@@ -18,6 +18,16 @@
       "id": "dynamics_128k_200step",
       "path": "results/dynamics_128k_200step/summary.json",
       "description": "128K real 200-step full-statistics smoke runs."
+    },
+    {
+      "id": "d8_metrics_grid_recipe",
+      "path": "results/recipes/d8_metrics_grid_recipe.json",
+      "description": "Canonical no-tuning d8 0.4B-token metrics grid for alpha=0.5 vs alpha=1.0."
+    },
+    {
+      "id": "sweep_catalog",
+      "path": "results/sweep_catalog/summary.json",
+      "description": "Generated consolidated catalog of existing optimizer sweeps."
     }
   ]
 }

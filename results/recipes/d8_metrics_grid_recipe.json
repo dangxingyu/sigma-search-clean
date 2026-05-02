@@ -1,0 +1,64 @@
+{
+  "schema_version": 1,
+  "id": "d8_metrics_grid",
+  "description": "No-tuning d8 dynamics study for Top-Aware Muon alpha=0.5 vs alpha=1.0 under nanochat batch/LR scaling.",
+  "model": {
+    "depth": 8,
+    "seq_len": 1024,
+    "world_size": 8,
+    "device_batch_size": 16
+  },
+  "token_budget": {
+    "tokens": 402653184,
+    "label": "about 0.4B",
+    "reason": "Chinchilla-style d8 dynamics budget; divisible by 262K, 1M, and 4M batches."
+  },
+  "optimizer": {
+    "method": "top_aware_muon",
+    "top_k": 1,
+    "alpha": [0.5, 1.0],
+    "base_matrix_lr": 0.02,
+    "lr_scaling": "effective_matrix_lr = base_matrix_lr * sqrt(batch_size / 524288)",
+    "streaming": {
+      "pure_qr": true,
+      "num_iters": 2,
+      "fallback_ortho_tol": 0.01
+    }
+  },
+  "batch_grid": [
+    {
+      "batch_size": 262144,
+      "role": "d8 critical batch",
+      "steps": 1536,
+      "grad_accum": 2,
+      "effective_matrix_lr": 0.01414213562373095
+    },
+    {
+      "batch_size": 1048576,
+      "role": "medium batch",
+      "steps": 384,
+      "grad_accum": 8,
+      "effective_matrix_lr": 0.0282842712474619
+    },
+    {
+      "batch_size": 4194304,
+      "role": "large batch",
+      "steps": 96,
+      "grad_accum": 32,
+      "effective_matrix_lr": 0.0565685424949238
+    }
+  ],
+  "metrics": {
+    "metrics_every": 1,
+    "metrics_top_k": 4,
+    "metrics_max_modules": 8,
+    "metrics_split_momentum": true,
+    "metrics_alignment_side": "lite",
+    "metrics_hessian_every": 50,
+    "metrics_hessian_top_k": 1,
+    "metrics_hessian_iters": 2,
+    "metrics_hessian_max_modules": 8,
+    "force_math_sdpa": true
+  },
+  "command": "bash scripts/run_d8_metrics_grid.sh"
+}

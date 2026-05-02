@@ -1,5 +1,15 @@
 # Experiment Log — LITE vs Muon diagnostic campaign
 
+## 2026-05-02 — clean repo sweep catalog, cleanup, and d8 0.4B metrics recipe
+
+Latest update:
+- Cleaned standalone repo by removing one-off `run_vXX...` launchers, duplicate `runners/` and `core/` mirrors, root-level duplicate analysis wrappers, and legacy `top1_damp_*` candidate files. Future pass-by usage should go through `run_eval.py`, `run_top_aware_muon_sweep.py`, `run_native_muon_v9.py`, `run_lite_v9.py`, and scripts under `scripts/`.
+- Added `scripts/build_sweep_catalog.py` and generated `results/sweep_catalog/` with normalized existing sweep rows. Current catalog has `159` rows, batches `{32K,64K,128K,256K,512K,1M,4M,8M,16M}`, methods `{native_muon,native_lite,streaming_identity,streaming_lite,top_aware_muon}`, and alpha values `{0.25,0.5,0.75,0.85,0.875,1,1.15,1.25}`.
+- Added canonical no-tuning d8 metrics recipe: `results/recipes/d8_metrics_grid_recipe.json` and `scripts/run_d8_metrics_grid.sh`.
+- Updated d8 default token budget in `run_top_aware_muon_sweep.py` to `402,653,184` tokens, about `0.4B`, divisible by `262K`, `1M`, and `4M`.
+- The new metrics-grid plan compares Top-Aware Muon `alpha={0.5,1.0}` at batches `{262144,1048576,4194304}` with `matrix_lr=0.02` and nanochat LR scaling only; no extra hyperparameter tuning.
+- v37 interim update while cleanup was happening: 128K `alpha=1.15`, seed `43`, fixed `lr=0.01`, completed with BPB `0.9163321360`. This strengthens the near-identity alpha signal, but seed `44` is still running.
+
 ## 2026-05-01 — clean-repo result organization and 128K near-identity alpha test
 
 Latest update:

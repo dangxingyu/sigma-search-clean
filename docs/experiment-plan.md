@@ -1,5 +1,15 @@
 # Experiment Plan — LITE vs Muon Switching Diagnostics
 
+## Current clean-handoff plan as of 2026-05-02
+
+Immediate standalone-repo priorities:
+- Use the clean method set: `top_aware_muon`, `streaming_identity`, `native_muon`, and single-process `native_lite` only when exact LITE is required.
+- For the new dynamics/logging study, run only Top-Aware Muon `top_k=1` with `alpha={0.5,1.0}` at batches `{262144,1048576,4194304}`.
+- Treat `262144` as the d8 critical batch. Do not insert an extra 512K point into this specific no-tuning metrics grid.
+- Use the d8 Chinchilla-style token budget `402,653,184` tokens, about `0.4B`, with nanochat LR scaling and no additional LR/alpha tuning.
+- Use `scripts/run_d8_metrics_grid.sh` for the canonical grid. It records cheap metrics every step and Hessian probes every 50 logged steps with math SDPA forced.
+- Use `results/sweep_catalog/` as the organized source for completed sweep rows; rebuild with `python scripts/build_sweep_catalog.py` whenever curated CSV/JSON summaries change.
+
 Derived from `guidance.md` (Sadhika's two-diagnostic framework).
 
 ## Current plan as of 2026-04-29, switching-priority pivot plus StreamingMuon DDP restart

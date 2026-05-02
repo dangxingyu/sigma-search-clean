@@ -1,0 +1,49 @@
+{
+  "schema_version": 1,
+  "row_count": 159,
+  "best_row_count": 45,
+  "batches": [
+    "32K",
+    "64K",
+    "128K",
+    "256K",
+    "512K",
+    "1M",
+    "4M",
+    "8M",
+    "16M"
+  ],
+  "methods": {
+    "native_lite": 27,
+    "native_muon": 39,
+    "streaming_identity": 27,
+    "streaming_lite": 9,
+    "top_aware_muon": 57
+  },
+  "families": {
+    "dynamics_smoke": 2,
+    "native_ddp_or_control": 12,
+    "native_single_gpu": 54,
+    "same_driver_streaming_ddp": 78,
+    "streaming_ddp_top1_old": 13
+  },
+  "alpha_values": [
+    "0.25",
+    "0.5",
+    "0.75",
+    "0.85",
+    "0.875",
+    "1",
+    "1.15",
+    "1.25"
+  ],
+  "sources": {
+    "figures/current_same_driver_v26/raw_rows.csv": 15,
+    "figures/historical_large_batch/raw_rows.csv": 67,
+    "figures/native_streaming_topk/native_streaming_topk_raw.csv": 2,
+    "figures/topaware_alpha_dashboard/raw_rows.csv": 65,
+    "results/dynamics_128k_200step/summary.json": 3,
+    "results/topaware_128k_alpha125_lrsweep/summary.json": 4,
+    "results/topaware_128k_near_identity_lr001/summary.json": 3
+  }
+}

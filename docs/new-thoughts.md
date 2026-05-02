@@ -1,5 +1,21 @@
 # New Thoughts — Reading Sadhika's guidance
 
+## Current conclusion ledger addendum (2026-05-02)
+
+### 1. Confident enough to treat as correct
+
+- The standalone repo should not expose historical one-off launchers as primary interfaces. The stable pass-by surface is `run_eval.py`, `run_top_aware_muon_sweep.py`, `run_native_muon_v9.py`, `run_lite_v9.py`, `scripts/run_d8_metrics_grid.sh`, and `scripts/build_sweep_catalog.py`.
+- For the requested d8 dynamics study, `262144` is the critical batch. The no-tuning grid should be `{262K,1M,4M}`, not `{262K,512K,1M,4M}`.
+- The d8 dynamics budget should be about `0.4B` tokens. `402,653,184` is a practical exact value because it is divisible by `262K`, `1M`, and `4M`.
+
+### 2. Multiple observations; likely true but still needs careful confirmation
+
+- At 128K fixed `lr=0.01`, near-identity Top-Aware `alpha=1.15` looks better than stronger damping and slightly better than identity/native Muon in seeds seen so far. The margin is tiny, so this is not yet a publishable optimizer-quality claim.
+
+### 4. Hypothesis
+
+- Dense metrics at d8 may cost close to 2x wall time when Hessian probes are enabled, but this should be measured from elapsed times in matched runs rather than assumed. The d8 metrics grid records elapsed time in each result JSON for that purpose.
+
 ## Current conclusion ledger (2026-04-30)
 
 ### 1. Confident enough to treat as correct

@@ -25,7 +25,9 @@ from pathlib import Path
 
 
 SEQ = 1024
-DEFAULT_TOKENS = 1_073_741_824
+# d8 Chinchilla-style study budget used by the clean handoff recipes.
+# 402,653,184 is near 0.4B tokens and divisible by 262K, 1M, and 4M.
+DEFAULT_TOKENS = 402_653_184
 METHOD_CHOICES = {
     "streaming_identity",
     "streaming_lite",
