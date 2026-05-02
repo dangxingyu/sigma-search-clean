@@ -7,7 +7,7 @@ or a general Muon-family issue.
 """
 import os
 os.environ["PYTORCH_ALLOC_CONF"] = "expandable_segments:True"
-import sys, json, time, math, gc, argparse
+import sys, json, time, math, gc, argparse, re
 from pathlib import Path
 import torch
 
@@ -190,6 +190,7 @@ def main():
         # direction M_tilde = (1-mom) * g + mom * m_new, which is the actual
         # matrix passed to Muon's polar step.
         do_momentum_d1 = grad_accum >= 2
+        split_reduce_names = set()
         if do_momentum_d1:
             m_A = {n: torch.zeros_like(p, dtype=torch.float32) for n, p in matrix_params_named.items()}
             m_B = {n: torch.zeros_like(p, dtype=torch.float32) for n, p in matrix_params_named.items()}
@@ -201,13 +202,23 @@ def main():
             m_A = m_B = mt_A = mt_B = None
             print0(f"[V2] grad_accum={grad_accum} < 2, momentum-D1 disabled this run")
         if metrics_enabled:
+            if ddp and args.metrics_split_momentum and do_momentum_d1:
+                module_pattern = re.compile(args.metrics_module_regex) if args.metrics_module_regex else None
+                split_reduce = [
+                    n for n in matrix_params_named
+                    if module_pattern is None or module_pattern.search(n) is not None
+                ]
+                if args.metrics_max_modules > 0:
+                    split_reduce = split_reduce[:args.metrics_max_modules]
+                split_reduce_names = set(split_reduce)
             split_msg = (
                 "enabled" if args.metrics_split_momentum and do_momentum_d1
                 else "disabled by flag" if not args.metrics_split_momentum
                 else f"disabled because grad_accum={grad_accum} < 2"
             )
             print0(f"Metric logging enabled every {args.metrics_every} steps; "
-                   f"hessian_every={args.metrics_hessian_every}; split momentum {split_msg}.")
+                   f"hessian_every={args.metrics_hessian_every}; split momentum {split_msg}; "
+                   f"split scope={'global DDP-averaged' if split_reduce_names else 'rank-local or single-process'}.")
 
         val_bpbs = []; best_val_bpb = float('inf')
         for step in range(num_iterations + 1):
@@ -260,10 +271,20 @@ def main():
             lrm = get_lr_mul(step); mom = get_mom(step); wd = get_wd(step)
             t0 = time.time()
             metrics_due = metrics_enabled and (step % args.metrics_every == 0)
+            hessian_due = (
+                metrics_due
+                and args.metrics_hessian_every > 0
+                and step % args.metrics_hessian_every == 0
+            )
             half = grad_accum // 2 if do_momentum_d1 else 0
             g_A_partial = {}
+            hessian_batch = None
+            train_loss_sum = 0.0
             for i in range(grad_accum):
+                if hessian_due and hessian_batch is None:
+                    hessian_batch = (x.detach().clone(), y.detach().clone())
                 loss = model(x, y)
+                train_loss_sum += loss.detach().item()
                 (loss / grad_accum).backward()
                 x, y = next(train_loader)
                 if do_momentum_d1 and (i + 1) == half:
@@ -284,11 +305,15 @@ def main():
                         # g_full = (half/grad_accum)*g_A + (rest/grad_accum)*g_B
                         # → g_B = (grad_accum*g_full - half*g_A) / rest
                         g_B = (grad_accum * g_full - half * g_A) / rest
+                        if n in split_reduce_names:
+                            torch.distributed.all_reduce(g_A, op=torch.distributed.ReduceOp.AVG)
+                            torch.distributed.all_reduce(g_B, op=torch.distributed.ReduceOp.AVG)
                         m_A[n].mul_(mom).add_(g_A, alpha=1.0 - mom)
                         m_B[n].mul_(mom).add_(g_B, alpha=1.0 - mom)
                         mt_A[n].copy_(g_A).mul_(1.0 - mom).add_(m_A[n], alpha=mom)
                         mt_B[n].copy_(g_B).mul_(1.0 - mom).add_(m_B[n], alpha=mom)
                 g_A_partial.clear()
+            train_loss_mean = train_loss_sum / grad_accum
 
             # capture grad norms before step
             gn = grad_norm_per_group(optimizer)
@@ -318,7 +343,7 @@ def main():
                     top_k=args.metrics_top_k,
                     module_regex=args.metrics_module_regex,
                     max_modules=args.metrics_max_modules,
-                    train_loss=float(loss.item()),
+                    train_loss=train_loss_mean,
                     lr_multiplier=lrm,
                     muon_momentum=mom,
                     save_components=args.metrics_save_components,
@@ -327,6 +352,15 @@ def main():
                 clear_metric_caches(optimizer)
 
                 if rank == 0 and metric_entry is not None:
+                    metric_entry.setdefault("metadata", {})
+                    metric_entry["metadata"].update({
+                        "train_loss": "raw mean cross-entropy over this optimizer step's grad-accum microbatches",
+                        "hessian_weight_state": "post_optimizer_step",
+                        "hessian_batch_source": "first_microbatch_same_optimizer_step" if hessian_batch is not None else None,
+                        "hessian_batch_scope": "rank0_local_microbatch" if ddp and hessian_batch is not None else "single_process",
+                        "split_momentum_alignment_source": "momentum_after_nesterov",
+                        "split_momentum_alignment_scope": "global_ddp_average" if split_reduce_names else "rank_local_or_single_process",
+                    })
                     if args.metrics_split_momentum and do_momentum_d1 and mt_A is not None and mt_B is not None:
                         split_stats = split_momentum_alignment(
                             mt_A,
@@ -336,6 +370,8 @@ def main():
                             module_regex=args.metrics_module_regex,
                             max_modules=args.metrics_max_modules,
                         )
+                        split_stats["tensor"] = "momentum_after_nesterov"
+                        split_stats["definition"] = "M_tilde = (1 - beta) * G_split + beta * M_split_new"
                         metric_entry["split_momentum_alignment"] = split_stats
                         for key, value in split_stats.get("vectors", {}).items():
                             metric_entry["vectors"][key] = value
@@ -350,7 +386,7 @@ def main():
                         try:
                             hessian_stats = hessian_power_probe(
                                 eager_model,
-                                (x, y),
+                                hessian_batch if hessian_batch is not None else (x, y),
                                 hessian_refs,
                                 matrix_params_named,
                                 top_k=args.metrics_hessian_top_k,
@@ -372,13 +408,13 @@ def main():
             if step == 0: gc.collect()
 
             # record telemetry each step
-            tel_loss.append(loss.item())
+            tel_loss.append(train_loss_mean)
             tel_grad_norms.append(gn)
             tel_lr_mul.append(lrm)
             tel_mom.append(mom)
 
             if step % 50 == 0:
-                print0(f"  Step {step:5d} | loss: {loss.item():.4f} | dt: {(time.time()-t0)*1000:.0f}ms")
+                print0(f"  Step {step:5d} | loss: {train_loss_mean:.4f} | dt: {(time.time()-t0)*1000:.0f}ms")
 
         results.update(dict(
             score=best_val_bpb, val_bpb_best=best_val_bpb, val_bpbs=val_bpbs, error=None,

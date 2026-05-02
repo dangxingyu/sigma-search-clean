@@ -1,0 +1,106 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+REPO="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+cd "$REPO"
+
+PARENT_REPO="$(cd "$REPO/.." && pwd)"
+if [[ -f "$PARENT_REPO/nanochat/.venv/bin/activate" ]]; then
+  # shellcheck disable=SC1091
+  source "$PARENT_REPO/nanochat/.venv/bin/activate"
+elif [[ -f "$REPO/nanochat/.venv/bin/activate" ]]; then
+  # shellcheck disable=SC1091
+  source "$REPO/nanochat/.venv/bin/activate"
+fi
+
+export PYTHONPATH="$REPO:$REPO/nanochat"
+export PYTORCH_ALLOC_CONF="${PYTORCH_ALLOC_CONF:-expandable_segments:True}"
+export OMP_NUM_THREADS="${OMP_NUM_THREADS:-1}"
+export MKL_NUM_THREADS="${MKL_NUM_THREADS:-1}"
+
+STAMP="${STAMP:-$(date +%Y%m%d_%H%M%S)}"
+OUT_ROOT="${OUT_ROOT:-search_evals/handoff_sweep_${STAMP}}"
+LOG_ROOT="${LOG_ROOT:-logs/handoff_sweep_${STAMP}}"
+
+METHODS="${METHODS:-streaming_identity native_muon top_aware_muon}"
+BATCHES="${BATCHES:-262144 524288 1048576 2097152}"
+ALPHAS="${ALPHAS:-0.5 0.75 1.0 1.25}"
+LRS="${LRS:-0.005 0.01 0.02 0.04}"
+SEEDS="${SEEDS:-42}"
+
+TOKENS="${TOKENS:-402653184}"
+DEPTH="${DEPTH:-8}"
+NPROC="${NPROC:-8}"
+MAX_DEVICE_BATCH_SIZE="${MAX_DEVICE_BATCH_SIZE:-16}"
+
+ADAPTIVE_LR="${ADAPTIVE_LR:-1}"
+LR_EXTEND_FACTOR="${LR_EXTEND_FACTOR:-2.0}"
+LR_MIN="${LR_MIN:-0.0005}"
+LR_MAX="${LR_MAX:-0.08}"
+MAX_LR_EXTENSION_ROUNDS="${MAX_LR_EXTENSION_ROUNDS:-2}"
+ADAPTIVE_MIN_EDGE_IMPROVEMENT="${ADAPTIVE_MIN_EDGE_IMPROVEMENT:-0.0}"
+
+METRICS_EVERY="${METRICS_EVERY:-0}"
+METRICS_MAX_MODULES="${METRICS_MAX_MODULES:-8}"
+METRICS_HESSIAN_EVERY="${METRICS_HESSIAN_EVERY:-0}"
+if [[ "$METRICS_HESSIAN_EVERY" != "0" ]]; then
+  export NANOCHAT_FORCE_MATH_SDPA="${NANOCHAT_FORCE_MATH_SDPA:-1}"
+fi
+
+cmd=(
+  python run_top_aware_muon_sweep.py
+  --out-root "$OUT_ROOT"
+  --log-root "$LOG_ROOT"
+  --nanochat-dir nanochat
+  --methods "$METHODS"
+  --batches "$BATCHES"
+  --alphas "$ALPHAS"
+  --lrs "$LRS"
+  --seeds "$SEEDS"
+  --tokens "$TOKENS"
+  --depth "$DEPTH"
+  --nproc-per-node "$NPROC"
+  --max-device-batch-size "$MAX_DEVICE_BATCH_SIZE"
+  --pure-qr
+  --streaming-num-iters "${STREAMING_NUM_ITERS:-2}"
+  --fallback-ortho-tol "${FALLBACK_ORTHO_TOL:-0.01}"
+  --metrics-every "$METRICS_EVERY"
+  --metrics-top-k "${METRICS_TOP_K:-4}"
+  --metrics-module-regex "${METRICS_MODULE_REGEX:-transformer\\.h}"
+  --metrics-max-modules "$METRICS_MAX_MODULES"
+  --metrics-alignment-side "${METRICS_ALIGNMENT_SIDE:-lite}"
+  --metrics-hessian-every "$METRICS_HESSIAN_EVERY"
+  --metrics-hessian-top-k "${METRICS_HESSIAN_TOP_K:-1}"
+  --metrics-hessian-iters "${METRICS_HESSIAN_ITERS:-2}"
+  --metrics-hessian-max-modules "${METRICS_HESSIAN_MAX_MODULES:-8}"
+  --lr-extend-factor "$LR_EXTEND_FACTOR"
+  --lr-min "$LR_MIN"
+  --lr-max "$LR_MAX"
+  --max-lr-extension-rounds "$MAX_LR_EXTENSION_ROUNDS"
+  --adaptive-min-edge-improvement "$ADAPTIVE_MIN_EDGE_IMPROVEMENT"
+)
+
+if [[ "$ADAPTIVE_LR" == "1" ]]; then
+  cmd+=(--adaptive-lr)
+fi
+if [[ "${METRICS_SPLIT_MOMENTUM:-0}" == "1" ]]; then
+  cmd+=(--metrics-split-momentum)
+fi
+if [[ "${DRY_RUN:-0}" == "1" ]]; then
+  cmd+=(--dry-run)
+fi
+if [[ "${RERUN_EXISTING:-0}" == "1" ]]; then
+  cmd+=(--rerun-existing)
+fi
+
+cmd+=("$@")
+
+printf 'OUT_ROOT=%s\nLOG_ROOT=%s\n' "$OUT_ROOT" "$LOG_ROOT"
+printf 'METHODS=%s\nBATCHES=%s\nALPHAS=%s\nLRS=%s\nSEEDS=%s\n' "$METHODS" "$BATCHES" "$ALPHAS" "$LRS" "$SEEDS"
+printf 'ADAPTIVE_LR=%s LR_EXTEND_FACTOR=%s LR_MIN=%s LR_MAX=%s MAX_ROUNDS=%s\n' \
+  "$ADAPTIVE_LR" "$LR_EXTEND_FACTOR" "$LR_MIN" "$LR_MAX" "$MAX_LR_EXTENSION_ROUNDS"
+printf 'Command:\n'
+printf ' %q' "${cmd[@]}"
+printf '\n'
+
+"${cmd[@]}"

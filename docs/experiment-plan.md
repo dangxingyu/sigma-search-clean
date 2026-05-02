@@ -4,10 +4,12 @@
 
 Immediate standalone-repo priorities:
 - Use the clean method set: `top_aware_muon`, `streaming_identity`, `native_muon`, and single-process `native_lite` only when exact LITE is required.
+- For handoff optimizer-quality sweeps, use `scripts/run_handoff_sweep.sh`. Keep metrics off by default, start from an LR grid such as `{0.005,0.01,0.02,0.04}`, and leave `ADAPTIVE_LR=1` so boundary LR optima are extended automatically before interpreting winners.
 - For the new dynamics/logging study, run only Top-Aware Muon `top_k=1` with `alpha={0.5,1.0}` at batches `{262144,1048576,4194304}`.
 - Treat `262144` as the d8 critical batch. Do not insert an extra 512K point into this specific no-tuning metrics grid.
 - Use the d8 Chinchilla-style token budget `402,653,184` tokens, about `0.4B`, with nanochat LR scaling and no additional LR/alpha tuning.
 - Use `scripts/run_d8_metrics_grid.sh` for the canonical grid. It records cheap metrics every step and Hessian probes every 50 logged steps with math SDPA forced.
+- Use corrected logging semantics: split alignment is on global-DDP-averaged `M'`, `train/loss` is raw optimizer-step mean CE, and Hessian probes are rank0-local post-update HVPs on a representative microbatch from the same optimizer step.
 - Use `results/sweep_catalog/` as the organized source for completed sweep rows; rebuild with `python scripts/build_sweep_catalog.py` whenever curated CSV/JSON summaries change.
 
 Derived from `guidance.md` (Sadhika's two-diagnostic framework).

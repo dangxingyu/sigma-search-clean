@@ -22,6 +22,7 @@ import shlex
 import subprocess
 import time
 from pathlib import Path
+from typing import Any
 
 
 SEQ = 1024
@@ -92,6 +93,22 @@ def case_name(method: str, batch: int, lr: float, seed: int, top_k: int | None, 
 def result_path(args: argparse.Namespace, method: str, batch: int, lr: float,
                 seed: int, top_k: int | None = None, alpha: float | None = None) -> Path:
     return args.out_root / case_name(method, batch, lr, seed, top_k, alpha) / "result.json"
+
+
+def note_case(args: argparse.Namespace, method: str, batch: int, lr: float,
+              seed: int, top_k: int | None, alpha: float | None) -> None:
+    spec = (method, int(batch), float(lr), int(seed), top_k, alpha)
+    if not hasattr(args, "_case_specs"):
+        args._case_specs = []
+        args._case_spec_set = set()
+    if spec not in args._case_spec_set:
+        args._case_specs.append(spec)
+        args._case_spec_set.add(spec)
+
+
+def group_key(method: str, batch: int, seed: int,
+              top_k: int | None, alpha: float | None) -> tuple[Any, ...]:
+    return (method, int(batch), int(seed), top_k, alpha)
 
 
 def common_training_args(args: argparse.Namespace, batch: int, lr: float, seed: int, out: Path) -> list[str]:
@@ -192,7 +209,13 @@ def build_command(args: argparse.Namespace, method: str, batch: int, lr: float, 
     if method == "native_muon":
         return cmd + ["run_native_muon_v9.py", *common, "--ns-steps", str(args.ns_steps), *metrics]
     if method == "native_lite":
-        return cmd + [
+        if args.nproc_per_node != 1:
+            raise ValueError(
+                "native_lite is single-process only in this repo. "
+                "Run it separately with --nproc-per-node 1 / NPROC=1."
+            )
+        return [
+            "python",
             "run_lite_v9.py",
             *common,
             "--ns-steps", str(args.ns_steps),
@@ -221,6 +244,7 @@ def append_summary(args: argparse.Namespace, row: dict) -> None:
 
 def run_case(args: argparse.Namespace, method: str, batch: int, lr: float, seed: int,
              top_k: int | None = None, alpha: float | None = None) -> tuple[float | None, str | None]:
+    note_case(args, method, batch, lr, seed, top_k, alpha)
     out = result_path(args, method, batch, lr, seed, top_k, alpha)
     name = out.parent.name
     log = args.log_root / f"{name}.log"
@@ -306,6 +330,14 @@ def write_manifest(args: argparse.Namespace, methods: list[str]) -> None:
             "hessian_iters": args.metrics_hessian_iters,
             "hessian_max_modules": args.metrics_hessian_max_modules,
         },
+        "adaptive_lr": {
+            "enabled": args.adaptive_lr,
+            "extend_factor": args.lr_extend_factor,
+            "min_lr": args.lr_min,
+            "max_lr": args.lr_max,
+            "max_extension_rounds": args.max_lr_extension_rounds,
+            "min_edge_improvement": args.adaptive_min_edge_improvement,
+        },
         "top_aware_muon_definition": (
             "For each matrix, scale the top_k largest current singular directions by alpha; "
             "all remaining singular directions use scale 1."
@@ -344,7 +376,10 @@ def write_summary_csv(args: argparse.Namespace, methods: list[str]) -> Path:
     with path.open("w", newline="") as f:
         writer = csv.DictWriter(f, fieldnames=fields)
         writer.writeheader()
-        for method, batch, lr, seed, top_k, alpha in iter_case_specs(args, methods):
+        case_specs = getattr(args, "_case_specs", None)
+        if case_specs is None:
+            case_specs = list(iter_case_specs(args, methods))
+        for method, batch, lr, seed, top_k, alpha in case_specs:
             out = result_path(args, method, batch, lr, seed, top_k, alpha)
             log = args.log_root / f"{out.parent.name}.log"
             score, err = load_score(out)
@@ -363,6 +398,120 @@ def write_summary_csv(args: argparse.Namespace, methods: list[str]) -> Path:
                 "log_file": log,
             })
     return path
+
+
+def edge_is_strong_enough(best_score: float, neighbor_score: float | None, min_improvement: float) -> bool:
+    if neighbor_score is None:
+        return True
+    return (neighbor_score - best_score) >= min_improvement
+
+
+def maybe_propose_lr_extensions(
+    args: argparse.Namespace,
+    methods: list[str],
+    blocked_edges: set[tuple[tuple[Any, ...], str]],
+) -> list[tuple[str, int, float, int, int | None, float | None, str]]:
+    """Return extra LR cases when the best completed LR is at a grid edge.
+
+    Scores are validation BPB, so lower is better. Extensions are independent
+    for each `(method, batch, seed, top_k, alpha)` group.
+    """
+    grouped: dict[tuple[Any, ...], list[tuple[float, str, int, int | None, float | None]]] = {}
+    case_specs = getattr(args, "_case_specs", list(iter_case_specs(args, methods)))
+    for method, batch, lr, seed, top_k, alpha in case_specs:
+        grouped.setdefault(group_key(method, batch, seed, top_k, alpha), []).append(
+            (float(lr), method, int(batch), top_k, alpha)
+        )
+
+    proposals: list[tuple[str, int, float, int, int | None, float | None, str]] = []
+    seen = set(getattr(args, "_case_spec_set", set()))
+    for key, lr_specs in sorted(grouped.items(), key=lambda kv: repr(kv[0])):
+        method, batch, seed, top_k, alpha = key
+        lrs = sorted({lr for lr, *_ in lr_specs})
+        scored: list[tuple[float, float | None, str | None]] = []
+        for lr in lrs:
+            score, err = load_score(result_path(args, method, batch, lr, seed, top_k, alpha))
+            scored.append((lr, score, err))
+        finite = [(lr, score) for lr, score, err in scored if score is not None and err is None]
+        if len(finite) < 2:
+            continue
+
+        finite.sort()
+        best_lr, best_score = min(finite, key=lambda item: item[1])
+        finite_lrs = [lr for lr, _ in finite]
+        finite_scores = {lr: score for lr, score in finite}
+
+        low_lr = finite_lrs[0]
+        if best_lr == low_lr and (key, "low") not in blocked_edges:
+            attempted_lower = [lr for lr in lrs if lr < low_lr]
+            if attempted_lower:
+                blocked_edges.add((key, "low"))
+            elif len(finite_lrs) >= 2 and edge_is_strong_enough(
+                best_score, finite_scores.get(finite_lrs[1]), args.adaptive_min_edge_improvement
+            ):
+                new_lr = low_lr / args.lr_extend_factor
+                if new_lr >= args.lr_min:
+                    spec = (method, batch, new_lr, seed, top_k, alpha)
+                    if spec not in seen:
+                        proposals.append((*spec, "low"))
+                        seen.add(spec)
+                else:
+                    blocked_edges.add((key, "low"))
+
+        high_lr = finite_lrs[-1]
+        if best_lr == high_lr and (key, "high") not in blocked_edges:
+            attempted_higher = [lr for lr in lrs if lr > high_lr]
+            if attempted_higher:
+                blocked_edges.add((key, "high"))
+            elif len(finite_lrs) >= 2 and edge_is_strong_enough(
+                best_score, finite_scores.get(finite_lrs[-2]), args.adaptive_min_edge_improvement
+            ):
+                new_lr = high_lr * args.lr_extend_factor
+                if new_lr <= args.lr_max:
+                    spec = (method, batch, new_lr, seed, top_k, alpha)
+                    if spec not in seen:
+                        proposals.append((*spec, "high"))
+                        seen.add(spec)
+                else:
+                    blocked_edges.add((key, "high"))
+    return proposals
+
+
+def run_adaptive_lr_rounds(args: argparse.Namespace, methods: list[str]) -> None:
+    blocked_edges: set[tuple[tuple[Any, ...], str]] = set()
+    trace: list[dict[str, Any]] = []
+    for round_idx in range(1, args.max_lr_extension_rounds + 1):
+        proposals = maybe_propose_lr_extensions(args, methods, blocked_edges)
+        trace.append({
+            "round": round_idx,
+            "num_proposals": len(proposals),
+            "proposals": [
+                {
+                    "method": method,
+                    "batch": batch,
+                    "lr": lr,
+                    "seed": seed,
+                    "top_k": top_k,
+                    "alpha": alpha,
+                    "edge": edge,
+                }
+                for method, batch, lr, seed, top_k, alpha, edge in proposals
+            ],
+        })
+        (args.out_root / "adaptive_lr_trace.json").write_text(json.dumps(trace, indent=2))
+        if not proposals:
+            print(f"[adaptive-lr] round {round_idx}: no boundary extensions needed", flush=True)
+            break
+        print(f"[adaptive-lr] round {round_idx}: running {len(proposals)} boundary extensions", flush=True)
+        for method, batch, lr, seed, top_k, alpha, edge in proposals:
+            print(
+                f"[adaptive-lr] {edge} edge -> method={method} batch={batch} "
+                f"alpha={alpha} top_k={top_k} lr={lr:g}",
+                flush=True,
+            )
+            score, err = run_case(args, method, batch, lr, seed, top_k=top_k, alpha=alpha)
+            if score is None or err is not None:
+                blocked_edges.add((group_key(method, batch, seed, top_k, alpha), edge))
 
 
 def main() -> None:
@@ -412,6 +561,18 @@ def main() -> None:
     parser.add_argument("--dry-run", action="store_true")
     parser.add_argument("--allow-top-k-sweep", action="store_true",
                         help="Allow top_k values other than exactly 1. Current clean recipe keeps top_k fixed to 1.")
+    parser.add_argument("--adaptive-lr", action="store_true",
+                        help="After the initial LR grid, extend outward if the best finite score is at a grid edge.")
+    parser.add_argument("--lr-extend-factor", type=float, default=2.0,
+                        help="Multiplier/divider for adaptive LR boundary extensions.")
+    parser.add_argument("--lr-min", type=float, default=1e-4,
+                        help="Minimum LR allowed for adaptive low-edge extensions.")
+    parser.add_argument("--lr-max", type=float, default=0.08,
+                        help="Maximum LR allowed for adaptive high-edge extensions.")
+    parser.add_argument("--max-lr-extension-rounds", type=int, default=2,
+                        help="Maximum adaptive LR extension rounds after the initial grid.")
+    parser.add_argument("--adaptive-min-edge-improvement", type=float, default=0.0,
+                        help="Require edge BPB to beat the adjacent LR by at least this amount before extending.")
     args = parser.parse_args()
 
     unknown = sorted(set(args.methods) - METHOD_CHOICES)
@@ -434,6 +595,9 @@ def main() -> None:
 
     for method, batch, lr, seed, top_k, alpha in iter_case_specs(args, args.methods):
         run_case(args, method, batch, lr, seed, top_k=top_k, alpha=alpha)
+
+    if args.adaptive_lr:
+        run_adaptive_lr_rounds(args, args.methods)
 
     print("\n=== sweep complete ===", flush=True)
     print(f"summary_csv={write_summary_csv(args, args.methods)}", flush=True)

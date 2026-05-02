@@ -5,6 +5,9 @@
 ### 1. Confident enough to treat as correct
 
 - The standalone repo should not expose historical one-off launchers as primary interfaces. The stable pass-by surface is `run_eval.py`, `run_top_aware_muon_sweep.py`, `run_native_muon_v9.py`, `run_lite_v9.py`, `scripts/run_d8_metrics_grid.sh`, and `scripts/build_sweep_catalog.py`.
+- The handoff sweep surface should now be `scripts/run_handoff_sweep.sh` for new users and `run_top_aware_muon_sweep.py` for direct control. Adaptive LR boundary extension is implemented and should be left on for optimizer-quality sweeps.
+- Split-batch alignment for the current study must be computed on optimizer input `M'`, not raw `M`. The clean StreamingMuon and native Muon metric paths now use `M' = (1 - beta)G + beta M_new`.
+- In 8-GPU runs, split-momentum diagnostics should average split gradients across DDP ranks before updating the diagnostic momenta. The corrected clean path now records global-DDP split alignment; previous rank-local split logs are weaker diagnostics.
 - For the requested d8 dynamics study, `262144` is the critical batch. The no-tuning grid should be `{262K,1M,4M}`, not `{262K,512K,1M,4M}`.
 - The d8 dynamics budget should be about `0.4B` tokens. `402,653,184` is a practical exact value because it is divisible by `262K`, `1M`, and `4M`.
 
@@ -12,9 +15,13 @@
 
 - At 128K fixed `lr=0.01`, near-identity Top-Aware `alpha=1.15` beats StreamingMuon identity in paired seeds `{42,43,44}` by mean `0.000509 ± 0.000057` BPB. This is a small fixed-LR signal, not yet a full LR-swept optimizer-quality claim.
 
+### 3. Some observations suggest
+
+- The expensive part of dense logging is likely every-step SVD/statistics more than Hessian alone. The corrected 200-step smoke confirms Hessian entries can be produced, but matched ablations are still needed for exact overhead attribution.
+
 ### 4. Hypothesis
 
-- Dense metrics at d8 may cost close to 2x wall time when Hessian probes are enabled, but this should be measured from elapsed times in matched runs rather than assumed. The d8 metrics grid records elapsed time in each result JSON for that purpose.
+- Dense metrics at d8 may cost much more than no-metrics training when `metrics_every=1`, primarily from per-step SVD diagnostics. This should be measured from elapsed times in matched runs rather than assumed. The d8 metrics grid records elapsed time in each result JSON for that purpose.
 
 ## Current conclusion ledger (2026-04-30)
 

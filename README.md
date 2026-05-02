@@ -1,27 +1,12 @@
 # Sigma-Search Clean
 
-Standalone handoff repo for Muon-family optimizer experiments on nanochat-style LLM pretraining. It contains the vendored `nanochat/` source, StreamingMuon, native Muon/LITE controls, Top-Aware Muon, metric logging, curated result summaries, and reusable sweep scripts.
+Standalone handoff repo for Muon-family optimizer experiments on nanochat-style LLM pretraining. The main question this repo supports is:
 
-## Layout
+> At fixed model/data recipe, how do native Muon, StreamingMuon identity, native LITE, and Top-Aware Muon compare across batch size, LR, and Top-Aware `alpha`?
 
-```text
-nanochat/                    vendored nanochat source
-candidates/                  sigma transforms: identity, LITE-like, Top-Aware
-run_eval.py                  StreamingMuon candidate train/eval entrypoint
-run_top_aware_muon_sweep.py  reusable batch x alpha x LR runner
-run_native_muon_v9.py        native Muon baseline
-run_lite_v9.py               native LITE baseline, single-process only
-metric_logging.py            opt-in dynamics diagnostics
-analysis/                    plotting and historical result parsers
-scripts/                     setup, data download, catalog, canonical launchers
-results/                     curated JSON/CSV summaries for pass-by
-figures/                     copied summary plots/tables
-docs/                        research notes and experiment logs
-```
+The code is self-contained: it includes `nanochat/`, optimizer implementations, sweep launchers, metric logging, and curated result folders.
 
-Generated outputs such as `search_evals/`, `logs/`, `wandb/`, checkpoints, and data shards are intentionally ignored.
-
-## Setup
+## Quick Start
 
 ```bash
 bash scripts/setup_env.sh
@@ -30,15 +15,46 @@ export PYTHONPATH="$PWD:$PWD/nanochat"
 bash scripts/download_climbmix.sh 170 8
 ```
 
-Run a tiny sanity check:
+Run a cheap sanity check:
 
 ```bash
 bash scripts/smoke_run.sh
 ```
 
+Run the recommended handoff sweep inside an allocation:
+
+```bash
+srun --jobid=<JOBID> --overlap --ntasks=1 bash scripts/run_handoff_sweep.sh
+```
+
+Outputs go to:
+
+```text
+search_evals/handoff_sweep_<stamp>/      result JSONs, manifest, CSV, adaptive trace
+logs/handoff_sweep_<stamp>/              stdout/stderr logs per run
+```
+
+## Repository Layout
+
+```text
+nanochat/                    vendored nanochat source
+candidates/                  sigma transforms: identity, LITE-like, Top-Aware
+run_eval.py                  StreamingMuon candidate train/eval runner
+run_top_aware_muon_sweep.py  main reusable sweep engine
+run_native_muon_v9.py        native Muon baseline runner
+run_lite_v9.py               native LITE baseline runner; single-process only
+metric_logging.py            opt-in optimizer dynamics metrics
+scripts/run_handoff_sweep.sh user-facing sweep wrapper
+scripts/run_d8_metrics_grid.sh canonical dense-metrics dynamics run
+results/                     curated JSON/CSV summaries for pass-by
+docs/                        experiment plan, log, and current conclusions
+```
+
+Generated folders such as `search_evals/`, `logs/`, `wandb/`, checkpoints, and data shards are ignored by git.
+
 ## Optimizers
 
-For a matrix parameter, Muon acts on Nesterov-corrected momentum:
+Muon-like methods act on Nesterov-corrected momentum:
 
 ```text
 M_t  = beta M_{t-1} + (1 - beta) G_t
@@ -47,7 +63,7 @@ M'_t = U Sigma V^T
 Muon update = U V^T
 ```
 
-StreamingMuon approximates the same SVD with a warm-started basis and applies a spectral transform:
+StreamingMuon approximates the same decomposition with a warm-started basis and then applies a spectral transform:
 
 ```text
 V_t     = streaming_power_iteration(M'_t, V_{t-1})
@@ -57,17 +73,17 @@ U_i     = R_t[:, i] / sigma_i
 update  = U diag(f(sigma)) V^T
 ```
 
-Current methods:
+Supported sweep method names:
 
-| Method | Runner | Definition |
+| Method | Runner | Meaning |
 |---|---|---|
-| `streaming_identity` | `run_eval.py + candidates/identity.py` | `f(sigma)=1`; StreamingMuon identity baseline |
-| `streaming_lite` | `run_eval.py + candidates/lite_chi2_rs01.py` | same-driver LITE-like sanity baseline |
-| `top_aware_muon` | `run_eval.py + candidates/top_aware_muon.py` | scale top-`k` singular directions by `alpha`, others by `1` |
-| `native_muon` | `run_native_muon_v9.py` | nanochat/native Muon control |
-| `native_lite` | `run_lite_v9.py` | native LITE control; use `nproc_per_node=1` only |
+| `streaming_identity` | `run_eval.py + candidates/identity.py` | StreamingMuon with `f(sigma)=1` |
+| `top_aware_muon` | `run_eval.py + candidates/top_aware_muon.py` | scale top-`k` singular directions by `alpha` |
+| `native_muon` | `run_native_muon_v9.py` | nanochat native Muon control |
+| `native_lite` | `run_lite_v9.py` | native LITE control; use single process only |
+| `streaming_lite` | `run_eval.py + candidates/lite_chi2_rs01.py` | implementation sanity check, not a main baseline |
 
-Stable StreamingMuon DDP settings:
+Stable StreamingMuon DDP settings are:
 
 ```text
 --pure-qr --streaming-num-iters 2 --fallback-ortho-tol 0.01
@@ -84,142 +100,124 @@ def f(sigma, top_k=1, alpha=0.5):
     return scale
 ```
 
-Clean recipe: keep `top_k=1`; sweep `alpha`, batch size, and LR only when doing optimizer-quality comparisons. The runner rejects `top_k != 1` unless `--allow-top-k-sweep` is passed.
+Current clean recipe: keep `top_k=1`; sweep `alpha`, batch size, and LR. The sweep runner rejects `top_k != 1` unless `--allow-top-k-sweep` is explicitly passed.
 
-## D8 Metrics Recipe
+## Recommended Sweep
 
-For dynamics/logging studies, use the d8 Chinchilla-style budget of `402,653,184` tokens, about `0.4B`, not the older `1.07B` budget. This value is divisible by the three current batch sizes.
+For optimizer-quality comparisons, keep dense metrics off and sweep LR carefully. The handoff wrapper exposes common knobs as environment variables:
 
-| batch | role | steps | device batch | grad accum | base matrix LR | effective matrix LR |
+```bash
+METHODS="streaming_identity native_muon top_aware_muon" \
+BATCHES="262144 524288 1048576 2097152" \
+ALPHAS="0.5 0.75 1.0 1.25" \
+LRS="0.005 0.01 0.02 0.04" \
+SEEDS="42" \
+TOKENS=402653184 \
+ADAPTIVE_LR=1 \
+srun --jobid=<JOBID> --overlap --ntasks=1 bash scripts/run_handoff_sweep.sh
+```
+
+Defaults use d8, seq1024, 8 GPUs, max device batch size 16, and `402,653,184` tokens. That is the d8 Chinchilla-style `~0.4B` token recipe.
+
+### Adaptive LR Behavior
+
+`scripts/run_handoff_sweep.sh` calls `run_top_aware_muon_sweep.py --adaptive-lr` by default.
+
+For each independent group `(method, batch, seed, top_k, alpha)`:
+
+1. Run the initial LR grid.
+2. Pick the best finite validation BPB; lower is better.
+3. If the best LR is the lowest grid point, run `lr / LR_EXTEND_FACTOR`.
+4. If the best LR is the highest grid point, run `lr * LR_EXTEND_FACTOR`.
+5. Repeat up to `MAX_LR_EXTENSION_ROUNDS`, stopping at `LR_MIN`, `LR_MAX`, or the first failed outward run.
+
+Useful knobs:
+
+```bash
+LR_EXTEND_FACTOR=2.0
+LR_MIN=0.0005
+LR_MAX=0.08
+MAX_LR_EXTENSION_ROUNDS=2
+ADAPTIVE_MIN_EDGE_IMPROVEMENT=0.0
+```
+
+Dry-run without launching training:
+
+```bash
+DRY_RUN=1 bash scripts/run_handoff_sweep.sh
+```
+
+## Dynamics Metrics
+
+For dynamics studies, enable logging on a small number of modules. Metrics are off by default because every-step SVD diagnostics are expensive.
+
+Recommended dense-metrics smoke:
+
+```bash
+METRICS_EVERY=1 \
+METRICS_SPLIT_MOMENTUM=1 \
+METRICS_HESSIAN_EVERY=100 \
+BATCHES="262144" ALPHAS="1.0" LRS="0.02" TOKENS=52428800 \
+srun --jobid=<JOBID> --overlap --ntasks=1 bash scripts/run_handoff_sweep.sh
+```
+
+Logged metric families:
+
+| Family | What is logged |
+|---|---|
+| loss | raw train loss per optimizer step, EMA train loss, validation BPB |
+| norms | per-module weight, gradient, momentum, and `M'` RMS |
+| spectrum | momentum spectral norm, `M'` spectral norm, top singular values, StreamingMuon sigma |
+| split alignment | split-half SVD alignment of global DDP-averaged `M'` |
+| Hessian | approximate rank0-local block sharpness and Hessian-gradient/momentum/component alignments |
+
+Hessian probes use post-update weights and a representative rank0 microbatch from the same optimizer step. Split alignment is global DDP-averaged; Hessian is intentionally local because global HVP would be much more expensive. Set `NANOCHAT_FORCE_MATH_SDPA=1` when Hessian probes are enabled.
+
+## D8 Recipe Table
+
+| batch | role | steps at 0.4B tokens | device batch | grad accum | base matrix LR | effective matrix LR |
 |---:|---|---:|---:|---:|---:|---:|
 | `262144` | d8 critical batch | `1536` | `16` | `2` | `0.02` | `0.01414` |
-| `1048576` | medium batch | `384` | `16` | `8` | `0.02` | `0.02828` |
-| `4194304` | large batch | `96` | `16` | `32` | `0.02` | `0.05657` |
+| `524288` | small/medium | `768` | `16` | `4` | `0.02` | `0.02000` |
+| `1048576` | medium | `384` | `16` | `8` | `0.02` | `0.02828` |
+| `2097152` | medium/large | `192` | `16` | `16` | `0.02` | `0.04000` |
+| `4194304` | large | `96` | `16` | `32` | `0.02` | `0.05657` |
 
-The effective LR follows nanochat's batch scaling: `lr_eff = matrix_lr * sqrt(batch / 524288)`.
+Effective matrix LR follows nanochat batch scaling:
 
-Canonical no-tuning metrics grid:
-
-```bash
-bash scripts/run_d8_metrics_grid.sh
+```text
+lr_eff = matrix_lr * sqrt(batch / 524288)
 ```
 
-This runs `top_aware_muon` with `alpha in {0.5, 1.0}`, `top_k=1`, `lr=0.02`, batches `{262K, 1M, 4M}`, d8, seq1024, 8 GPUs, full per-step cheap metrics, and Hessian probes every 50 logged steps. `alpha=1.0` is the identity/Muon-like control through the same candidate path.
+## Results
 
-## Metric Logging
+Each run writes `result.json`. The sweep root also writes:
 
-`run_eval.py` and `run_native_muon_v9.py` support opt-in logging. Normal runs do not cache tensors unless `--metrics-every` is set.
-
-Recommended dynamics flags:
-
-```bash
---metrics-every 1 \
---metrics-top-k 4 \
---metrics-max-modules 8 \
---metrics-split-momentum \
---metrics-alignment-side lite \
---metrics-hessian-every 50 \
---metrics-hessian-top-k 1 \
---metrics-hessian-iters 2 \
---metrics-hessian-max-modules 8
+```text
+manifest.json                exact sweep configuration
+top_aware_sweep_rows.csv     one row per attempted run
+adaptive_lr_trace.json       LR boundary-extension decisions
 ```
 
-Set `NANOCHAT_FORCE_MATH_SDPA=1` when Hessian probes are enabled; flash/mem-efficient attention kernels may not support double backward.
-
-Logged quantities include:
-
-| Metric family | Contents |
-|---|---|
-| loss | train loss, validation BPB/loss |
-| norms | per-module weight, gradient, momentum, Nesterov momentum RMS |
-| spectrum | momentum and Nesterov spectral norm, top singular values, StreamingMuon sigma |
-| split alignment | side-aware split-half momentum SVD alignment, using `V` for tall and `U` for wide matrices |
-| Hessian probe | approximate sharpness and Hessian-gradient/momentum/component alignments |
-
-## Sweeps And Results
-
-Curated summaries live in `results/`. Rebuild the consolidated sweep catalog with:
+Rebuild the historical consolidated catalog:
 
 ```bash
 python scripts/build_sweep_catalog.py
 ```
 
-Main files:
+Curated catalog files:
 
 ```text
 results/sweep_catalog/all_sweeps.csv
 results/sweep_catalog/best_by_batch_method.csv
 results/sweep_catalog/summary.json
-results/sweep_catalog/README.md
 ```
 
-Comparison rule: first compare rows within the same `family`. Historical single-GPU native rows and newer same-driver StreamingMuon DDP rows can have different absolute BPB.
-
-Currently organized result sets:
-
-```text
-results/topaware_128k_near_identity_lr001/summary.json
-results/topaware_128k_alpha125_lrsweep/summary.json
-results/dynamics_128k_200step/summary.json
-results/recipes/d8_metrics_grid_recipe.json
-```
-
-## Reusable Commands
-
-Top-Aware alpha/LR sweep:
-
-```bash
-python run_top_aware_muon_sweep.py \
-  --methods "streaming_identity native_muon top_aware_muon" \
-  --batches "262144 1048576" \
-  --alphas "0.5 0.75 1.0" \
-  --lrs "0.005 0.01 0.02 0.04" \
-  --seeds "42" \
-  --tokens 402653184 \
-  --depth 8 \
-  --nproc-per-node 8
-```
-
-Single StreamingMuon identity run:
-
-```bash
-torchrun --standalone --nproc_per_node=8 run_eval.py \
-  --candidate-file candidates/identity.py \
-  --total-batch-size 262144 \
-  --device-batch-size 16 \
-  --max-seq-len 1024 \
-  --max-steps 1536 \
-  --matrix-lr 0.02 \
-  --num-iters 2 --pure-qr --fallback-ortho-tol 0.01 \
-  --output-file results/raw/identity_262k_lr002.json
-```
-
-Native Muon control:
-
-```bash
-torchrun --standalone --nproc_per_node=8 run_native_muon_v9.py \
-  --total-batch-size 262144 \
-  --device-batch-size 16 \
-  --max-steps 1536 \
-  --matrix-lr 0.02 \
-  --output-file results/raw/native_muon_262k_lr002.json
-```
-
-Native LITE control, single-process only:
-
-```bash
-python run_lite_v9.py \
-  --total-batch-size 262144 \
-  --device-batch-size 16 \
-  --max-steps 1536 \
-  --matrix-lr 0.02 \
-  --lite-chi 2 --lite-rs 0.1 --lite-chi-warmup 0.5 \
-  --lite-chi-schedule warmup_hold \
-  --output-file results/raw/native_lite_262k_lr002.json
-```
+When comparing results, compare within the same recipe family first. Historical single-GPU native rows and newer same-driver StreamingMuon DDP rows can have different absolute BPB.
 
 ## Caveats
 
-- `native_lite` is not DDP-safe in this repo. Do not include it in 8-GPU DDP sweeps until a distributed LITE optimizer is implemented.
-- Historical 1B-token results remain useful for context, but new d8 dynamics runs should use the `0.4B` recipe unless the question specifically requires longer training.
-- Dense metric runs can be much slower than no-metrics runs. Use result JSON elapsed time to report measured overhead instead of assuming exactly `2x`.
+- `native_lite` is not DDP-safe here. Do not include it in 8-GPU DDP sweeps until a distributed LITE optimizer is implemented.
+- `streaming_lite` is not a primary claim baseline; it is mainly an implementation sanity check.
+- Dense metrics can be much slower than no-metrics training. Report measured `eval_time_seconds` from `result.json`.
+- New d8 dynamics runs should use the `0.4B` recipe unless the question explicitly needs longer training.

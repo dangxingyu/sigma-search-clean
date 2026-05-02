@@ -1,5 +1,18 @@
 # Experiment Log — LITE vs Muon diagnostic campaign
 
+## 2026-05-02 — logging audit fix and user-facing handoff sweep interface
+
+Latest update:
+- Audited clean-repo metric logging while v38 was starting. Stopped the partially-running v38 metrics grid before completion because StreamingMuon split alignment was logging split momentum buffer `M`, not optimizer input `M'`.
+- Fixed `run_eval.py`: split-half alignment now uses `M' = (1 - beta) * G_split + beta * M_split_new`, matching the matrix sent to StreamingMuon. In DDP, split gradients are all-reduced before updating diagnostic split momenta, so the split alignment is global-batch rather than rank-local.
+- Fixed `run_eval.py` and `run_native_muon_v9.py`: `train/loss` now records the raw mean cross-entropy across the optimizer step's grad-accum microbatches; `train/loss_ema` stores the smoothed value.
+- Fixed Hessian probe batch semantics: Hessian uses post-update weights and the first microbatch from the same optimizer step. In DDP this remains a rank0-local HVP, not a global-batch HVP; metadata records this caveat.
+- Verified the corrected logging path with a real 8xB200 200-step run: `search_evals/d8_metrics_alpha_grid_v38_logging_smoke_20260502_020957/top_aware_k1_a1_bsz262144_lr0p02_s42/result.json`. It wrote 200 metric entries, global-DDP split `M'` alignment, and Hessian/sharpness entries at steps 0 and 100.
+- Rewrote `README.md` to be handoff-oriented: quick start, recommended sweep, optimizer definitions, adaptive LR behavior, metrics caveats, output layout, and d8 recipe table.
+- Added `scripts/run_handoff_sweep.sh`, a user-facing wrapper around `run_top_aware_muon_sweep.py`.
+- Enhanced `run_top_aware_muon_sweep.py` with `--adaptive-lr`: after the initial LR grid, each `(method,batch,seed,top_k,alpha)` group extends outward if its best finite BPB is on the low or high LR boundary. Decisions are written to `adaptive_lr_trace.json`.
+- Validation passed: `python -m py_compile run_top_aware_muon_sweep.py run_eval.py run_native_muon_v9.py metric_logging.py`; `bash -n scripts/run_handoff_sweep.sh scripts/run_d8_metrics_grid.sh`; dry-run adaptive test correctly proposed `0.04` when `{0.01,0.02}` had best BPB at `0.02`.
+
 ## 2026-05-02 — clean repo sweep catalog, cleanup, and d8 0.4B metrics recipe
 
 Latest update:

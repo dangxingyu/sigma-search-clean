@@ -18,6 +18,7 @@ import json
 import time
 import math
 import argparse
+import re
 from pathlib import Path
 
 import torch
@@ -394,11 +395,40 @@ def main():
         metric_logs = []
         do_split_momentum = metrics_enabled and args.metrics_split_momentum and grad_accum_steps >= 2
         split_momentum_a = split_momentum_b = None
+        split_mtilde_a = split_mtilde_b = None
+        split_momentum_names = []
         if do_split_momentum:
-            split_momentum_a = {n: torch.zeros_like(p, dtype=torch.float32) for n, p in matrix_params_named.items()}
-            split_momentum_b = {n: torch.zeros_like(p, dtype=torch.float32) for n, p in matrix_params_named.items()}
-            print0(f"Metric logging: split-half momentum alignment enabled, "
-                   f"top_k={args.metrics_top_k}, side={args.metrics_alignment_side}")
+            module_pattern = re.compile(args.metrics_module_regex) if args.metrics_module_regex else None
+            split_momentum_names = [
+                n for n in matrix_params_named
+                if module_pattern is None or module_pattern.search(n) is not None
+            ]
+            if args.metrics_max_modules > 0:
+                split_momentum_names = split_momentum_names[:args.metrics_max_modules]
+            if not split_momentum_names:
+                do_split_momentum = False
+                print0("Metric logging: split-half momentum alignment disabled; no modules matched.")
+            else:
+                split_momentum_a = {
+                    n: torch.zeros_like(matrix_params_named[n], dtype=torch.float32)
+                    for n in split_momentum_names
+                }
+                split_momentum_b = {
+                    n: torch.zeros_like(matrix_params_named[n], dtype=torch.float32)
+                    for n in split_momentum_names
+                }
+                split_mtilde_a = {
+                    n: torch.zeros_like(matrix_params_named[n], dtype=torch.float32)
+                    for n in split_momentum_names
+                }
+                split_mtilde_b = {
+                    n: torch.zeros_like(matrix_params_named[n], dtype=torch.float32)
+                    for n in split_momentum_names
+                }
+                scope = "global DDP-averaged" if ddp else "single-process"
+                print0(f"Metric logging: split-half momentum alignment enabled, "
+                       f"top_k={args.metrics_top_k}, side={args.metrics_alignment_side}, "
+                       f"tensor=M_tilde, scope={scope}, modules={len(split_momentum_names)}")
         elif metrics_enabled:
             reason = "disabled by flag" if not args.metrics_split_momentum else f"grad_accum={grad_accum_steps} < 2"
             print0(f"Metric logging enabled every {args.metrics_every} steps; split momentum {reason}.")
@@ -427,30 +457,57 @@ def main():
             muon_momentum = get_muon_momentum(step)
             muon_wd = get_weight_decay(step)
             metrics_due = metrics_enabled and (step % args.metrics_every == 0)
+            hessian_due = (
+                metrics_due
+                and args.metrics_hessian_every > 0
+                and step % args.metrics_hessian_every == 0
+            )
             half = grad_accum_steps // 2 if do_split_momentum else 0
             split_grad_a = {}
+            hessian_batch = None
+            train_loss_sum = 0.0
             for micro_step in range(grad_accum_steps):
+                if hessian_due and hessian_batch is None:
+                    hessian_batch = (x.detach().clone(), y.detach().clone())
                 loss = model(x, y)
                 train_loss_val = loss.detach().item()
+                train_loss_sum += train_loss_val
                 loss = loss / grad_accum_steps
                 loss.backward()
                 x, y = next(train_loader)
                 if do_split_momentum and (micro_step + 1) == half:
                     scale = grad_accum_steps / half
-                    for n, p in matrix_params_named.items():
+                    for n in split_momentum_names:
+                        p = matrix_params_named[n]
                         if p.grad is not None:
                             split_grad_a[n] = (scale * p.grad.detach().to(torch.float32)).clone()
 
-            if do_split_momentum and split_momentum_a is not None and split_momentum_b is not None:
+            if (
+                do_split_momentum
+                and split_momentum_a is not None
+                and split_momentum_b is not None
+                and split_mtilde_a is not None
+                and split_mtilde_b is not None
+            ):
                 rest = grad_accum_steps - half
-                for n, p in matrix_params_named.items():
+                for n in split_momentum_names:
+                    p = matrix_params_named[n]
                     if n not in split_grad_a or p.grad is None:
                         continue
                     grad_full = p.grad.detach().to(torch.float32)
                     grad_a = split_grad_a[n]
                     grad_b = (grad_accum_steps * grad_full - half * grad_a) / rest
+                    if ddp:
+                        torch.distributed.all_reduce(grad_a, op=torch.distributed.ReduceOp.AVG)
+                        torch.distributed.all_reduce(grad_b, op=torch.distributed.ReduceOp.AVG)
                     split_momentum_a[n].mul_(muon_momentum).add_(grad_a, alpha=1.0 - muon_momentum)
                     split_momentum_b[n].mul_(muon_momentum).add_(grad_b, alpha=1.0 - muon_momentum)
+                    split_mtilde_a[n].copy_(grad_a).mul_(1.0 - muon_momentum).add_(
+                        split_momentum_a[n], alpha=muon_momentum
+                    )
+                    split_mtilde_b[n].copy_(grad_b).mul_(1.0 - muon_momentum).add_(
+                        split_momentum_b[n], alpha=muon_momentum
+                    )
 
             # Schedule
             for group in optimizer.param_groups:
@@ -464,7 +521,8 @@ def main():
 
             # Logging
             ema_beta = 0.9
-            smooth_train_loss = ema_beta * smooth_train_loss + (1 - ema_beta) * train_loss_val
+            train_loss_mean = train_loss_sum / grad_accum_steps
+            smooth_train_loss = ema_beta * smooth_train_loss + (1 - ema_beta) * train_loss_mean
             debiased = smooth_train_loss / (1 - ema_beta ** (step + 1))
             dt = time.time() - t0
 
@@ -485,7 +543,7 @@ def main():
                     top_k=args.metrics_top_k,
                     module_regex=args.metrics_module_regex,
                     max_modules=args.metrics_max_modules,
-                    train_loss=debiased,
+                    train_loss=train_loss_mean,
                     lr_multiplier=lrm,
                     muon_momentum=muon_momentum,
                     save_components=args.metrics_save_components,
@@ -494,15 +552,27 @@ def main():
                 clear_metric_caches(optimizer)
 
                 if rank == 0 and metric_entry is not None:
-                    if do_split_momentum and split_momentum_a is not None and split_momentum_b is not None:
+                    metric_entry.setdefault("metadata", {})
+                    metric_entry["metadata"].update({
+                        "train_loss": "raw mean cross-entropy over this optimizer step's grad-accum microbatches",
+                        "train_loss_ema_scalar": "train/loss_ema",
+                        "hessian_weight_state": "post_optimizer_step",
+                        "hessian_batch_source": "first_microbatch_same_optimizer_step" if hessian_batch is not None else None,
+                        "hessian_batch_scope": "rank0_local_microbatch" if ddp and hessian_batch is not None else "single_process",
+                        "split_momentum_alignment_scope": "global_ddp_average" if ddp else "single_process",
+                    })
+                    metric_entry["scalars"]["train/loss_ema"] = debiased
+                    if do_split_momentum and split_mtilde_a is not None and split_mtilde_b is not None:
                         split_stats = split_momentum_alignment(
-                            split_momentum_a,
-                            split_momentum_b,
+                            split_mtilde_a,
+                            split_mtilde_b,
                             top_k=args.metrics_top_k,
                             alignment_side=args.metrics_alignment_side,
                             module_regex=args.metrics_module_regex,
                             max_modules=args.metrics_max_modules,
                         )
+                        split_stats["tensor"] = "momentum_after_nesterov"
+                        split_stats["definition"] = "M_tilde = (1 - beta) * G_split + beta * M_split_new"
                         metric_entry["split_momentum_alignment"] = split_stats
                         for key, value in split_stats.get("vectors", {}).items():
                             metric_entry["vectors"][key] = value
@@ -517,7 +587,7 @@ def main():
                         try:
                             hessian_stats = hessian_power_probe(
                                 eager_model,
-                                (x, y),
+                                hessian_batch if hessian_batch is not None else (x, y),
                                 hessian_refs,
                                 matrix_params_named,
                                 top_k=args.metrics_hessian_top_k,
