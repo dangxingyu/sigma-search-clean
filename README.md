@@ -86,6 +86,39 @@ STAMP=d12_c001_b4m   BATCHES="4194304" bash scripts/run_d12_sweep.sh
 
 If a shard is preempted, resubmit only that shard with the same `STAMP`. If you change core recipe knobs such as `DEPTH`, `TOKENS`, `BATCHES`, `LRS`, `ALPHAS`, or `SEEDS`, use a new `STAMP` rather than reusing an old checkpoint directory.
 
+To submit all default d12 batch shards to SLURM at once, use the optional submitter:
+
+```bash
+SUBMIT_DRY_RUN=1 \
+CAMPAIGN=d12_c001 \
+SBATCH_PARTITION=<partition> \
+SBATCH_ACCOUNT=<account> \
+bash scripts/submit_d12_sweep_shards_slurm.sh
+```
+
+Remove `SUBMIT_DRY_RUN=1` after inspecting the generated sbatch files under `logs/slurm_submit/<campaign>/`. By default this submits one job per batch:
+
+```text
+d12_c001_b262k
+d12_c001_b1m
+d12_c001_b4m
+```
+
+Each job runs `scripts/run_d12_sweep.sh` with its own stable `STAMP`, so preemption resume is safe. If the scheduler does not automatically requeue jobs, rerun the same submitter command with the same `CAMPAIGN`; completed cases skip and incomplete cases resume. Do not rerun the submitter while the same campaign's jobs are still active.
+
+Useful submitter overrides:
+
+```bash
+CAMPAIGN=d12_alpha_scan \
+SHARD_BY=batch_alpha \
+METHODS=top_aware_muon \
+ALPHAS="0.25 0.5 0.75 1.0" \
+SBATCH_GPU_DIRECTIVE="--gres=gpu:8" \
+bash scripts/submit_d12_sweep_shards_slurm.sh
+```
+
+`SHARD_BY=batch` is the default and avoids duplicating the `streaming_identity` baseline. If you shard by `batch_alpha` with `METHODS="streaming_identity top_aware_muon"` and multiple alphas, the identity baseline will be duplicated in each alpha shard.
+
 ## Repository Layout
 
 ```text
@@ -99,6 +132,7 @@ metric_logging.py            opt-in optimizer dynamics metrics
 scripts/run_handoff_sweep.sh user-facing sweep wrapper
 scripts/run_d12_sweep.sh     blessed d12 optimizer-quality sweep
 scripts/run_d12_statistics.sh dense d12 dynamics/statistics runner
+scripts/submit_d12_sweep_shards_slurm.sh optional SLURM shard submitter
 scripts/run_d8_metrics_grid.sh canonical dense-metrics dynamics run
 results/                     curated JSON/CSV summaries for pass-by
 docs/                        experiment plan, log, and current conclusions
