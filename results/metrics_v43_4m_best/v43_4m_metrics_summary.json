@@ -1,0 +1,106 @@
+[
+  {
+    "case": "identity_lr0.02",
+    "label": "identity c=1",
+    "lr": "0.02",
+    "score": 1.2066424123322734,
+    "error": null,
+    "steps_completed": 96,
+    "metric_logs": 96,
+    "hessian_steps": [
+      0,
+      24,
+      48,
+      72
+    ],
+    "sharpness": [
+      0.10119754821062088,
+      0.3353993594646454,
+      0.5742266178131104,
+      0.833035409450531
+    ],
+    "projection_norm_mean": 0.03731472271164935,
+    "projection_norm_last10": 0.019819839857518673,
+    "projection_corr_mean": -0.7835834077136083,
+    "projection_corr_last10": -0.9780699372291565,
+    "json_size_mb": 6.843294143676758
+  },
+  {
+    "case": "identity_lr0.04",
+    "label": "identity c=1",
+    "lr": "0.04",
+    "score": 1.2068696224585742,
+    "error": null,
+    "steps_completed": 96,
+    "metric_logs": 96,
+    "hessian_steps": [
+      0,
+      24,
+      48,
+      72
+    ],
+    "sharpness": [
+      0.10029450803995132,
+      0.1936035305261612,
+      0.1713891178369522,
+      0.2198784053325653
+    ],
+    "projection_norm_mean": 0.01989097099747438,
+    "projection_norm_last10": 0.009825209504924715,
+    "projection_corr_mean": -0.8250629663128745,
+    "projection_corr_last10": -0.996757036447525,
+    "json_size_mb": 6.848920822143555
+  },
+  {
+    "case": "topaware_lr0.02",
+    "label": "top-aware c=0.5",
+    "lr": "0.02",
+    "score": 1.1766477051200148,
+    "error": null,
+    "steps_completed": 96,
+    "metric_logs": 96,
+    "hessian_steps": [
+      0,
+      24,
+      48,
+      72
+    ],
+    "sharpness": [
+      0.10111798346042633,
+      0.6857086420059204,
+      0.9622798562049866,
+      1.5100280046463013
+    ],
+    "projection_norm_mean": 0.04271297975166184,
+    "projection_norm_last10": 0.018969872035086155,
+    "projection_corr_mean": -0.7791386024222117,
+    "projection_corr_last10": -0.965690016746521,
+    "json_size_mb": 6.843973159790039
+  },
+  {
+    "case": "topaware_lr0.04",
+    "label": "top-aware c=0.5",
+    "lr": "0.04",
+    "score": 1.1773144827961457,
+    "error": null,
+    "steps_completed": 96,
+    "metric_logs": 96,
+    "hessian_steps": [
+      0,
+      24,
+      48,
+      72
+    ],
+    "sharpness": [
+      0.10010193288326263,
+      0.33550769090652466,
+      0.32877886295318604,
+      0.5103889107704163
+    ],
+    "projection_norm_mean": 0.022262411997199586,
+    "projection_norm_last10": 0.006328957201912999,
+    "projection_corr_mean": -0.7840254449137402,
+    "projection_corr_last10": -0.9668227016925812,
+    "json_size_mb": 6.849733352661133
+  }
+]

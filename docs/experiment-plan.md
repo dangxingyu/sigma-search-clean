@@ -2,6 +2,11 @@
 
 ## Current clean-handoff plan as of 2026-05-02
 
+Status checkpoint:
+- v42 completed the core `c=1` vs `c=0.5` d8 / 0.4B-token sweep at `{262K,1M,4M}`. Treat the current evidence as: `262K` identity slight win, `1M` effectively tie/tiny `c=0.5` win only after LR extension, `4M` strong `c=0.5` win.
+- v43 completed the first dense dynamics run at `4M` with metrics every step and Hessian top-4 probes every 24 steps. Use `results/metrics_v43_4m_best/` for the current dynamics sanity plots.
+- v44 is the active transition sweep: `{2M,8M}`, methods `{streaming_identity, top_aware_muon}`, `alpha=0.5`, LR `{0.01,0.02,0.04,0.08}`, metrics off. If best LR lands at `0.08`, extend upward before interpreting the winner.
+
 Immediate standalone-repo priorities:
 - Use the clean method set: `top_aware_muon` and `streaming_identity`. Keep native Muon/LITE code as deprecated targeted validation controls, not as default sweep methods.
 - For handoff optimizer-quality sweeps, use `scripts/run_handoff_sweep.sh`. Keep metrics off by default, start from an LR grid such as `{0.005,0.01,0.02,0.04}`, and leave `ADAPTIVE_LR=1` so boundary LR optima are extended automatically before interpreting winners.

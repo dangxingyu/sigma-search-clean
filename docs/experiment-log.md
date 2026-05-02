@@ -1,5 +1,26 @@
 # Experiment Log — LITE vs Muon diagnostic campaign
 
+## 2026-05-02 — v42/v43 clean c=0.5 study and no-SVD dynamics logging
+
+Latest update:
+- Pushed clean repo commits through `38711f0` to `git@github.com:dangxingyu/sigma-search-clean.git`.
+- v42 completed the primary d8 / 0.4B-token optimizer-quality sweep for `streaming_identity` (`c=1`) vs Top-Aware Muon `top_k=1, alpha=0.5` (`c=0.5`) at batches `{262144, 1048576, 4194304}` with LR boundary extension.
+- v42 best rows:
+
+| batch | identity best | c=0.5 best | c=0.5 - identity | winner |
+|---:|---:|---:|---:|---|
+| 262144 | `0.967732 @ 0.04` | `0.969135 @ 0.02` | `+0.001403` | identity |
+| 1048576 | `1.010557 @ 0.02` | `1.009856 @ 0.08` | `-0.000700` | c=0.5, tiny |
+| 4194304 | `1.206814 @ 0.04` | `1.174488 @ 0.02` | `-0.032326` | c=0.5 |
+
+- v42 artifacts are in `results/sweep_catalog/`: `v42_c05_vs_identity_final.md`, `v42_c05_vs_identity_lr_sweep_table.md`, and `v42_c05_vs_identity_lr_sweep.svg`.
+- v43 completed the targeted 4M dynamics run with metrics every step and Hessian every 24 steps for identity `lr={0.02,0.04}` and Top-Aware `c=0.5, lr={0.02,0.04}`.
+- v43 metric sanity passed: all four runs have 96 per-step metric records and Hessian probes at steps `[0, 24, 48, 72]`; each result JSON is about `6.8MB`.
+- v43 best result is Top-Aware `c=0.5, lr=0.02` at `1.176648`, about `0.030 BPB` better than best identity in the same metrics run.
+- v43 artifacts are in `results/metrics_v43_4m_best/`: `v43_4m_metrics_summary.md`, `v43_4m_metrics_summary.json`, and `v43_4m_metrics_dynamics.svg`.
+- Current metrics path is no-SVD for the active StreamingMuon study: it logs cached streaming `sigma`, cached basis-derived alignments, `weight_norm`, `grad_norm`, `momentum_after_nesterov_*`, global selected-subspace Hessian probes, and fixed-Hessian-subspace gradient projection correlations.
+- Launched v44 transition sweep while analyzing v43: `search_evals/v44_d8_c05_transition_2m8m`, batches `{2097152, 8388608}`, methods `{streaming_identity, top_aware_muon}`, `alpha=0.5`, LR grid `{0.01,0.02,0.04,0.08}`, metrics off.
+
 ## 2026-05-02 — logging audit fix and user-facing handoff sweep interface
 
 Latest update:
