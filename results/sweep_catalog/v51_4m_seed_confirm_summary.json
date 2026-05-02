@@ -1,0 +1,36 @@
+{
+  "pairs": [
+    {
+      "seed": 42,
+      "identity": 1.2068139791623371,
+      "identity_lr": 0.04,
+      "topaware": 1.174487687423776,
+      "topaware_lr": 0.02,
+      "delta": -0.032326291738561164,
+      "winner": "c=0.5"
+    },
+    {
+      "seed": 43,
+      "identity": 1.228648611471892,
+      "identity_lr": 0.04,
+      "topaware": 1.2033467062655736,
+      "topaware_lr": 0.04,
+      "delta": -0.025301905206318365,
+      "winner": "c=0.5"
+    },
+    {
+      "seed": 44,
+      "identity": 1.2095363709020541,
+      "identity_lr": 0.04,
+      "topaware": 1.191445706474066,
+      "topaware_lr": 0.02,
+      "delta": -0.018090664427988123,
+      "winner": "c=0.5"
+    }
+  ],
+  "mean_delta": -0.025239620457622552,
+  "sem_delta": 0.004109589629708516,
+  "n": 3,
+  "identity_wins": 0,
+  "topaware_wins": 3
+}
