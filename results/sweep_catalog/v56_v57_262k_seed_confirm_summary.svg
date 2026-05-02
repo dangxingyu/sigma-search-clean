@@ -1,0 +1,17 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="720" height="360" viewBox="0 0 720 360">
+<rect width="100%" height="100%" fill="#fbfaf7"/>
+<text x="28" y="32" font-family="serif" font-size="22" font-weight="700" fill="#222">262K seed confirmation: c=0.5 - identity</text>
+<rect x="70" y="60" width="570" height="220" fill="#fff" stroke="#ddd6c8"/>
+<line x1="70" y1="163.7" x2="640" y2="163.7" stroke="#333"/>
+<polyline points="70.0,144.0 355.0,196.0 640.0,176.8" fill="none" stroke="#c94f1a" stroke-width="3"/>
+<circle cx="70.0" cy="144.0" r="5" fill="#174a7c"/>
+<text x="70.0" y="134.0" text-anchor="middle" font-family="monospace" font-size="10">+0.001</text>
+<text x="70.0" y="300" text-anchor="middle" font-family="monospace" font-size="11">s42</text>
+<circle cx="355.0" cy="196.0" r="5" fill="#c94f1a"/>
+<text x="355.0" y="186.0" text-anchor="middle" font-family="monospace" font-size="10">-0.002</text>
+<text x="355.0" y="300" text-anchor="middle" font-family="monospace" font-size="11">s43</text>
+<circle cx="640.0" cy="176.8" r="5" fill="#c94f1a"/>
+<text x="640.0" y="166.8" text-anchor="middle" font-family="monospace" font-size="10">-0.001</text>
+<text x="640.0" y="300" text-anchor="middle" font-family="monospace" font-size="11">s44</text>
+<text x="360.0" y="340" text-anchor="middle" font-family="sans-serif" font-size="12" fill="#554d44">Mean -0.0006 ± 0.0011 SEM; negative means Top-Aware wins.</text>
+</svg>

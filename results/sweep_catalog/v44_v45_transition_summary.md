@@ -11,6 +11,7 @@ Clean d8 / 0.4B-token StreamingMuon sweep, same driver, seed 42. Lower BPB is be
 | 8388608 | 1.456445 @ 0.02 | 1.421837 @ 0.02 | -0.034608 | c=0.5 | yes |
 
 Notes:
+- Follow-up 262K seeds `{42,43,44}` show near-tie/noisy behavior: mean `c=0.5 - identity = -0.000613 ± 0.001083` SEM, with identity winning 1 seed and c=0.5 winning 2 seeds.
 - 1M Top-Aware was explicitly extended to `lr=0.16`; it got worse than `0.08`, so the 1M high-LR side is closed.
 - 2M was explicitly extended to `lr=0.16`; both methods got worse, so the `0.08` optima are closed on the high-LR side.
 - The one-seed pattern is not perfectly monotone: after identity high-LR closure, 1M seed42 favors identity, 2M seed42 favors identity, while 4M/8M strongly favor c=0.5.

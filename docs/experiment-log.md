@@ -40,7 +40,7 @@ Latest update:
 - v51 completed 4M seed confirmation using LRs `{0.02,0.04}`, seeds `{42,43,44}`. Mean delta `c=0.5 - identity = -0.025240 ± 0.004110` SEM; Top-Aware wins 3/3 seeds. Artifact: `results/sweep_catalog/v51_4m_seed_confirm_summary.md`.
 - v52-v55 completed 1M seed confirmation with closed high-LR checks. Mean delta `c=0.5 - identity = +0.001850 ± 0.002798` SEM over seeds `{42,43,44}`; identity wins seed42, Top-Aware wins seeds43/44 by tiny margins. Artifact: `results/sweep_catalog/v52_v55_1m_seed_confirm_summary.md`.
 - Correction: the earlier 1M seed42 Top-Aware edge was an LR-sweep artifact. After adding identity `lr=0.08`, seed42 favors identity (`1.002451` vs Top-Aware `1.009856`).
-- Launched v56 262K seed confirmation: batch `262144`, LRs `{0.02,0.04}`, methods `{streaming_identity, top_aware_muon}`, seeds `{43,44}`, metrics off.
+- v56/v57 completed 262K seed confirmation with boundary check. Mean delta `c=0.5 - identity = -0.000613 ± 0.001083` SEM over seeds `{42,43,44}`; identity wins seed42, Top-Aware wins seeds43/44 by tiny margins. Artifact: `results/sweep_catalog/v56_v57_262k_seed_confirm_summary.md`.
 
 ## 2026-05-02 — logging audit fix and user-facing handoff sweep interface
 

@@ -12,7 +12,8 @@ Status checkpoint:
 - v49/v50 completed the 2M seed check at `lr=0.08`: seeds `{42,43,44,45,46}` are a tie/noisy transition, mean `c=0.5 - identity = +0.000507 ± 0.004183` SEM.
 - v51 confirmed the 4M Top-Aware win across seeds `{42,43,44}`: mean `c=0.5 - identity = -0.025240 ± 0.004110` SEM.
 - v52-v55 completed the 1M seed check with high-LR closure: seeds `{42,43,44}` are near-tie, mean `c=0.5 - identity = +0.001850 ± 0.002798` SEM.
-- v56 is active to check 262K seeds `{43,44}` with LR grid `{0.02,0.04}`.
+- v56/v57 completed the 262K seed check: seeds `{42,43,44}` are near-tie, mean `c=0.5 - identity = -0.000613 ± 0.001083` SEM.
+- Current next useful runs are optional robustness checks, not blockers: either add more seeds in the 262K/1M/2M transition band, or run dynamics metrics at 1M/262K if we need mechanism rather than winner classification.
 
 Immediate standalone-repo priorities:
 - Use the clean method set: `top_aware_muon` and `streaming_identity`. Keep native Muon/LITE code as deprecated targeted validation controls, not as default sweep methods.
