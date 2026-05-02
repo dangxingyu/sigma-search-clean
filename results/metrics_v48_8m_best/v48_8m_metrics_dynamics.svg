@@ -1,0 +1,70 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="960" height="520" viewBox="0 0 960 520">
+<rect width="100%" height="100%" fill="#fbfaf7"/>
+<text x="32" y="34" font-family="serif" font-size="23" font-weight="700" fill="#222">v48 8M dynamics: identity vs Top-Aware c=0.5</text>
+<line x1="570" y1="30" x2="598" y2="30" stroke="#174a7c" stroke-width="3"/>
+<text x="606" y="35" font-family="sans-serif" font-size="12" fill="#222">identity c=1</text>
+<line x1="780" y1="30" x2="808" y2="30" stroke="#c94f1a" stroke-width="3"/>
+<text x="816" y="35" font-family="sans-serif" font-size="12" fill="#222">top-aware c=0.5</text>
+<rect x="68.0" y="62.0" width="414.5" height="183.0" fill="#fff" stroke="#ddd6c8"/>
+<text x="68.0" y="50.0" font-family="sans-serif" font-size="14" font-weight="700">Validation BPB (steps >=12)</text>
+<line x1="68.0" y1="62.0" x2="482.5" y2="62.0" stroke="#eee8dc"/>
+<text x="60.0" y="66.0" text-anchor="end" font-family="monospace" font-size="10" fill="#746b5d">1.967</text>
+<line x1="68.0" y1="153.5" x2="482.5" y2="153.5" stroke="#eee8dc"/>
+<text x="60.0" y="157.5" text-anchor="end" font-family="monospace" font-size="10" fill="#746b5d">1.657</text>
+<line x1="68.0" y1="245.0" x2="482.5" y2="245.0" stroke="#eee8dc"/>
+<text x="60.0" y="249.0" text-anchor="end" font-family="monospace" font-size="10" fill="#746b5d">1.346</text>
+<polyline points="68.0,91.9 137.1,121.1 206.2,147.8 275.2,170.2 344.3,189.3 413.4,205.0 482.5,214.3" fill="none" stroke="#174a7c" stroke-width="2.4"/>
+<circle cx="68.0" cy="91.9" r="3" fill="#fbfaf7" stroke="#174a7c" stroke-width="1.6"/>
+<circle cx="137.1" cy="121.1" r="3" fill="#fbfaf7" stroke="#174a7c" stroke-width="1.6"/>
+<circle cx="206.2" cy="147.8" r="3" fill="#fbfaf7" stroke="#174a7c" stroke-width="1.6"/>
+<circle cx="275.2" cy="170.2" r="3" fill="#fbfaf7" stroke="#174a7c" stroke-width="1.6"/>
+<circle cx="344.3" cy="189.3" r="3" fill="#fbfaf7" stroke="#174a7c" stroke-width="1.6"/>
+<circle cx="413.4" cy="205.0" r="3" fill="#fbfaf7" stroke="#174a7c" stroke-width="1.6"/>
+<circle cx="482.5" cy="214.3" r="3" fill="#fbfaf7" stroke="#174a7c" stroke-width="1.6"/>
+<polyline points="68.0,86.2 137.1,126.1 206.2,153.2 275.2,176.0 344.3,195.9 413.4,211.5 482.5,220.8" fill="none" stroke="#c94f1a" stroke-width="2.4"/>
+<circle cx="68.0" cy="86.2" r="3" fill="#fbfaf7" stroke="#c94f1a" stroke-width="1.6"/>
+<circle cx="137.1" cy="126.1" r="3" fill="#fbfaf7" stroke="#c94f1a" stroke-width="1.6"/>
+<circle cx="206.2" cy="153.2" r="3" fill="#fbfaf7" stroke="#c94f1a" stroke-width="1.6"/>
+<circle cx="275.2" cy="176.0" r="3" fill="#fbfaf7" stroke="#c94f1a" stroke-width="1.6"/>
+<circle cx="344.3" cy="195.9" r="3" fill="#fbfaf7" stroke="#c94f1a" stroke-width="1.6"/>
+<circle cx="413.4" cy="211.5" r="3" fill="#fbfaf7" stroke="#c94f1a" stroke-width="1.6"/>
+<circle cx="482.5" cy="220.8" r="3" fill="#fbfaf7" stroke="#c94f1a" stroke-width="1.6"/>
+<rect x="517.5" y="62.0" width="414.5" height="183.0" fill="#fff" stroke="#ddd6c8"/>
+<text x="517.5" y="50.0" font-family="sans-serif" font-size="14" font-weight="700">Sharpness</text>
+<line x1="517.5" y1="62.0" x2="932.0" y2="62.0" stroke="#eee8dc"/>
+<text x="509.5" y="66.0" text-anchor="end" font-family="monospace" font-size="10" fill="#746b5d">1.994</text>
+<line x1="517.5" y1="153.5" x2="932.0" y2="153.5" stroke="#eee8dc"/>
+<text x="509.5" y="157.5" text-anchor="end" font-family="monospace" font-size="10" fill="#746b5d">0.937</text>
+<line x1="517.5" y1="245.0" x2="932.0" y2="245.0" stroke="#eee8dc"/>
+<text x="509.5" y="249.0" text-anchor="end" font-family="monospace" font-size="10" fill="#746b5d">-0.119</text>
+<polyline points="517.5,220.8 655.7,109.2 793.8,183.6 932.0,144.1" fill="none" stroke="#174a7c" stroke-width="2.4"/>
+<circle cx="517.5" cy="220.8" r="3" fill="#fbfaf7" stroke="#174a7c" stroke-width="1.6"/>
+<circle cx="655.7" cy="109.2" r="3" fill="#fbfaf7" stroke="#174a7c" stroke-width="1.6"/>
+<circle cx="793.8" cy="183.6" r="3" fill="#fbfaf7" stroke="#174a7c" stroke-width="1.6"/>
+<circle cx="932.0" cy="144.1" r="3" fill="#fbfaf7" stroke="#174a7c" stroke-width="1.6"/>
+<polyline points="517.5,220.8 655.7,110.1 793.8,141.9 932.0,86.2" fill="none" stroke="#c94f1a" stroke-width="2.4"/>
+<circle cx="517.5" cy="220.8" r="3" fill="#fbfaf7" stroke="#c94f1a" stroke-width="1.6"/>
+<circle cx="655.7" cy="110.1" r="3" fill="#fbfaf7" stroke="#c94f1a" stroke-width="1.6"/>
+<circle cx="793.8" cy="141.9" r="3" fill="#fbfaf7" stroke="#c94f1a" stroke-width="1.6"/>
+<circle cx="932.0" cy="86.2" r="3" fill="#fbfaf7" stroke="#c94f1a" stroke-width="1.6"/>
+<rect x="68.0" y="287.0" width="414.5" height="183.0" fill="#fff" stroke="#ddd6c8"/>
+<text x="68.0" y="275.0" font-family="sans-serif" font-size="14" font-weight="700">Projection norm</text>
+<line x1="68.0" y1="287.0" x2="482.5" y2="287.0" stroke="#eee8dc"/>
+<text x="60.0" y="291.0" text-anchor="end" font-family="monospace" font-size="10" fill="#746b5d">0.706</text>
+<line x1="68.0" y1="378.5" x2="482.5" y2="378.5" stroke="#eee8dc"/>
+<text x="60.0" y="382.5" text-anchor="end" font-family="monospace" font-size="10" fill="#746b5d">0.299</text>
+<line x1="68.0" y1="470.0" x2="482.5" y2="470.0" stroke="#eee8dc"/>
+<text x="60.0" y="474.0" text-anchor="end" font-family="monospace" font-size="10" fill="#746b5d">-0.108</text>
+<polyline points="68.0,433.5 77.0,445.1 86.0,445.8 95.0,445.0 104.0,444.8 113.1,444.9 122.1,445.7 131.1,443.6 140.1,445.4 149.1,444.8 158.1,444.9 176.1,381.7 185.1,391.5 194.2,403.1 203.2,406.2 212.2,399.8 221.2,397.8 230.2,409.1 239.2,424.5 248.2,426.7 257.2,419.5 266.2,419.3 284.3,424.0 293.3,425.6 302.3,424.8 311.3,419.8 320.3,416.5 329.3,418.1 338.3,416.0 347.3,418.7 356.3,419.2 365.4,426.2 374.4,429.7 392.4,433.2 401.4,434.7 410.4,433.6 419.4,432.8 428.4,431.3 437.4,426.7 446.5,424.3 455.5,429.2 464.5,434.0 473.5,438.0 482.5,442.3" fill="none" stroke="#174a7c" stroke-width="2.4"/>
+<polyline points="68.0,433.6 77.0,445.0 86.0,445.8 95.0,445.4 104.0,445.2 113.1,445.0 122.1,445.5 131.1,444.5 140.1,444.8 149.1,445.7 158.1,445.5 176.1,311.2 185.1,417.3 194.2,441.3 203.2,440.1 212.2,440.2 221.2,434.6 230.2,422.1 239.2,409.8 248.2,403.6 257.2,415.6 266.2,416.4 284.3,396.2 293.3,397.6 302.3,409.6 311.3,423.8 320.3,419.7 329.3,413.2 338.3,414.3 347.3,420.2 356.3,420.7 365.4,418.6 374.4,422.8 392.4,438.0 401.4,439.4 410.4,432.2 419.4,424.7 428.4,420.1 437.4,424.4 446.5,430.8 455.5,434.4 464.5,436.9 473.5,441.1 482.5,444.5" fill="none" stroke="#c94f1a" stroke-width="2.4"/>
+<rect x="517.5" y="287.0" width="414.5" height="183.0" fill="#fff" stroke="#ddd6c8"/>
+<text x="517.5" y="275.0" font-family="sans-serif" font-size="14" font-weight="700">Projection cosine</text>
+<line x1="517.5" y1="287.0" x2="932.0" y2="287.0" stroke="#eee8dc"/>
+<text x="509.5" y="291.0" text-anchor="end" font-family="monospace" font-size="10" fill="#746b5d">1.050</text>
+<line x1="517.5" y1="378.5" x2="932.0" y2="378.5" stroke="#eee8dc"/>
+<text x="509.5" y="382.5" text-anchor="end" font-family="monospace" font-size="10" fill="#746b5d">0.000</text>
+<line x1="517.5" y1="470.0" x2="932.0" y2="470.0" stroke="#eee8dc"/>
+<text x="509.5" y="474.0" text-anchor="end" font-family="monospace" font-size="10" fill="#746b5d">-1.050</text>
+<polyline points="517.5,443.9 526.7,381.5 535.9,422.5 545.1,291.4 554.3,291.5 563.6,458.4 572.8,302.4 582.0,465.2 591.2,465.3 600.4,465.5 628.0,463.5 637.2,460.3 646.5,451.3 655.7,463.6 664.9,465.1 674.1,465.6 683.3,464.9 692.5,465.3 701.7,465.6 710.9,465.4 738.6,465.6 747.8,465.2 757.0,464.9 766.2,464.3 775.4,464.2 784.6,463.9 793.8,463.4 803.0,461.9 812.3,458.4 821.5,454.5 849.1,459.4 858.3,459.2 867.5,465.5 876.7,463.9 885.9,464.9 895.2,465.2 904.4,465.5 913.6,465.6 922.8,465.4 932.0,464.9" fill="none" stroke="#174a7c" stroke-width="2.4"/>
+<polyline points="517.5,441.1 526.7,380.0 535.9,428.2 545.1,291.4 554.3,291.4 563.6,293.1 572.8,464.3 582.0,291.4 591.2,298.6 600.4,297.1 628.0,356.5 637.2,436.9 646.5,321.7 655.7,440.5 664.9,464.7 674.1,465.6 683.3,464.9 692.5,465.4 701.7,464.4 710.9,463.0 738.6,457.8 747.8,465.4 757.0,457.7 766.2,462.1 775.4,465.2 784.6,465.6 793.8,464.8 803.0,465.0 812.3,463.9 821.5,464.3 849.1,407.6 858.3,449.4 867.5,463.3 876.7,465.0 885.9,465.6 895.2,465.6 904.4,465.6 913.6,464.7 922.8,464.4 932.0,458.7" fill="none" stroke="#c94f1a" stroke-width="2.4"/>
+</svg>

@@ -8,7 +8,8 @@ Status checkpoint:
 - v44/v45 completed the transition sweep: `2M` favors identity after explicit `lr=0.16` boundary closure, while `8M` strongly favors `c=0.5`. Use `results/sweep_catalog/v44_v45_transition_summary.*`.
 - v46 completed the 2M dynamics sweep: identity and Top-Aware `c=0.5`, both at `lr=0.08`, metrics every step, Hessian top-4 every 48 steps. Use `results/metrics_v46_2m_best/`.
 - v47 closed the 1M `c=0.5` high-LR edge: `lr=0.16` is worse than `0.08`, so the current 1M best row is closed.
-- v48 is active for 8M dynamics: identity and Top-Aware `c=0.5`, both `lr=0.02`, metrics every step, Hessian top-4 every 12 steps.
+- v48 completed 8M dynamics: identity and Top-Aware `c=0.5`, both `lr=0.02`, metrics every step, Hessian top-4 every 12 steps. Use `results/metrics_v48_8m_best/`.
+- v49 is active to check whether the 2M identity win survives seeds `{43,44}` at the closed best LR `0.08`.
 
 Immediate standalone-repo priorities:
 - Use the clean method set: `top_aware_muon` and `streaming_identity`. Keep native Muon/LITE code as deprecated targeted validation controls, not as default sweep methods.

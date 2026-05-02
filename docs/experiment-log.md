@@ -33,7 +33,9 @@ Latest update:
 - v46 sharpness probes: identity `[0.060, 0.121, 0.087, 0.226]`, Top-Aware `[0.060, 0.182, 0.158, 0.219]`. Projection-correlation means are similar (`-0.852` identity, `-0.859` Top-Aware), so the current simple metrics do not yet explain the 2M degradation.
 - v47 closed the 1M Top-Aware high-LR boundary: `lr=0.16` scored `1.022783`, worse than the existing `lr=0.08` score `1.009856`, so the 1M best row remains `c=0.5 @ lr=0.08`.
 - The updated transition artifact `results/sweep_catalog/v44_v45_transition_summary.md` now includes the v47 1M boundary check.
-- Launched v48 8M best-LR dynamics run: identity and Top-Aware `c=0.5`, both `lr=0.02`, metrics every step, Hessian every 12 steps.
+- v48 completed the 8M best-LR dynamics run: identity `1.450463 @ lr=0.02`, Top-Aware `c=0.5` `1.428626 @ lr=0.02`, metrics every step, Hessian every 12 steps. Artifacts are in `results/metrics_v48_8m_best/`.
+- v48 sharpness probes: identity `[0.161, 1.449, 0.590, 1.046]`, Top-Aware `[0.160, 1.439, 1.071, 1.714]`. Projection norm means are nearly identical, while Top-Aware has less negative average projection-correlation (`-0.540` vs identity `-0.787`).
+- Launched v49 seed confirmation for the surprising 2M identity win: batch `2097152`, `lr=0.08`, methods `{streaming_identity, top_aware_muon}`, seeds `{43,44}`, metrics off.
 
 ## 2026-05-02 — logging audit fix and user-facing handoff sweep interface
 
