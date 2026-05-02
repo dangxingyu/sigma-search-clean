@@ -10,7 +10,7 @@
 
 ### 2. Multiple observations; likely true but still needs careful confirmation
 
-- At 128K fixed `lr=0.01`, near-identity Top-Aware `alpha=1.15` looks better than stronger damping and slightly better than identity/native Muon in seeds seen so far. The margin is tiny, so this is not yet a publishable optimizer-quality claim.
+- At 128K fixed `lr=0.01`, near-identity Top-Aware `alpha=1.15` beats StreamingMuon identity in paired seeds `{42,43,44}` by mean `0.000509 ± 0.000057` BPB. This is a small fixed-LR signal, not yet a full LR-swept optimizer-quality claim.
 
 ### 4. Hypothesis
 

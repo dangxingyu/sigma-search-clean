@@ -1,0 +1,90 @@
+{
+  "schema_version": 1,
+  "id": "topaware_128k_alpha115_seed_confirm",
+  "updated_at": "2026-05-02",
+  "description": "128K fixed-LR seed confirmation for near-identity Top-Aware Muon alpha=1.15 versus StreamingMuon identity. All rows use d8, seq1024, 8192 steps, lr=0.01.",
+  "score_unit": "validation_bpb",
+  "lower_is_better": true,
+  "recipe": {
+    "batch_size": 131072,
+    "depth": 8,
+    "seq_len": 1024,
+    "steps": 8192,
+    "tokens": 1073741824,
+    "lr": 0.01,
+    "top_k": 1,
+    "alpha": 1.15,
+    "streaming": {
+      "pure_qr": true,
+      "num_iters": 2,
+      "fallback_ortho_tol": 0.01
+    }
+  },
+  "records": [
+    {
+      "method": "streaming_identity",
+      "seed": 42,
+      "alpha": 1.0,
+      "score": 0.916967759255345,
+      "status": "complete",
+      "source": "search_evals/ddp8_top1_damp_adaptive_20260429_171235/identity_bsz131072_lr0p01/result.json"
+    },
+    {
+      "method": "top_aware_muon",
+      "seed": 42,
+      "top_k": 1,
+      "alpha": 1.15,
+      "score": 0.9165686200379373,
+      "status": "complete",
+      "source": "search_evals/v36_topaware_128k_near_identity_lr001_20260501/top_aware_k1_a1p15_bsz131072_lr0p01_s42/result.json"
+    },
+    {
+      "method": "streaming_identity",
+      "seed": 43,
+      "alpha": 1.0,
+      "score": 0.9168703834869304,
+      "status": "complete",
+      "source": "search_evals/v37_128k_alpha115_seed_confirm_20260501/streaming_identity_bsz131072_lr0p01_s43/result.json"
+    },
+    {
+      "method": "top_aware_muon",
+      "seed": 43,
+      "top_k": 1,
+      "alpha": 1.15,
+      "score": 0.9163321360289303,
+      "status": "complete",
+      "source": "search_evals/v37_128k_alpha115_seed_confirm_20260501/top_aware_k1_a1p15_bsz131072_lr0p01_s43/result.json"
+    },
+    {
+      "method": "streaming_identity",
+      "seed": 44,
+      "alpha": 1.0,
+      "score": 0.9165008047706484,
+      "status": "complete",
+      "source": "search_evals/v37_128k_alpha115_seed_confirm_20260501/streaming_identity_bsz131072_lr0p01_s44/result.json"
+    },
+    {
+      "method": "top_aware_muon",
+      "seed": 44,
+      "top_k": 1,
+      "alpha": 1.15,
+      "score": 0.9159111886967212,
+      "status": "complete",
+      "source": "search_evals/v37_128k_alpha115_seed_confirm_20260501/top_aware_k1_a1p15_bsz131072_lr0p01_s44/result.json"
+    }
+  ],
+  "aggregate": {
+    "streaming_identity_mean": 0.9167796491709747,
+    "streaming_identity_sem": 0.00014222770447834066,
+    "top_aware_alpha115_mean": 0.9162706482545295,
+    "top_aware_alpha115_sem": 0.00019225811808075674,
+    "paired_delta_identity_minus_topaware": [
+      0.00039913921740775127,
+      0.0005382474580001295,
+      0.0005896160739272682
+    ],
+    "paired_delta_mean": 0.0005090009164450496,
+    "paired_delta_sem": 0.00005689721247445233
+  },
+  "interpretation": "At 128K and fixed lr=0.01, alpha=1.15 consistently beats StreamingMuon identity across seeds 42/43/44. The effect is small but paired and stable; it remains a local fixed-LR result, not a full LR-swept optimizer-quality claim."
+}

@@ -13,7 +13,7 @@ Important comparison rule: compare rows within the same `family` first. Historic
 
 - Batch sizes present: 32K, 64K, 128K, 256K, 512K, 1M, 4M, 8M, 16M.
 - Alpha values present: 0.25, 0.5, 0.75, 0.85, 0.875, 1, 1.15, 1.25.
-- Methods present: native_lite=27, native_muon=39, streaming_identity=27, streaming_lite=9, top_aware_muon=57.
+- Methods present: native_lite=27, native_muon=39, streaming_identity=29, streaming_lite=9, top_aware_muon=59.
 
 ## Sources
 
@@ -22,8 +22,9 @@ Important comparison rule: compare rows within the same `family` first. Historic
 - `figures/native_streaming_topk/native_streaming_topk_raw.csv`: 2 rows.
 - `figures/topaware_alpha_dashboard/raw_rows.csv`: 65 rows.
 - `results/dynamics_128k_200step/summary.json`: 3 rows.
+- `results/topaware_128k_alpha115_seed_confirm/summary.json`: 5 rows.
 - `results/topaware_128k_alpha125_lrsweep/summary.json`: 4 rows.
-- `results/topaware_128k_near_identity_lr001/summary.json`: 3 rows.
+- `results/topaware_128k_near_identity_lr001/summary.json`: 2 rows.
 
 ## Best Rows Snapshot
 
@@ -39,11 +40,11 @@ Important comparison rule: compare rows within the same `family` first. Historic
 | native_ddp_or_control | 128K | native_muon | - | 0.01 | 42 | 0.916692 |
 | native_single_gpu | 128K | native_lite | - | 0.01 | 44 | 0.892904 |
 | native_single_gpu | 128K | native_muon | - | 0.01 | 44 | 0.893413 |
-| same_driver_streaming_ddp | 128K | streaming_identity | 1 | 0.01 | 42 | 0.916968 |
+| same_driver_streaming_ddp | 128K | streaming_identity | 1 | 0.01 | 44 | 0.916501 |
 | same_driver_streaming_ddp | 128K | top_aware_muon | 0.5 | 0.01 | 42 | 0.917040 |
 | same_driver_streaming_ddp | 128K | top_aware_muon | 0.75 | 0.01 | 42 | 0.917183 |
 | same_driver_streaming_ddp | 128K | top_aware_muon | 0.85 | 0.01 | 42 | 0.916766 |
-| same_driver_streaming_ddp | 128K | top_aware_muon | 1.15 | 0.01 | 42 | 0.916569 |
+| same_driver_streaming_ddp | 128K | top_aware_muon | 1.15 | 0.01 | 44 | 0.915911 |
 | same_driver_streaming_ddp | 128K | top_aware_muon | 1.25 | 0.01 | 42 | 0.917164 |
 | native_ddp_or_control | 256K | native_muon | - | 0.01 | 42 | 0.913946 |
 | native_single_gpu | 256K | native_lite | - | 0.01 | 42 | 0.891713 |

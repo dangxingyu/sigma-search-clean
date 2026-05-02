@@ -15,6 +15,11 @@
       "description": "128K alpha=1.25 LR sweep."
     },
     {
+      "id": "topaware_128k_alpha115_seed_confirm",
+      "path": "results/topaware_128k_alpha115_seed_confirm/summary.json",
+      "description": "128K fixed-LR seed confirmation for Top-Aware alpha=1.15 versus StreamingMuon identity."
+    },
+    {
       "id": "dynamics_128k_200step",
       "path": "results/dynamics_128k_200step/summary.json",
       "description": "128K real 200-step full-statistics smoke runs."
