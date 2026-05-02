@@ -8,7 +8,24 @@ The code is self-contained: it includes `nanochat/`, StreamingMuon, Top-Aware Mu
 
 ## Quick Start
 
-If you only want one command for the main d12 optimizer-quality sweep, use a fixed `STAMP`:
+Set up the vendored nanochat environment once:
+
+```bash
+bash scripts/setup_env.sh
+source nanochat/.venv/bin/activate
+export PYTHONPATH="$PWD:$PWD/nanochat"
+bash scripts/download_climbmix.sh 170 8
+```
+
+Tokenizer/data note: the tokenizer and tokenized CLIMB-mix shards come from nanochat's data prep, not from a static file committed in this repo. `scripts/download_climbmix.sh` calls `python -m nanochat.dataset`, which is the intended setup path. If you already ran nanochat's tokenizer/data preparation successfully, that is correct; make sure `NANOCHAT_BASE_DIR` points to the same data directory when launching training.
+
+Run a cheap sanity check:
+
+```bash
+bash scripts/smoke_run.sh
+```
+
+Run the main d12 optimizer-quality sweep with a fixed `STAMP`:
 
 ```bash
 STAMP=d12_main_001 bash scripts/run_d12_sweep.sh
@@ -30,22 +47,7 @@ After the sweep identifies the LR/batch points to inspect, run dense statistics 
 BATCHES="262144 1048576 4194304" LRS="0.02" bash scripts/run_d12_statistics.sh
 ```
 
-```bash
-bash scripts/setup_env.sh
-source nanochat/.venv/bin/activate
-export PYTHONPATH="$PWD:$PWD/nanochat"
-bash scripts/download_climbmix.sh 170 8
-```
-
-Run a cheap sanity check:
-
-```bash
-bash scripts/smoke_run.sh
-```
-
 Cluster launchers are intentionally not part of the command. If you use SLURM, Kubernetes, Ray, or another scheduler, wrap the same standalone script with your local allocation/launcher convention.
-
-Tokenizer/data note: the tokenizer and tokenized CLIMB-mix shards come from nanochat's data prep, not from a static file committed in this repo. `scripts/download_climbmix.sh` calls `python -m nanochat.dataset`, which is the intended setup path. If you already ran nanochat's tokenizer/data preparation successfully, that is correct; make sure `NANOCHAT_BASE_DIR` points to the same data directory when launching training.
 
 Outputs go to:
 
