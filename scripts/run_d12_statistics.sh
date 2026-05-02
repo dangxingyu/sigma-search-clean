@@ -82,11 +82,6 @@ cmd=(
   --metrics-hessian-iters "$METRICS_HESSIAN_ITERS"
   --metrics-hessian-max-modules "$METRICS_HESSIAN_MAX_MODULES"
   --metrics-projection-correlation-window "$METRICS_PROJECTION_CORRELATION_WINDOW"
-  --lr-extend-factor "${LR_EXTEND_FACTOR:-2.0}"
-  --lr-min "${LR_MIN:-0.0005}"
-  --lr-max "${LR_MAX:-0.08}"
-  --max-lr-extension-rounds "${MAX_LR_EXTENSION_ROUNDS:-2}"
-  --adaptive-min-edge-improvement "${ADAPTIVE_MIN_EDGE_IMPROVEMENT:-0.0}"
 )
 
 if [[ "${ALLOW_TOP_K_SWEEP:-0}" == "1" ]]; then
@@ -105,7 +100,7 @@ if [[ "${RERUN_EXISTING:-0}" == "1" ]]; then
 fi
 cmd+=("$@")
 
-printf 'Running d12 statistics/dynamics run\n'
+printf 'Running statistics/dynamics run (d12 defaults; DEPTH/TOKENS may override)\n'
 printf 'OUT_ROOT=%s\nLOG_ROOT=%s\n' "$OUT_ROOT" "$LOG_ROOT"
 printf 'DEPTH=%s TOKENS=%s NPROC=%s\n' "$DEPTH" "$TOKENS" "$NPROC"
 printf 'METHODS=%s\nBATCHES=%s\nALPHAS=%s\nTOP_KS=%s\nLRS=%s\nSEEDS=%s\n' \

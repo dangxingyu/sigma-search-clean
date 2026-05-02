@@ -19,6 +19,7 @@ import json
 import shlex
 import subprocess
 import time
+from json import JSONDecodeError
 from pathlib import Path
 from typing import Any
 
@@ -65,7 +66,10 @@ def eval_every_for_steps(steps: int) -> int:
 def load_score(path: Path) -> tuple[float | None, str | None]:
     if not path.exists():
         return None, "missing"
-    data = json.loads(path.read_text())
+    try:
+        data = json.loads(path.read_text())
+    except JSONDecodeError as exc:
+        return None, f"invalid_json:{exc.msg}"
     err = data.get("error")
     score = data.get("score")
     if err is not None or score is None:

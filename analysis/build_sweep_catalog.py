@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Build a compact catalog from curated sweep CSV/JSON summaries."""
+"""Build a compact historical catalog from curated sweep CSV/JSON summaries."""
 
 from __future__ import annotations
 

@@ -80,40 +80,6 @@ STAMP=d12_c001_b4m   BATCHES="4194304" bash scripts/run_d12_sweep.sh
 
 If a shard is preempted, resubmit only that shard with the same `STAMP`. If you change core recipe knobs such as `DEPTH`, `TOKENS`, `BATCHES`, `LRS`, `ALPHAS`, or `SEEDS`, use a new `STAMP` rather than reusing an old checkpoint directory.
 
-To submit all default d12 batch shards to SLURM at once, use the optional submitter:
-
-```bash
-SUBMIT_DRY_RUN=1 \
-CAMPAIGN=d12_c001 \
-SBATCH_PARTITION=<partition> \
-SBATCH_ACCOUNT=<account> \
-bash scripts/submit_d12_sweep_shards_slurm.sh
-```
-
-Remove `SUBMIT_DRY_RUN=1` after inspecting the generated sbatch files under `logs/slurm_submit/<campaign>/`. By default this submits one job per batch:
-
-```text
-d12_c001_b262k
-d12_c001_b1m
-d12_c001_b4m
-```
-
-Each job runs `scripts/run_d12_sweep.sh` with its own stable `STAMP`, so preemption resume is safe. If the scheduler does not automatically requeue jobs, rerun the same submitter command with the same `CAMPAIGN`; completed cases skip and incomplete cases resume. Do not rerun the submitter while the same campaign's jobs are still active.
-
-Useful submitter overrides:
-
-```bash
-CAMPAIGN=d12_alpha_scan \
-SHARD_BY=batch_alpha \
-METHODS=top_aware_muon \
-ALPHAS="0.25 0.5 0.75 1.0" \
-TOP_KS="1" \
-SBATCH_GPU_DIRECTIVE="--gres=gpu:8" \
-bash scripts/submit_d12_sweep_shards_slurm.sh
-```
-
-`SHARD_BY=batch` is the default and avoids duplicating the `streaming_identity` baseline. If you shard by `batch_alpha` with `METHODS="streaming_identity top_aware_muon"` and multiple alphas, the identity baseline will be duplicated in each alpha shard.
-
 ## Repository Layout
 
 ```text
@@ -124,8 +90,6 @@ run_top_aware_muon_sweep.py  main reusable sweep engine
 metric_logging.py            opt-in optimizer dynamics metrics
 scripts/run_d12_sweep.sh     blessed d12 optimizer-quality sweep
 scripts/run_d12_statistics.sh dense d12 dynamics/statistics runner
-scripts/submit_d12_sweep_shards_slurm.sh optional SLURM shard submitter
-scripts/run_d8_metrics_grid.sh canonical dense-metrics dynamics run
 results/                     curated JSON/CSV summaries for pass-by
 docs/                        experiment plan, log, and current conclusions
 ```
@@ -192,13 +156,15 @@ Useful overrides:
 ```bash
 STAMP=d12_c001_b262k \
 BATCHES="262144 1048576 4194304" \
-ALPHAS="0.5 1.0" \
+ALPHAS="0.5" \
 TOP_KS="1" \
 LRS="0.005 0.01 0.02 0.04" \
 SEEDS="42 43" \
 TOKENS=1698693120 \
 bash scripts/run_d12_sweep.sh
 ```
+
+`streaming_identity` is already the `c=1` baseline. Only include `ALPHAS="1.0"` if you explicitly want to sanity-check that Top-Aware with `alpha=1` matches identity.
 
 ## Statistics Runs
 
@@ -214,7 +180,7 @@ SEEDS="42" \
 bash scripts/run_d12_statistics.sh
 ```
 
-The statistics wrapper uses the same d12 1x token budget as `run_d12_sweep.sh`, but enables `METRICS_EVERY=1` and `METRICS_HESSIAN_EVERY=50` by default. Override `LRS` and `BATCHES` to match the selected sweep winners. It intentionally sets `ADAPTIVE_LR=0`.
+The statistics wrapper uses the same d12 1x token budget as `run_d12_sweep.sh`, but enables `METRICS_EVERY=1` and `METRICS_HESSIAN_EVERY=50` by default. Override `LRS` and `BATCHES` to match the selected sweep winners. It does not pass `--adaptive-lr`; statistics runs should inspect fixed recipes selected by the sweep.
 
 If the best LR differs by method or batch, run statistics in separate groups rather than forcing one shared LR, for example:
 
@@ -257,7 +223,7 @@ Useful knobs:
 ```bash
 LR_EXTEND_FACTOR=2.0
 LR_MIN=0.0005
-LR_MAX=0.08
+LR_MAX=0.16
 MAX_LR_EXTENSION_ROUNDS=2
 ADAPTIVE_MIN_EDGE_IMPROVEMENT=0.0
 ```
@@ -277,8 +243,8 @@ Recommended dense-metrics smoke:
 ```bash
 METRICS_EVERY=1 \
 METRICS_HESSIAN_EVERY=100 \
-BATCHES="262144" ALPHAS="1.0" LRS="0.02" TOKENS=52428800 \
-bash scripts/run_d8_metrics_grid.sh
+BATCHES="262144" ALPHAS="0.5" LRS="0.02" TOKENS=52428800 DEPTH=8 \
+bash scripts/run_d12_statistics.sh
 ```
 
 Canonical logged metrics:
@@ -355,7 +321,7 @@ adaptive_lr_trace.json       LR boundary-extension decisions
 Rebuild the historical consolidated catalog:
 
 ```bash
-python scripts/build_sweep_catalog.py
+python analysis/build_sweep_catalog.py
 ```
 
 Curated catalog files:

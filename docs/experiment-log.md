@@ -1,5 +1,14 @@
 # Experiment Log — LITE vs Muon diagnostic campaign
 
+## 2026-05-02 — sweep surface cleanup for handoff
+
+Latest update:
+- Reduced the active `scripts/` surface to five files: `setup_env.sh`, `download_climbmix.sh`, `smoke_run.sh`, `run_d12_sweep.sh`, and `run_d12_statistics.sh`.
+- Removed the duplicate d8 metrics wrapper. d8 sweeps/statistics now use the same d12 wrappers with `DEPTH=8 TOKENS=402653184`, which avoids multiple near-identical launch paths.
+- Kept scheduler submission outside the repo. For multi-job runs, users should shard by setting `STAMP`, `BATCHES`, `ALPHAS`, `LRS`, and `SEEDS` explicitly.
+- Hardened sweep resume behavior: invalid or half-written result JSONs now trigger rerun instead of crashing the sweep cataloger.
+- Raised default adaptive LR upper bound to `0.16`, so the default two-round edge extension can close `0.04 -> 0.08 -> 0.16` when the high-LR boundary remains best.
+
 ## 2026-05-02 — v42/v43 clean c=0.5 study and no-SVD dynamics logging
 
 Latest update:
@@ -41,6 +50,14 @@ Latest update:
 - v52-v55 completed 1M seed confirmation with closed high-LR checks. Mean delta `c=0.5 - identity = +0.001850 ± 0.002798` SEM over seeds `{42,43,44}`; identity wins seed42, Top-Aware wins seeds43/44 by tiny margins. Artifact: `results/sweep_catalog/v52_v55_1m_seed_confirm_summary.md`.
 - Correction: the earlier 1M seed42 Top-Aware edge was an LR-sweep artifact. After adding identity `lr=0.08`, seed42 favors identity (`1.002451` vs Top-Aware `1.009856`).
 - v56/v57 completed 262K seed confirmation with boundary check. Mean delta `c=0.5 - identity = -0.000613 ± 0.001083` SEM over seeds `{42,43,44}`; identity wins seed42, Top-Aware wins seeds43/44 by tiny margins. Artifact: `results/sweep_catalog/v56_v57_262k_seed_confirm_summary.md`.
+
+## 2026-05-02 — scripts directory trimmed
+
+Latest update:
+- Trimmed `scripts/` to five user-facing commands only: `setup_env.sh`, `download_climbmix.sh`, `smoke_run.sh`, `run_d12_sweep.sh`, and `run_d12_statistics.sh`.
+- Removed the optional SLURM submitter and the duplicate d8 metrics wrapper from the clean repo. Scheduler-specific job arrays should be handled outside the repo by the user's cluster infra; d8 uses `DEPTH=8 TOKENS=402653184` overrides on the same standalone scripts.
+- Moved historical catalog rebuilding from `scripts/build_sweep_catalog.py` to `analysis/build_sweep_catalog.py`; it remains available for result curation but is no longer presented as a sweep/launch script.
+- Updated `README.md`, `MANIFEST.md`, `docs/experiment-plan.md`, and `docs/new-thoughts.md` to match the smaller script surface.
 
 ## 2026-05-02 — standalone sweep scripts
 

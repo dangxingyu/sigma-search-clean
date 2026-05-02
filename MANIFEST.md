@@ -30,13 +30,11 @@ the clean runtime surface. Historical results are still preserved under
 - `scripts/smoke_run.sh`: tiny sanity run.
 - `scripts/run_d12_sweep.sh`: standalone blessed d12 optimizer-quality sweep.
 - `scripts/run_d12_statistics.sh`: standalone dense d12 metrics/statistics run.
-- `scripts/run_d8_metrics_grid.sh`: canonical d8 dense-metrics grid.
-- `scripts/submit_d12_sweep_shards_slurm.sh`: optional SLURM shard submitter.
-- `scripts/build_sweep_catalog.py`: rebuild historical `results/sweep_catalog/`.
 
 ## Analysis And Results
 
 - `analysis/`: reusable plot/table scripts retained for dashboards.
+- `analysis/build_sweep_catalog.py`: rebuild historical `results/sweep_catalog/`.
 - `figures/`: copied summary plots and raw CSVs used by the catalog builder.
 - `results/`: curated machine-readable summaries and recipes.
 - `results/sweep_catalog/`: generated consolidated sweep index.

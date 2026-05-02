@@ -45,7 +45,7 @@ RESUME="${RESUME:-1}"
 ADAPTIVE_LR="${ADAPTIVE_LR:-1}"
 LR_EXTEND_FACTOR="${LR_EXTEND_FACTOR:-2.0}"
 LR_MIN="${LR_MIN:-0.0005}"
-LR_MAX="${LR_MAX:-0.08}"
+LR_MAX="${LR_MAX:-0.16}"
 MAX_LR_EXTENSION_ROUNDS="${MAX_LR_EXTENSION_ROUNDS:-2}"
 ADAPTIVE_MIN_EDGE_IMPROVEMENT="${ADAPTIVE_MIN_EDGE_IMPROVEMENT:-0.0}"
 
@@ -115,7 +115,7 @@ if [[ "${RERUN_EXISTING:-0}" == "1" ]]; then
 fi
 cmd+=("$@")
 
-printf 'Running d12 optimizer-quality sweep\n'
+printf 'Running optimizer-quality sweep (d12 defaults; DEPTH/TOKENS may override)\n'
 printf 'OUT_ROOT=%s\nLOG_ROOT=%s\n' "$OUT_ROOT" "$LOG_ROOT"
 printf 'DEPTH=%s TOKENS=%s NPROC=%s\n' "$DEPTH" "$TOKENS" "$NPROC"
 printf 'METHODS=%s\nBATCHES=%s\nALPHAS=%s\nTOP_KS=%s\nLRS=%s\nSEEDS=%s\n' \
