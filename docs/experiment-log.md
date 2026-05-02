@@ -35,7 +35,9 @@ Latest update:
 - The updated transition artifact `results/sweep_catalog/v44_v45_transition_summary.md` now includes the v47 1M boundary check.
 - v48 completed the 8M best-LR dynamics run: identity `1.450463 @ lr=0.02`, Top-Aware `c=0.5` `1.428626 @ lr=0.02`, metrics every step, Hessian every 12 steps. Artifacts are in `results/metrics_v48_8m_best/`.
 - v48 sharpness probes: identity `[0.161, 1.449, 0.590, 1.046]`, Top-Aware `[0.160, 1.439, 1.071, 1.714]`. Projection norm means are nearly identical, while Top-Aware has less negative average projection-correlation (`-0.540` vs identity `-0.787`).
-- Launched v49 seed confirmation for the surprising 2M identity win: batch `2097152`, `lr=0.08`, methods `{streaming_identity, top_aware_muon}`, seeds `{43,44}`, metrics off.
+- v49/v50 completed 2M seed confirmation at `lr=0.08`, seeds `{42,43,44,45,46}`. Mean delta `c=0.5 - identity = +0.000507 ± 0.004183` SEM; identity wins 3 seeds and Top-Aware wins 2. Artifact: `results/sweep_catalog/v49_v50_2m_seed_confirm_summary.md`.
+- Interpretation update: 2M is a noisy/tie-like transition point, not a robust identity-win point.
+- Launched v51 4M seed confirmation: batch `4194304`, LRs `{0.02,0.04}`, methods `{streaming_identity, top_aware_muon}`, seeds `{43,44}`, metrics off.
 
 ## 2026-05-02 — logging audit fix and user-facing handoff sweep interface
 

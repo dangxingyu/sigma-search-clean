@@ -13,4 +13,5 @@ Clean d8 / 0.4B-token StreamingMuon sweep, same driver, seed 42. Lower BPB is be
 Notes:
 - 1M Top-Aware was explicitly extended to `lr=0.16`; it got worse than `0.08`, so the 1M high-LR side is closed.
 - 2M was explicitly extended to `lr=0.16`; both methods got worse, so the `0.08` optima are closed on the high-LR side.
-- The current pattern is not perfectly monotone: 1M has a tiny c=0.5 edge, 2M favors identity, while 4M/8M strongly favor c=0.5. Treat the transition region as not settled without more seeds or nearby batch points.
+- The one-seed pattern is not perfectly monotone: 1M has a tiny c=0.5 edge, 2M seed42 favors identity, while 4M/8M strongly favor c=0.5.
+- Follow-up 2M seeds `{42,43,44,45,46}` at `lr=0.08` show a tie/noisy transition: mean `c=0.5 - identity = +0.000507 ± 0.004183` SEM, with identity winning 3 seeds and c=0.5 winning 2 seeds.

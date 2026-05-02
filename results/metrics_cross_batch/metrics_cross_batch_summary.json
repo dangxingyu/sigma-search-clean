@@ -1,0 +1,166 @@
+[
+  {
+    "batch": 2097152,
+    "identity": {
+      "case": "identity_lr0.08",
+      "label": "identity c=1",
+      "lr": "0.08",
+      "score": 1.0677657289987728,
+      "error": null,
+      "metric_logs": 192,
+      "hessian_steps": [
+        0,
+        48,
+        96,
+        144
+      ],
+      "sharpness": [
+        0.05993754044175148,
+        0.12068168073892593,
+        0.08675790578126907,
+        0.2255554050207138
+      ],
+      "projection_norm_mean": 0.01082391279472157,
+      "projection_norm_last10": 0.003456428891513497,
+      "projection_corr_mean": -0.852489365214158,
+      "projection_corr_last10": -0.972823315858841,
+      "json_size_mb": 12.08851146697998
+    },
+    "topaware": {
+      "case": "topaware_lr0.08",
+      "label": "top-aware c=0.5",
+      "lr": "0.08",
+      "score": 1.0833901202445928,
+      "error": null,
+      "metric_logs": 192,
+      "hessian_steps": [
+        0,
+        48,
+        96,
+        144
+      ],
+      "sharpness": [
+        0.05988558754324913,
+        0.18172688782215118,
+        0.15815900266170502,
+        0.21853621304035187
+      ],
+      "projection_norm_mean": 0.01724632613517547,
+      "projection_norm_last10": 0.0016167178197065367,
+      "projection_corr_mean": -0.8591754464938751,
+      "projection_corr_last10": -0.685824203491211,
+      "json_size_mb": 12.079543113708496
+    },
+    "delta": 0.015624391245820046
+  },
+  {
+    "batch": 4194304,
+    "identity": {
+      "case": "identity_lr0.02",
+      "label": "identity c=1",
+      "lr": "0.02",
+      "score": 1.2066424123322734,
+      "error": null,
+      "steps_completed": 96,
+      "metric_logs": 96,
+      "hessian_steps": [
+        0,
+        24,
+        48,
+        72
+      ],
+      "sharpness": [
+        0.10119754821062088,
+        0.3353993594646454,
+        0.5742266178131104,
+        0.833035409450531
+      ],
+      "projection_norm_mean": 0.03731472271164935,
+      "projection_norm_last10": 0.019819839857518673,
+      "projection_corr_mean": -0.7835834077136083,
+      "projection_corr_last10": -0.9780699372291565,
+      "json_size_mb": 6.843294143676758
+    },
+    "topaware": {
+      "case": "topaware_lr0.02",
+      "label": "top-aware c=0.5",
+      "lr": "0.02",
+      "score": 1.1766477051200148,
+      "error": null,
+      "steps_completed": 96,
+      "metric_logs": 96,
+      "hessian_steps": [
+        0,
+        24,
+        48,
+        72
+      ],
+      "sharpness": [
+        0.10111798346042633,
+        0.6857086420059204,
+        0.9622798562049866,
+        1.5100280046463013
+      ],
+      "projection_norm_mean": 0.04271297975166184,
+      "projection_norm_last10": 0.018969872035086155,
+      "projection_corr_mean": -0.7791386024222117,
+      "projection_corr_last10": -0.965690016746521,
+      "json_size_mb": 6.843973159790039
+    },
+    "delta": -0.02999470721225861
+  },
+  {
+    "batch": 8388608,
+    "identity": {
+      "case": "identity_lr0.02",
+      "label": "identity c=1",
+      "lr": "0.02",
+      "score": 1.4504627870818718,
+      "error": null,
+      "metric_logs": 48,
+      "hessian_steps": [
+        0,
+        12,
+        24,
+        36
+      ],
+      "sharpness": [
+        0.16061192750930786,
+        1.4487560987472534,
+        0.5895963311195374,
+        1.0461971759796143
+      ],
+      "projection_norm_mean": 0.08623044461207675,
+      "projection_norm_last10": 0.058230604603886606,
+      "projection_corr_mean": -0.7871461639180779,
+      "projection_corr_last10": -0.9805752635002136,
+      "json_size_mb": 4.224881172180176
+    },
+    "topaware": {
+      "case": "topaware_lr0.02",
+      "label": "top-aware c=0.5",
+      "lr": "0.02",
+      "score": 1.4286259812060578,
+      "error": null,
+      "metric_logs": 48,
+      "hessian_steps": [
+        0,
+        12,
+        24,
+        36
+      ],
+      "sharpness": [
+        0.16033579409122467,
+        1.4389064311981201,
+        1.0709471702575684,
+        1.7140945196151733
+      ],
+      "projection_norm_mean": 0.08623641399324035,
+      "projection_norm_last10": 0.05754854301922023,
+      "projection_corr_mean": -0.5399300353601575,
+      "projection_corr_last10": -0.9007113188505173,
+      "json_size_mb": 4.225066184997559
+    },
+    "delta": -0.021836805875814047
+  }
+]
