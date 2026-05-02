@@ -8,6 +8,20 @@ The code is self-contained: it includes `nanochat/`, StreamingMuon, Top-Aware Mu
 
 ## Quick Start
 
+If you only want one command for the main d12 optimizer-quality sweep, use:
+
+```bash
+bash scripts/run_d12_sweep.sh
+```
+
+This runs the current mainline comparison, `streaming_identity` vs Top-Aware Muon `alpha=0.5`, at d12 with the default batch/LR grid. Run it from a node/session that already has the intended GPUs visible; wrap it with your local scheduler outside the repo if needed.
+
+To inspect the exact expanded `torchrun` commands without launching training:
+
+```bash
+DRY_RUN=1 bash scripts/run_d12_sweep.sh
+```
+
 ```bash
 bash scripts/setup_env.sh
 source nanochat/.venv/bin/activate
@@ -29,6 +43,8 @@ bash scripts/run_handoff_sweep.sh
 
 Cluster launchers are intentionally not part of the command. If you use SLURM, Kubernetes, Ray, or another scheduler, wrap the same command with your local allocation/launcher convention.
 
+Tokenizer/data note: the tokenizer and tokenized CLIMB-mix shards come from nanochat's data prep, not from a static file committed in this repo. `scripts/download_climbmix.sh` calls `python -m nanochat.dataset`, which is the intended setup path. If you already ran nanochat's tokenizer/data preparation successfully, that is correct; make sure `NANOCHAT_BASE_DIR` points to the same data directory when launching training.
+
 Outputs go to:
 
 ```text
@@ -47,6 +63,7 @@ run_native_muon_v9.py        deprecated native Muon validation runner
 run_lite_v9.py               deprecated native LITE validation runner; single-process only
 metric_logging.py            opt-in optimizer dynamics metrics
 scripts/run_handoff_sweep.sh user-facing sweep wrapper
+scripts/run_d12_sweep.sh     blessed d12 optimizer-quality sweep
 scripts/run_d8_metrics_grid.sh canonical dense-metrics dynamics run
 results/                     curated JSON/CSV summaries for pass-by
 docs/                        experiment plan, log, and current conclusions
@@ -105,6 +122,23 @@ def f(sigma, top_k=1, alpha=0.5):
 Current clean recipe: keep `top_k=1`; sweep `alpha`, batch size, and LR. The sweep runner rejects `top_k != 1` unless `--allow-top-k-sweep` is explicitly passed.
 
 ## Recommended Sweep
+
+For the standard d12 handoff run, prefer the consolidated wrapper:
+
+```bash
+bash scripts/run_d12_sweep.sh
+```
+
+Useful overrides:
+
+```bash
+BATCHES="262144 1048576 4194304" \
+ALPHAS="0.5 1.0" \
+LRS="0.005 0.01 0.02 0.04" \
+SEEDS="42 43" \
+TOKENS=3221225472 \
+bash scripts/run_d12_sweep.sh
+```
 
 For optimizer-quality comparisons, keep dense metrics off and sweep LR carefully. The handoff wrapper exposes common knobs as environment variables:
 
