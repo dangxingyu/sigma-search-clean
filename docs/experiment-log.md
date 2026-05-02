@@ -9,6 +9,7 @@ Latest update:
 - Updated d8 default token budget in `run_top_aware_muon_sweep.py` to `402,653,184` tokens, about `0.4B`, divisible by `262K`, `1M`, and `4M`.
 - The new metrics-grid plan compares Top-Aware Muon `alpha={0.5,1.0}` at batches `{262144,1048576,4194304}` with `matrix_lr=0.02` and nanochat LR scaling only; no extra hyperparameter tuning.
 - v37 completed: 128K fixed `lr=0.01`, seeds `{43,44}`, methods `{streaming_identity, top_aware_muon(alpha=1.15)}`. Combined with seed `42`, paired identity-minus-Top-Aware deltas are `{0.000399,0.000538,0.000590}`, mean `0.000509 ± 0.000057` SEM. This is a small but stable fixed-LR signal for `alpha=1.15`.
+- Launched v38 dynamics grid on allocation `29702470`: clean repo command `STAMP=v38_d8_metrics_alpha05_a10_20260502 srun --jobid=29702470 --overlap --ntasks=1 bash scripts/run_d8_metrics_grid.sh`. Grid is `alpha={0.5,1.0}`, batches `{262144,1048576,4194304}`, base `matrix_lr=0.02`, d8, seq1024, `402,653,184` tokens, metrics every step, Hessian every 50 logged steps.
 
 ## 2026-05-01 — clean-repo result organization and 128K near-identity alpha test
 
