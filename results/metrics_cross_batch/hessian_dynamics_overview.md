@@ -1,14 +1,16 @@
 # Hessian Dynamics Overview
 
-![Hessian dynamics overview](hessian_dynamics_overview.svg)
+![Hessian dynamics overview](hessian_dynamics_overview.png)
 
-| batch | method | val BPB | sharpness probes | grad-Hessian top-1 alignment | projection-corr mean | projection-corr last10 |
-|---:|---|---:|---|---|---:|---:|
-| 2M | identity c=1 | 1.068 | 0.060, 0.121, 0.087, 0.226 | 0.022, -0.030, -0.130, 0.051 | -0.852 | -0.973 |
-| 2M | Top-Aware c=0.5 | 1.083 | 0.060, 0.182, 0.158, 0.219 | 0.023, -0.049, 0.176, -0.144 | -0.859 | -0.686 |
-| 4M | identity c=1 | 1.207 | 0.101, 0.335, 0.574, 0.833 | -0.024, 0.710, -0.177, 0.077 | -0.784 | -0.978 |
-| 4M | Top-Aware c=0.5 | 1.177 | 0.101, 0.686, 0.962, 1.510 | -0.024, -0.184, 0.380, -0.164 | -0.779 | -0.966 |
-| 8M | identity c=1 | 1.450 | 0.161, 1.449, 0.590, 1.046 | 0.013, -0.104, -0.612, -0.446 | -0.787 | -0.981 |
-| 8M | Top-Aware c=0.5 | 1.429 | 0.160, 1.439, 1.071, 1.714 | 0.013, 0.556, -0.842, 0.372 | -0.540 | -0.901 |
-
-Read: sharpness is the top selected-subspace Hessian eigenvalue. Gradient-Hessian alignment is the signed cosine with the top Hessian direction. Projection correlation is the cosine between consecutive gradients after projecting both into the most recent Hessian top-k subspace.
+| batch | method | val BPB | metric logs | sharpness last | sharpness max | grad-Hessian align last | projection-corr mean | projection-corr last10 |
+|---:|---|---:|---:|---:|---:|---:|---:|---:|
+| 262K | identity c=1 | 0.967446 | 1536 | 3.945086 | 3.984360 | -3.84e-03 | -0.834783 | -0.034393 |
+| 262K | Top-Aware c=0.5 | 0.969429 | 1536 | 24.454258 | 24.454258 | 0.036330 | -0.816524 | -0.045438 |
+| 1M | identity c=1 | 1.002178 | 384 | 0.311951 | 0.311951 | -0.049533 | -0.788810 | -0.258321 |
+| 1M | Top-Aware c=0.5 | 1.010222 | 384 | 0.871192 | 0.910757 | 0.387333 | -0.849237 | -0.447164 |
+| 2M | identity c=1 | 1.067766 | 192 | 0.225555 | 0.225555 | 0.050878 | -0.852489 | -0.972823 |
+| 2M | Top-Aware c=0.5 | 1.083390 | 192 | 0.218536 | 0.218536 | -0.143665 | -0.859175 | -0.685824 |
+| 4M | identity c=1 | 1.206642 | 96 | 0.833035 | 0.833035 | 0.076807 | -0.783583 | -0.978070 |
+| 4M | Top-Aware c=0.5 | 1.176648 | 96 | 1.510028 | 1.510028 | -0.164302 | -0.779139 | -0.965690 |
+| 8M | identity c=1 | 1.450463 | 48 | 1.046197 | 1.448756 | -0.446381 | -0.787146 | -0.980575 |
+| 8M | Top-Aware c=0.5 | 1.428626 | 48 | 1.714095 | 1.714095 | 0.372316 | -0.539930 | -0.900711 |
