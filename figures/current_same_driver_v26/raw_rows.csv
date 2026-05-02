@@ -1,0 +1,16 @@
+batch_label,batch,method,method_label,lr,seed,score,final,error,steps,time_min,path
+32K,32768,identity,identity / Muon-like,0.0025,42,0.9417721351449199,0.9417721351449199,,32768,44.690559991200765,search_evals/v26_small_bsz_streaming_fair_20260430/identity_bsz32768_lr0p0025_s42/result.json
+32K,32768,identity,identity / Muon-like,0.005,42,0.9350636402423552,0.9350636402423552,,32768,45.04353319406509,search_evals/v26_small_bsz_streaming_fair_20260430/identity_bsz32768_lr0p005_s42/result.json
+32K,32768,identity,identity / Muon-like,0.01,42,0.9360529751513595,0.9360529751513595,,32768,44.67493010759354,search_evals/v26_small_bsz_streaming_fair_20260430/identity_bsz32768_lr0p01_s42/result.json
+32K,32768,identity,identity / Muon-like,0.02,42,0.9423229892872238,0.9423229892872238,,32768,44.706856056054434,search_evals/v26_small_bsz_streaming_fair_20260430/identity_bsz32768_lr0p02_s42/result.json
+32K,32768,lite_chi2_rs01,LITE-like chi=2 rs=.1,0.005,42,0.9331306153157911,0.9331306153157911,,32768,44.76174976825714,search_evals/v26_small_bsz_streaming_fair_20260430/lite_chi2_rs01_bsz32768_lr0p005_s42/result.json
+64K,65536,identity,identity / Muon-like,0.005,42,0.9237184937955479,0.9237184937955479,,16384,24.538546641667683,search_evals/v26_small_bsz_streaming_fair_20260430/identity_bsz65536_lr0p005_s42/result.json
+64K,65536,identity,identity / Muon-like,0.01,42,0.9221445420150127,0.9221445420150127,,16384,24.082235980033875,search_evals/v26_small_bsz_streaming_fair_20260430/identity_bsz65536_lr0p01_s42/result.json
+64K,65536,identity,identity / Muon-like,0.02,42,0.9270234737449538,0.9270234737449538,,16384,24.082619281609855,search_evals/v26_small_bsz_streaming_fair_20260430/identity_bsz65536_lr0p02_s42/result.json
+64K,65536,lite_chi2_rs01,LITE-like chi=2 rs=.1,0.0025,42,0.9264464643553302,0.9264464643553302,,16384,24.14577260414759,search_evals/v26_small_bsz_streaming_fair_20260430/lite_chi2_rs01_bsz65536_lr0p0025_s42/result.json
+64K,65536,lite_chi2_rs01,LITE-like chi=2 rs=.1,0.005,42,0.9223371924377913,0.9223371924377913,,16384,24.143204740683238,search_evals/v26_small_bsz_streaming_fair_20260430/lite_chi2_rs01_bsz65536_lr0p005_s42/result.json
+64K,65536,lite_chi2_rs01,LITE-like chi=2 rs=.1,0.01,42,0.9222910403808865,0.9222910403808865,,16384,24.127379099527996,search_evals/v26_small_bsz_streaming_fair_20260430/lite_chi2_rs01_bsz65536_lr0p01_s42/result.json
+64K,65536,lite_chi2_rs01,LITE-like chi=2 rs=.1,0.02,42,0.9299474275291122,0.9299474275291122,,16384,24.125309427579243,search_evals/v26_small_bsz_streaming_fair_20260430/lite_chi2_rs01_bsz65536_lr0p02_s42/result.json
+64K,65536,top1pm_a05,top1 per-matrix alpha=.5,0.005,42,0.9245033685717648,0.9245033685717648,,16384,24.104527179400126,search_evals/v26_small_bsz_streaming_fair_20260430/top1pm_a05_bsz65536_lr0p005_s42/result.json
+64K,65536,top1pm_a05,top1 per-matrix alpha=.5,0.01,42,0.9238023210009465,0.9238023210009465,,16384,24.178902304172517,search_evals/v26_small_bsz_streaming_fair_20260430/top1pm_a05_bsz65536_lr0p01_s42/result.json
+64K,65536,top1pm_a05,top1 per-matrix alpha=.5,0.02,42,0.9287040027244011,0.9287040027244011,,16384,24.133219488461812,search_evals/v26_small_bsz_streaming_fair_20260430/top1pm_a05_bsz65536_lr0p02_s42/result.json

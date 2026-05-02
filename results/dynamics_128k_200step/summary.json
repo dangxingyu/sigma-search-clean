@@ -1,0 +1,59 @@
+{
+  "schema_version": 1,
+  "id": "dynamics_128k_200step",
+  "updated_at": "2026-05-01",
+  "description": "Real 200-step full-statistics smoke runs at 128K, d8, seq1024, 8xB200 DDP, device_batch=8, grad_accum=2, lr=0.01, seed 42.",
+  "score_unit": "validation_bpb",
+  "lower_is_better": true,
+  "recipe": {
+    "batch_size": 131072,
+    "depth": 8,
+    "seq_len": 1024,
+    "steps": 200,
+    "lr": 0.01,
+    "seed": 42,
+    "world_size": 8,
+    "device_batch_size": 8,
+    "grad_accum": 2,
+    "metrics_every": 1,
+    "metrics_hessian_every": 100,
+    "metrics_hessian_iters": 2,
+    "metrics_hessian_max_modules": 4,
+    "force_math_sdpa": true
+  },
+  "records": [
+    {
+      "method": "streaming_identity",
+      "score": 1.5865120954253333,
+      "elapsed_min": 8.550606628259024,
+      "metric_logs": 200,
+      "split_momentum_logs": 200,
+      "hessian_success": 2,
+      "status": "complete",
+      "source": "search_evals/v34_real_metrics_smoke_128k_200_streaming_identity_accum2/result.json"
+    },
+    {
+      "method": "native_muon",
+      "score": 1.5943004180454958,
+      "elapsed_min": 9.927557841936748,
+      "metric_logs": 200,
+      "split_momentum_logs": 200,
+      "hessian_success": 2,
+      "status": "complete",
+      "source": "search_evals/v34_real_metrics_smoke_128k_200_native_muon_accum2/result.json"
+    },
+    {
+      "method": "top_aware_muon",
+      "top_k": 1,
+      "alpha": 1.25,
+      "score": 1.6009770339762581,
+      "elapsed_min": 8.50540851354599,
+      "metric_logs": 200,
+      "split_momentum_logs": 200,
+      "hessian_success": 2,
+      "status": "complete",
+      "source": "search_evals/v34_real_metrics_smoke_128k_200_topaware_a1p25_accum2/result.json"
+    }
+  ],
+  "interpretation": "The logging stack is verified at realistic 128K/d8/8xB200 scale: all three methods produced per-step metrics, split-momentum diagnostics, and two successful Hessian probes. These are smoke-scale dynamics runs, not final optimizer-quality comparisons."
+}

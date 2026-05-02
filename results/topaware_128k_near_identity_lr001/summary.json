@@ -1,0 +1,83 @@
+{
+  "schema_version": 1,
+  "id": "topaware_128k_near_identity_lr001",
+  "updated_at": "2026-05-01",
+  "description": "Fixed-LR alpha curve around identity at 128K. All completed Top-Aware rows use d8, seq1024, 8192 steps, lr=0.01, seed 42.",
+  "score_unit": "validation_bpb",
+  "lower_is_better": true,
+  "recipe": {
+    "batch_size": 131072,
+    "depth": 8,
+    "seq_len": 1024,
+    "steps": 8192,
+    "tokens": 1073741824,
+    "lr": 0.01,
+    "seed": 42,
+    "streaming": {
+      "pure_qr": true,
+      "num_iters": 2,
+      "fallback_ortho_tol": 0.01
+    }
+  },
+  "records": [
+    {
+      "method": "native_muon",
+      "alpha": null,
+      "score": 0.9166915714360024,
+      "status": "complete",
+      "source": "sweep_results_v21_exact_native_controls_top1/native_muon_bsz131072_lr0.01_s42.json"
+    },
+    {
+      "method": "streaming_identity",
+      "alpha": 1.0,
+      "score": 0.916967759255345,
+      "status": "complete",
+      "source": "search_evals/ddp8_top1_damp_adaptive_20260429_171235/identity_bsz131072_lr0p01/result.json"
+    },
+    {
+      "method": "top_aware_muon",
+      "alpha": 0.5,
+      "score": 0.917040211463987,
+      "status": "complete",
+      "source": "search_evals/ddp8_top1_damp_adaptive_20260429_171235/top1_damp_a05_bsz131072_lr0p01/result.json"
+    },
+    {
+      "method": "top_aware_muon",
+      "alpha": 0.75,
+      "score": 0.9171825800539681,
+      "status": "complete",
+      "source": "search_evals/v28_topaware_k1_128k_alpha075_20260430/top_aware_k1_a0p75_bsz131072_lr0p01_s42/result.json"
+    },
+    {
+      "method": "top_aware_muon",
+      "alpha": 0.85,
+      "score": 0.916765690045443,
+      "status": "complete",
+      "source": "search_evals/v36_topaware_128k_near_identity_lr001_20260501/top_aware_k1_a0p85_bsz131072_lr0p01_s42/result.json"
+    },
+    {
+      "method": "top_aware_muon",
+      "alpha": 1.15,
+      "score": null,
+      "status": "running",
+      "source": "search_evals/v36_topaware_128k_near_identity_lr001_20260501/top_aware_k1_a1p15_bsz131072_lr0p01_s42/result.json"
+    },
+    {
+      "method": "top_aware_muon",
+      "alpha": 1.25,
+      "score": 0.9171637424797212,
+      "status": "complete",
+      "source": "search_evals/v33_topaware_k1_128k_alpha125_20260501/top_aware_k1_a1p25_bsz131072_lr0p01_s42/result.json"
+    }
+  ],
+  "current_best_completed": {
+    "method": "native_muon",
+    "alpha": null,
+    "score": 0.9166915714360024
+  },
+  "current_best_completed_topaware": {
+    "alpha": 0.85,
+    "score": 0.916765690045443
+  },
+  "interpretation": "At fixed lr=0.01, alpha=0.85 is the best completed Top-Aware point so far and nearly matches native Muon, but it does not clearly beat the native control. Alpha=1.15 is still running."
+}

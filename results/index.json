@@ -1,0 +1,23 @@
+{
+  "schema_version": 1,
+  "updated_at": "2026-05-01",
+  "score_unit": "validation_bpb",
+  "lower_is_better": true,
+  "result_sets": [
+    {
+      "id": "topaware_128k_near_identity_lr001",
+      "path": "results/topaware_128k_near_identity_lr001/summary.json",
+      "description": "128K fixed-LR alpha curve around identity for Top-Aware Muon."
+    },
+    {
+      "id": "topaware_128k_alpha125_lrsweep",
+      "path": "results/topaware_128k_alpha125_lrsweep/summary.json",
+      "description": "128K alpha=1.25 LR sweep."
+    },
+    {
+      "id": "dynamics_128k_200step",
+      "path": "results/dynamics_128k_200step/summary.json",
+      "description": "128K real 200-step full-statistics smoke runs."
+    }
+  ]
+}

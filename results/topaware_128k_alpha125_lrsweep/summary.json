@@ -1,0 +1,55 @@
+{
+  "schema_version": 1,
+  "id": "topaware_128k_alpha125_lrsweep",
+  "updated_at": "2026-05-01",
+  "description": "Top-Aware Muon alpha=1.25 LR sweep at 128K, d8, seq1024, about 1.07B tokens, seed 42.",
+  "score_unit": "validation_bpb",
+  "lower_is_better": true,
+  "recipe": {
+    "method": "top_aware_muon",
+    "top_k": 1,
+    "alpha": 1.25,
+    "batch_size": 131072,
+    "depth": 8,
+    "seq_len": 1024,
+    "steps": 8192,
+    "tokens": 1073741824,
+    "seed": 42,
+    "streaming": {
+      "pure_qr": true,
+      "num_iters": 2,
+      "fallback_ortho_tol": 0.01
+    }
+  },
+  "records": [
+    {
+      "lr": 0.005,
+      "score": 0.9196086422603399,
+      "status": "complete",
+      "source": "search_evals/v33_topaware_k1_128k_alpha125_20260501/top_aware_k1_a1p25_bsz131072_lr0p005_s42/result.json"
+    },
+    {
+      "lr": 0.01,
+      "score": 0.9171637424797212,
+      "status": "complete",
+      "source": "search_evals/v33_topaware_k1_128k_alpha125_20260501/top_aware_k1_a1p25_bsz131072_lr0p01_s42/result.json"
+    },
+    {
+      "lr": 0.02,
+      "score": 0.918857747569976,
+      "status": "complete",
+      "source": "search_evals/v33_topaware_k1_128k_alpha125_20260501/top_aware_k1_a1p25_bsz131072_lr0p02_s42/result.json"
+    },
+    {
+      "lr": 0.04,
+      "score": 0.926675485786847,
+      "status": "complete",
+      "source": "search_evals/v33_topaware_k1_128k_alpha125_20260501/top_aware_k1_a1p25_bsz131072_lr0p04_s42/result.json"
+    }
+  ],
+  "best": {
+    "lr": 0.01,
+    "score": 0.9171637424797212
+  },
+  "interpretation": "Alpha=1.25 did not improve the 128K Top-Aware result; best LR remained 0.01 and high LR 0.04 was clearly worse."
+}

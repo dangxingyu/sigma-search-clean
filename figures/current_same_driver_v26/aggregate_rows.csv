@@ -1,0 +1,16 @@
+batch_label,batch,method,method_label,lr,n,mean,sem
+32K,32768,identity,identity / Muon-like,0.0025,1,0.9417721351449199,0.0
+32K,32768,identity,identity / Muon-like,0.005,1,0.9350636402423552,0.0
+32K,32768,identity,identity / Muon-like,0.01,1,0.9360529751513595,0.0
+32K,32768,identity,identity / Muon-like,0.02,1,0.9423229892872238,0.0
+32K,32768,lite_chi2_rs01,LITE-like chi=2 rs=.1,0.005,1,0.9331306153157911,0.0
+64K,65536,identity,identity / Muon-like,0.005,1,0.9237184937955479,0.0
+64K,65536,identity,identity / Muon-like,0.01,1,0.9221445420150127,0.0
+64K,65536,identity,identity / Muon-like,0.02,1,0.9270234737449538,0.0
+64K,65536,lite_chi2_rs01,LITE-like chi=2 rs=.1,0.0025,1,0.9264464643553302,0.0
+64K,65536,lite_chi2_rs01,LITE-like chi=2 rs=.1,0.005,1,0.9223371924377913,0.0
+64K,65536,lite_chi2_rs01,LITE-like chi=2 rs=.1,0.01,1,0.9222910403808865,0.0
+64K,65536,lite_chi2_rs01,LITE-like chi=2 rs=.1,0.02,1,0.9299474275291122,0.0
+64K,65536,top1pm_a05,top1 per-matrix alpha=.5,0.005,1,0.9245033685717648,0.0
+64K,65536,top1pm_a05,top1 per-matrix alpha=.5,0.01,1,0.9238023210009465,0.0
+64K,65536,top1pm_a05,top1 per-matrix alpha=.5,0.02,1,0.9287040027244011,0.0
