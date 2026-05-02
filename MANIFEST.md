@@ -16,8 +16,8 @@ and omits virtualenvs, raw sweep outputs, logs, datasets, checkpoints, and
 
 ## Candidates
 
-- `candidates/identity.py`: StreamingMuon identity baseline, `f(sigma)=1`.
-- `candidates/top_aware_muon.py`: Top-Aware Muon transform with `top_k` and `alpha`.
+- `candidates/top_aware_muon.py`: Top-Aware Muon transform with `top_k` and `alpha`; `alpha=1.0` is the same-candidate identity baseline.
+- `candidates/identity.py`: retained identity sanity candidate, `f(sigma)=1`.
 
 Native Muon/LITE launchers and LITE-like streaming transforms were removed from
 the clean runtime surface. Historical results are still preserved under

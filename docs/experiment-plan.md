@@ -16,10 +16,10 @@ Status checkpoint:
 - Current next useful runs are optional robustness checks, not blockers: either add more seeds in the 262K/1M/2M transition band, or run dynamics metrics at 1M/262K if we need mechanism rather than winner classification.
 
 Immediate standalone-repo priorities:
-- Use the clean method set: `top_aware_muon` and `streaming_identity`. Keep native Muon/LITE code as deprecated targeted validation controls, not as default sweep methods.
+- Use the clean method set: `top_aware_muon` only, with `alpha=1.0` as the same-candidate identity baseline and `alpha=0.5` as the main Top-Aware setting. Keep `streaming_identity` only as a targeted sanity candidate, not as the default sweep baseline.
 - For handoff optimizer-quality sweeps, use the standalone `scripts/run_d12_sweep.sh`. Keep metrics off by default, start from an LR grid such as `{0.005,0.01,0.02,0.04}`, and leave `ADAPTIVE_LR=1` so boundary LR optima are extended automatically before interpreting winners.
-- For the new dynamics/logging study, run `streaming_identity` (`c=1`) versus Top-Aware Muon `top_k=1, alpha=0.5` (`c=0.5`) at batches `{262144,1048576,4194304}`.
-- Treat `alpha` as the document's T-Muon coefficient `c`. Do not spend default compute on `0.75/0.25` or a duplicate `top_aware alpha=1` until the two-point test gives a reason.
+- For the new dynamics/logging study, run Top-Aware Muon `top_k=1` with `alpha=1.0` (`c=1`) versus `alpha=0.5` (`c=0.5`) at batches `{262144,1048576,4194304}`.
+- Treat `alpha` as the document's T-Muon coefficient `c`. Do not spend default compute on `0.75/0.25` unless the two-point test gives a reason.
 - If the `1M` batch does not show an obvious Top-Aware improvement over identity, pivot the medium/large batch probe to `{2097152,8388608}` rather than expanding alpha.
 - Treat `262144` as the d8 critical batch. Do not insert an extra 512K point into this specific no-tuning metrics grid.
 - Use the d8 Chinchilla-style token budget `402,653,184` tokens, about `0.4B`, with nanochat LR scaling and no additional LR/alpha tuning. In the clean interface this is `DEPTH=8 CHINCHILLA_MULT=1`.

@@ -3,9 +3,9 @@
 Standalone handoff repo for StreamingMuon-family optimizer experiments on top
 of an in-tree `nanochat/` checkout. The current research question is:
 
-> Under the same nanochat training recipe, when does Top-Aware Muon beat the
-> same-driver StreamingMuon identity baseline across batch size, LR, and
-> Top-Aware `alpha`?
+> Under the same nanochat training recipe, when does Top-Aware Muon with
+> `alpha=0.5` beat its same-candidate identity setting `alpha=1.0` across
+> batch size and LR?
 
 The active runtime surface is intentionally small:
 
@@ -14,14 +14,13 @@ run_eval.py                  single train/eval entrypoint
 run_top_aware_muon_sweep.py  reusable sweep engine
 streaming_muon_torch.py      StreamingMuon optimizer implementation
 metric_logging.py            opt-in dynamics and Hessian metrics
-candidates/identity.py       StreamingMuon identity, f(sigma)=1
 candidates/top_aware_muon.py Top-Aware Muon transform
 scripts/run_d12_sweep.sh     optimizer-quality sweep wrapper
 scripts/run_d12_statistics.sh metrics/statistics wrapper
 ```
 
 Historical native Muon/LITE results may still exist under `docs/`, `figures/`,
-and `results/`, but the clean handoff scripts run only `streaming_identity` and
+and `results/`, but the clean handoff scripts run the current alpha sweep via
 `top_aware_muon`.
 
 ## Basic Setup
@@ -65,12 +64,12 @@ Default recipe:
 
 | knob | default |
 |---|---|
-| methods | `streaming_identity top_aware_muon` |
+| methods | `top_aware_muon` |
 | depth | `12` |
 | token budget | `CHINCHILLA_MULT=1`, auto-resolved from `DEPTH` |
 | batches | `262144 1048576 4194304` |
 | LRs | `0.005 0.01 0.02 0.04` |
-| Top-Aware | `top_k=1`, `alpha=0.5` |
+| Top-Aware | `top_k=1`, `alpha=1.0 0.5` |
 | distributed | `NPROC=8`, max device batch size `16` |
 | StreamingMuon | `--pure-qr --streaming-num-iters 2 --fallback-ortho-tol 0.01` |
 | checkpointing | `SAVE_EVERY=100`, `KEEP_LAST_CHECKPOINTS=2`, `RESUME=1` |
@@ -100,15 +99,14 @@ DRY_RUN=1 bash scripts/run_d12_sweep.sh
 ```bash
 STAMP=d12_c001_b262k \
 BATCHES="262144" \
-ALPHAS="0.5" \
+ALPHAS="1.0 0.5" \
 LRS="0.005 0.01 0.02 0.04" \
 SEEDS="42 43" \
 bash scripts/run_d12_sweep.sh
 ```
 
-`streaming_identity` is already the `c=1` baseline. Only include
-`ALPHAS="1.0"` if you explicitly want to sanity-check that Top-Aware with
-`alpha=1` matches identity.
+`alpha=1.0` is the `c=1` identity baseline under the same
+`top_aware_muon.py` implementation. `alpha=0.5` is the main Top-Aware setting.
 
 For d8 / 0.4B-token runs, reuse the same script with overrides:
 
@@ -116,7 +114,7 @@ For d8 / 0.4B-token runs, reuse the same script with overrides:
 DEPTH=8 \
 CHINCHILLA_MULT=1 \
 BATCHES="262144 1048576 4194304" \
-ALPHAS="0.5" \
+ALPHAS="1.0 0.5" \
 LRS="0.005 0.01 0.02 0.04" \
 ADAPTIVE_LR=1 \
 bash scripts/run_d12_sweep.sh
@@ -128,7 +126,7 @@ For d16 / 4.0B-token runs, use the same wrapper:
 DEPTH=16 \
 CHINCHILLA_MULT=1 \
 BATCHES="262144 1048576 4194304" \
-ALPHAS="0.5" \
+ALPHAS="1.0 0.5" \
 LRS="0.005 0.01 0.02 0.04" \
 ADAPTIVE_LR=1 \
 STAMP=d16_main_001 \
@@ -200,9 +198,9 @@ Use metrics runs after a sweep has identified the batch/LR recipes worth
 inspecting. Metrics runs should be fixed-recipe diagnostics, not LR searches.
 
 ```bash
-METHODS="streaming_identity top_aware_muon" \
+METHODS="top_aware_muon" \
 BATCHES="262144 1048576 4194304" \
-ALPHAS="0.5" \
+ALPHAS="1.0 0.5" \
 LRS="0.02" \
 SEEDS="42" \
 bash scripts/run_d12_statistics.sh
@@ -223,7 +221,7 @@ If the best LR differs by method or batch, run separate fixed-recipe metrics
 jobs:
 
 ```bash
-METHODS="streaming_identity" BATCHES="262144" LRS="0.04" \
+METHODS="top_aware_muon" BATCHES="262144" ALPHAS="1.0" LRS="0.04" \
 bash scripts/run_d12_statistics.sh
 
 METHODS="top_aware_muon" BATCHES="262144" ALPHAS="0.5" LRS="0.02" \
@@ -236,7 +234,7 @@ For a short d8 metrics smoke:
 DEPTH=8 \
 TOKENS=52428800 \
 BATCHES="262144" \
-ALPHAS="0.5" \
+ALPHAS="1.0 0.5" \
 LRS="0.02" \
 METRICS_EVERY=1 \
 METRICS_HESSIAN_EVERY=100 \

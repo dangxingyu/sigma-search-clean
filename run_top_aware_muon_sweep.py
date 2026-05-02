@@ -1,11 +1,15 @@
 #!/usr/bin/env python3
-"""Sweep StreamingMuon identity vs Top-Aware Muon.
+"""Sweep Top-Aware Muon alpha variants on StreamingMuon.
 
 This is the clean handoff sweep engine. It intentionally supports only the
 StreamingMuon path used for current experiments:
 
-    streaming_identity: run_eval.py + candidates/identity.py
-    top_aware_muon:     run_eval.py + candidates/top_aware_muon.py
+    top_aware_muon: run_eval.py + candidates/top_aware_muon.py
+
+The default baseline is Top-Aware Muon with alpha=1.0, which is exactly
+f(sigma)=1 under the same candidate implementation. The separate
+streaming_identity candidate remains supported for targeted sanity checks but
+is not part of the default handoff sweep.
 
 Native Muon/LITE launchers and same-driver LITE sanity checks were removed
 from this runner so batch/LR/alpha sweeps cannot accidentally mix recipes.
@@ -554,12 +558,12 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--log-root", type=Path, default=Path(f"logs/top_aware_muon_sweep_{stamp}"))
     parser.add_argument("--nanochat-dir", type=str, default="nanochat")
     parser.add_argument("--methods", type=parse_list_str,
-                        default=parse_list_str("streaming_identity top_aware_muon"),
+                        default=parse_list_str("top_aware_muon"),
                         help="Space/comma separated subset of: streaming_identity top_aware_muon")
     parser.add_argument("--batches", type=parse_list_int, default=parse_list_int("131072"))
     parser.add_argument("--lrs", type=parse_list_float, default=parse_list_float("0.005 0.01 0.02 0.04"))
     parser.add_argument("--top-ks", type=parse_list_int, default=parse_list_int("1"))
-    parser.add_argument("--alphas", type=parse_list_float, default=parse_list_float("0.5"))
+    parser.add_argument("--alphas", type=parse_list_float, default=parse_list_float("1.0 0.5"))
     parser.add_argument("--seeds", type=parse_list_int, default=parse_list_int("42"))
     parser.add_argument("--depth", type=int, default=8)
     parser.add_argument("--tokens", type=int, default=None,

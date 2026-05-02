@@ -4,7 +4,7 @@
 
 ### 1. Confident enough to treat as correct
 
-- The active clean-repo research path should compare `streaming_identity` (`c=1`) against Top-Aware Muon `top_k=1, alpha=0.5` (`c=0.5`) first. Native Muon/LITE code remains as deprecated controls, not the default handoff workflow.
+- The active clean-repo research path should compare Top-Aware Muon `top_k=1, alpha=1.0` (`c=1`, same-candidate identity) against `alpha=0.5` (`c=0.5`) first. Native Muon/LITE code and the separate `streaming_identity` candidate remain targeted controls, not the default handoff workflow.
 - The clean StreamingMuon metrics path should not do explicit SVD. For this phase, use cached streaming `sigma`/basis, Nesterov-corrected optimizer input metrics, and Hessian/projection diagnostics.
 - The v42/v43 evidence is internally consistent at 4M: Top-Aware `c=0.5` clearly beats identity under the same driver/recipe, both without metrics and with dense metrics enabled.
 

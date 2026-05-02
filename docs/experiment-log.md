@@ -6,6 +6,7 @@ Latest update:
 - Added a hard-coded `DEPTH -> 1x Chinchilla tokens` table to the clean sweep engine: d8 `402653184`, d12 `1698693120`, d16 `4026531840`.
 - Updated `scripts/run_d12_sweep.sh` and `scripts/run_d12_statistics.sh` so normal runs use `DEPTH` plus `CHINCHILLA_MULT`; exact `TOKENS` remains available only for smoke tests or custom truncated runs.
 - Documented the d16 sweep command in `README.md`: `DEPTH=16 CHINCHILLA_MULT=1 STAMP=d16_main_001 bash scripts/run_d12_sweep.sh`.
+- Updated the clean default comparison to `METHODS=top_aware_muon` with `ALPHAS="1.0 0.5"`, so `c=1` and `c=0.5` run through the same candidate implementation. The separate `streaming_identity` candidate is now a targeted sanity check rather than the default baseline.
 
 ## 2026-05-02 — README handoff rewrite
 
