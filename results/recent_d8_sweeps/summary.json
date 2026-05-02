@@ -1,0 +1,91 @@
+{
+  "row_count": 97,
+  "sources": [
+    "v42_d8_c05_vs_identity_0p4B",
+    "v43_4m_best_metrics",
+    "v44_d8_c05_transition_2m8m",
+    "v45_d8_2m_lr016_boundary",
+    "v46_2m_best_metrics",
+    "v47_1m_topaware_lr016_boundary",
+    "v48_8m_best_metrics",
+    "v49_2m_seed_confirm",
+    "v50_2m_seed_confirm_more",
+    "v51_4m_seed_confirm",
+    "v52_1m_seed_confirm",
+    "v53_1m_identity_s42_boundary",
+    "v54_1m_identity_s43s44_lr016",
+    "v55_1m_topaware_s43s44_lr016",
+    "v56_262k_seed_confirm",
+    "v57_262k_topaware_s44_lr08",
+    "v58_262k_1m_best_metrics_20260502_095901"
+  ],
+  "batches": [
+    "262K",
+    "1M",
+    "2M",
+    "4M",
+    "8M"
+  ],
+  "paired_summary": [
+    {
+      "batch": 262144,
+      "batch_label": "262K",
+      "identity_best_lr": 0.04,
+      "identity_mean_bpb": 0.9682162313074245,
+      "identity_n": 4,
+      "topaware_best_lr": 0.02,
+      "topaware_mean_bpb": 0.9694053712948107,
+      "topaware_n": 4,
+      "delta_topaware_minus_identity": 0.001189139987386234,
+      "winner": "streaming_identity"
+    },
+    {
+      "batch": 1048576,
+      "batch_label": "1M",
+      "identity_best_lr": 0.08,
+      "identity_mean_bpb": 1.004063953968709,
+      "identity_n": 4,
+      "topaware_best_lr": 0.08,
+      "topaware_mean_bpb": 1.0074620893453763,
+      "topaware_n": 4,
+      "delta_topaware_minus_identity": 0.0033981353766672218,
+      "winner": "streaming_identity"
+    },
+    {
+      "batch": 2097152,
+      "batch_label": "2M",
+      "identity_best_lr": 0.08,
+      "identity_mean_bpb": 1.0718697119050808,
+      "identity_n": 6,
+      "topaware_best_lr": 0.08,
+      "topaware_mean_bpb": 1.0748963304688848,
+      "topaware_n": 6,
+      "delta_topaware_minus_identity": 0.003026618563803929,
+      "winner": "streaming_identity"
+    },
+    {
+      "batch": 4194304,
+      "batch_label": "4M",
+      "identity_best_lr": 0.04,
+      "identity_mean_bpb": 1.2129671459987144,
+      "identity_n": 4,
+      "topaware_best_lr": 0.04,
+      "topaware_mean_bpb": 1.1872696517332115,
+      "topaware_n": 4,
+      "delta_topaware_minus_identity": -0.02569749426550283,
+      "winner": "top_aware_muon"
+    },
+    {
+      "batch": 8388608,
+      "batch_label": "8M",
+      "identity_best_lr": 0.02,
+      "identity_mean_bpb": 1.4534541214200671,
+      "identity_n": 2,
+      "topaware_best_lr": 0.02,
+      "topaware_mean_bpb": 1.425231595231188,
+      "topaware_n": 2,
+      "delta_topaware_minus_identity": -0.028222526188879105,
+      "winner": "top_aware_muon"
+    }
+  ]
+}
