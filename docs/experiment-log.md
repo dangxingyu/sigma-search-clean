@@ -12,6 +12,8 @@ Latest update:
 - Added `scripts/run_handoff_sweep.sh`, a user-facing wrapper around `run_top_aware_muon_sweep.py`.
 - Enhanced `run_top_aware_muon_sweep.py` with `--adaptive-lr`: after the initial LR grid, each `(method,batch,seed,top_k,alpha)` group extends outward if its best finite BPB is on the low or high LR boundary. Decisions are written to `adaptive_lr_trace.json`.
 - Validation passed: `python -m py_compile run_top_aware_muon_sweep.py run_eval.py run_native_muon_v9.py metric_logging.py`; `bash -n scripts/run_handoff_sweep.sh scripts/run_d8_metrics_grid.sh`; dry-run adaptive test correctly proposed `0.04` when `{0.01,0.02}` had best BPB at `0.02`.
+- Pushed clean repo commit `3c828c5` to `origin/main`.
+- Launched corrected v38b metrics grid: `search_evals/d8_metrics_alpha_grid_v38b_d8_metrics_fixed_logging_20260502_022100/`, same d8 alpha `{0.5,1.0}` x batch `{262K,1M,4M}` plan, now with corrected split-`M'` and loss/Hessian metadata.
 
 ## 2026-05-02 — clean repo sweep catalog, cleanup, and d8 0.4B metrics recipe
 
