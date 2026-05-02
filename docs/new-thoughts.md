@@ -17,7 +17,7 @@
 ### 3. Some observations suggest
 
 - Top-Aware can improve BPB while the measured selected-subspace sharpness is higher than identity. The mechanism is therefore not simply "reduce all measured sharpness"; it may be allowing useful progress while controlling the top sigma direction's effective update.
-- The transition region should be described as noisy/tie-like rather than monotone: 1M has a tiny LR-closed `c=0.5` edge pending seed confirmation, 2M over five seeds is near-tie (`+0.0005 ± 0.0042` SEM for `c=0.5 - identity`), and 4M robustly favors `c=0.5` over three seeds (`-0.0252 ± 0.0041` SEM).
+- The transition region should be described as noisy/tie-like rather than monotone: 1M over three seeds is near-tie with a slight identity lean (`+0.0019 ± 0.0028` SEM for `c=0.5 - identity`), 2M over five seeds is near-tie (`+0.0005 ± 0.0042` SEM), and 4M robustly favors `c=0.5` over three seeds (`-0.0252 ± 0.0041` SEM).
 - v46 2M dynamics does not provide an obvious scalar explanation: identity wins despite similar late sharpness/projection-correlation aggregates. This suggests the mechanism is likely trajectory- or spectrum-shape-dependent, not captured by the current aggregate sharpness alone.
 - v48 8M dynamics suggests projection-correlation may differ between regimes: Top-Aware wins while having less negative average fixed-Hessian projection correlation than identity. This is only a hint because 8M has 48 optimizer steps and one seed.
 - The fixed-Hessian-subspace gradient projection cosine is strongly negative late in 4M runs, suggesting oscillatory behavior in the sharp subspace. This needs more interpretation before becoming a central claim.
