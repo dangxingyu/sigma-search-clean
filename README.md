@@ -58,6 +58,22 @@ search_evals/handoff_sweep_<stamp>/      result JSONs, manifest, CSV, adaptive t
 logs/handoff_sweep_<stamp>/              stdout/stderr logs per run
 ```
 
+Checkpointing is enabled by default in the sweep wrappers. Each case writes resumable checkpoints under:
+
+```text
+search_evals/<stamp>/<case_name>/checkpoints/
+```
+
+The default is `SAVE_EVERY=100`, `KEEP_LAST_CHECKPOINTS=2`, and `RESUME=1`. Re-submit the same command with the same `STAMP`/`OUT_ROOT` after preemption: completed cases with valid `result.json` are skipped, and incomplete cases resume from their latest complete checkpoint. A complete DDP checkpoint requires `model_<step>.pt`, `meta_<step>.json`, and every `optim_<step>_rank*.pt`; half-written checkpoints are ignored.
+
+Example preemption-safe pattern:
+
+```bash
+STAMP=d12_main_001 bash scripts/run_d12_sweep.sh
+# if preempted, submit exactly the same command again
+STAMP=d12_main_001 bash scripts/run_d12_sweep.sh
+```
+
 ## Repository Layout
 
 ```text

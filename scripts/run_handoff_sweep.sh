@@ -33,6 +33,10 @@ DEPTH="${DEPTH:-8}"
 NPROC="${NPROC:-8}"
 MAX_DEVICE_BATCH_SIZE="${MAX_DEVICE_BATCH_SIZE:-16}"
 
+SAVE_EVERY="${SAVE_EVERY:-100}"
+KEEP_LAST_CHECKPOINTS="${KEEP_LAST_CHECKPOINTS:-2}"
+RESUME="${RESUME:-1}"
+
 ADAPTIVE_LR="${ADAPTIVE_LR:-1}"
 LR_EXTEND_FACTOR="${LR_EXTEND_FACTOR:-2.0}"
 LR_MIN="${LR_MIN:-0.0005}"
@@ -61,6 +65,8 @@ cmd=(
   --depth "$DEPTH"
   --nproc-per-node "$NPROC"
   --max-device-batch-size "$MAX_DEVICE_BATCH_SIZE"
+  --save-every "$SAVE_EVERY"
+  --keep-last-checkpoints "$KEEP_LAST_CHECKPOINTS"
   --pure-qr
   --streaming-num-iters "${STREAMING_NUM_ITERS:-2}"
   --fallback-ortho-tol "${FALLBACK_ORTHO_TOL:-0.01}"
@@ -82,6 +88,11 @@ cmd=(
 if [[ "$ADAPTIVE_LR" == "1" ]]; then
   cmd+=(--adaptive-lr)
 fi
+if [[ "$RESUME" == "1" ]]; then
+  cmd+=(--resume)
+else
+  cmd+=(--no-resume)
+fi
 if [[ "${DRY_RUN:-0}" == "1" ]]; then
   cmd+=(--dry-run)
 fi
@@ -93,6 +104,7 @@ cmd+=("$@")
 
 printf 'OUT_ROOT=%s\nLOG_ROOT=%s\n' "$OUT_ROOT" "$LOG_ROOT"
 printf 'METHODS=%s\nBATCHES=%s\nALPHAS=%s\nLRS=%s\nSEEDS=%s\n' "$METHODS" "$BATCHES" "$ALPHAS" "$LRS" "$SEEDS"
+printf 'CHECKPOINTING=save_every:%s keep_last:%s resume:%s\n' "$SAVE_EVERY" "$KEEP_LAST_CHECKPOINTS" "$RESUME"
 printf 'ADAPTIVE_LR=%s LR_EXTEND_FACTOR=%s LR_MIN=%s LR_MAX=%s MAX_ROUNDS=%s\n' \
   "$ADAPTIVE_LR" "$LR_EXTEND_FACTOR" "$LR_MIN" "$LR_MAX" "$MAX_LR_EXTENSION_ROUNDS"
 printf 'Command:\n'

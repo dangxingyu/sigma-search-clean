@@ -122,7 +122,7 @@ def common_training_args(args: argparse.Namespace, batch: int, lr: float, seed: 
         )
     warmup = max(1, round(args.warmup_ratio * steps))
     eval_every = args.eval_every if args.eval_every > 0 else eval_every_for_steps(steps)
-    return [
+    common = [
         "--nanochat-dir", args.nanochat_dir,
         "--output-file", str(out),
         "--depth", str(args.depth),
@@ -137,6 +137,19 @@ def common_training_args(args: argparse.Namespace, batch: int, lr: float, seed: 
         "--eval-every", str(eval_every),
         "--eval-tokens", str(args.eval_tokens),
         "--seed", str(seed),
+    ]
+    return common
+
+
+def checkpoint_args(args: argparse.Namespace, out: Path) -> list[str]:
+    if args.save_every <= 0:
+        return []
+    return [
+        "--checkpoint-dir", str(out.parent / "checkpoints"),
+        "--save-every", str(args.save_every),
+        "--keep-last-checkpoints", str(args.keep_last_checkpoints),
+        "--resume-from-step", str(args.resume_from_step),
+        "--resume" if args.resume else "--no-resume",
     ]
 
 
@@ -163,6 +176,7 @@ def build_command(args: argparse.Namespace, method: str, batch: int, lr: float, 
                   out: Path, top_k: int | None, alpha: float | None) -> list[str]:
     cmd = ["torchrun", "--standalone", f"--nproc_per_node={args.nproc_per_node}"]
     common = common_training_args(args, batch, lr, seed, out)
+    ckpt = checkpoint_args(args, out)
     metrics = streaming_metrics_args(args)
 
     if method == "streaming_identity":
@@ -174,6 +188,7 @@ def build_command(args: argparse.Namespace, method: str, batch: int, lr: float, 
             "--num-iters", str(args.streaming_num_iters),
             "--fallback-ortho-tol", f"{args.fallback_ortho_tol:g}",
             *(["--pure-qr"] if args.pure_qr else []),
+            *ckpt,
             *metrics,
         ]
     if method == "streaming_lite":
@@ -185,6 +200,7 @@ def build_command(args: argparse.Namespace, method: str, batch: int, lr: float, 
             "--num-iters", str(args.streaming_num_iters),
             "--fallback-ortho-tol", f"{args.fallback_ortho_tol:g}",
             *(["--pure-qr"] if args.pure_qr else []),
+            *ckpt,
             *metrics,
         ]
     if method == "top_aware_muon":
@@ -199,13 +215,18 @@ def build_command(args: argparse.Namespace, method: str, batch: int, lr: float, 
             "--num-iters", str(args.streaming_num_iters),
             "--fallback-ortho-tol", f"{args.fallback_ortho_tol:g}",
             *(["--pure-qr"] if args.pure_qr else []),
+            *ckpt,
             *metrics,
         ]
     if method == "native_muon":
+        if args.save_every > 0:
+            raise ValueError("checkpoint/resume is implemented for StreamingMuon run_eval.py only; set SAVE_EVERY=0 for native_muon")
         if args.metrics_every > 0:
             raise ValueError("metrics logging is supported only for StreamingMuon methods in the clean repo")
         return cmd + ["run_native_muon_v9.py", *common, "--ns-steps", str(args.ns_steps), *metrics]
     if method == "native_lite":
+        if args.save_every > 0:
+            raise ValueError("checkpoint/resume is implemented for StreamingMuon run_eval.py only; set SAVE_EVERY=0 for native_lite")
         if args.metrics_every > 0:
             raise ValueError("metrics logging is supported only for StreamingMuon methods in the clean repo")
         if args.nproc_per_node != 1:
@@ -315,6 +336,14 @@ def write_manifest(args: argparse.Namespace, methods: list[str]) -> None:
             "num_iters": args.streaming_num_iters,
             "fallback_ortho_tol": args.fallback_ortho_tol,
             "rank_k": args.streaming_rank_k,
+        },
+        "checkpointing": {
+            "enabled": args.save_every > 0,
+            "save_every": args.save_every,
+            "keep_last_checkpoints": args.keep_last_checkpoints,
+            "resume": args.resume,
+            "resume_from_step": args.resume_from_step,
+            "layout": "each case writes checkpoints under <case_dir>/checkpoints",
         },
         "metrics": {
             "metrics_every": args.metrics_every,
@@ -537,6 +566,14 @@ def main() -> None:
     parser.add_argument("--warmup-ratio", type=float, default=0.05)
     parser.add_argument("--warmdown-ratio", type=float, default=0.65)
     parser.add_argument("--final-lr-frac", type=float, default=0.05)
+    parser.add_argument("--save-every", type=int, default=0,
+                        help="If >0, enable per-case checkpoints every N optimizer steps.")
+    parser.add_argument("--keep-last-checkpoints", type=int, default=2,
+                        help="Keep only the latest N complete per-case checkpoints; <=0 keeps all.")
+    parser.add_argument("--resume", action=argparse.BooleanOptionalAction, default=True,
+                        help="Resume incomplete cases from their latest complete checkpoint.")
+    parser.add_argument("--resume-from-step", type=int, default=-1,
+                        help="-1 means latest complete checkpoint, >=0 means exact checkpoint step.")
     parser.add_argument("--streaming-num-iters", type=int, default=2)
     parser.add_argument("--streaming-rank-k", type=int, default=-1)
     parser.add_argument("--fallback-ortho-tol", type=float, default=0.01)

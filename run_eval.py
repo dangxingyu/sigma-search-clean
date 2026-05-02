@@ -19,6 +19,7 @@ import time
 import math
 import argparse
 import re
+import signal
 from pathlib import Path
 
 import torch
@@ -65,6 +66,17 @@ parser.add_argument("--sigma-spread", type=float, default=0.0, help="Multiply le
 # Eval
 parser.add_argument("--eval-every", type=int, default=100, help="Evaluate val BPB every N steps")
 parser.add_argument("--eval-tokens", type=int, default=524288, help="Tokens for val eval")
+# Checkpoint / resume
+parser.add_argument("--checkpoint-dir", type=str, default=None,
+                    help="Directory for resumable model/optimizer checkpoints. Disabled if omitted.")
+parser.add_argument("--save-every", type=int, default=0,
+                    help="Save a resumable checkpoint every N optimizer steps; 0 disables periodic saves.")
+parser.add_argument("--keep-last-checkpoints", type=int, default=2,
+                    help="Keep only the latest N complete checkpoints; <=0 keeps all.")
+parser.add_argument("--resume", action=argparse.BooleanOptionalAction, default=True,
+                    help="Resume from --checkpoint-dir if a complete checkpoint exists.")
+parser.add_argument("--resume-from-step", type=int, default=-1,
+                    help="-1 means latest complete checkpoint, >=0 means exact step.")
 # Diagnostics
 parser.add_argument("--save-sigma-profile", type=str, default=None,
                     help="Path to save sigma distribution stats (JSON). Useful for profiling baseline.")
@@ -102,7 +114,10 @@ sys.path.insert(0, args.nanochat_dir)
 sys.path.insert(0, str(SCRIPT_DIR))
 
 from nanochat.gpt import GPT, GPTConfig
-from nanochat.dataloader import tokenizing_distributed_data_loader_bos_bestfit
+from nanochat.dataloader import (
+    tokenizing_distributed_data_loader_bos_bestfit,
+    tokenizing_distributed_data_loader_with_state_bos_bestfit,
+)
 from nanochat.common import COMPUTE_DTYPE, print0, autodetect_device_type
 from nanochat.tokenizer import get_tokenizer, get_token_bytes
 from nanochat.loss_eval import evaluate_bpb
@@ -177,11 +192,182 @@ def configure_candidate_fn(fn, params: dict):
     return wrapped
 
 
+_STOP_REQUESTED = False
+
+
+def _handle_stop_signal(signum, frame):
+    del frame
+    global _STOP_REQUESTED
+    _STOP_REQUESTED = True
+    print(f"Received signal {signum}; will checkpoint after the current optimizer step.", flush=True)
+
+
+def _install_signal_handlers():
+    signal.signal(signal.SIGTERM, _handle_stop_signal)
+    signal.signal(signal.SIGINT, _handle_stop_signal)
+
+
+def _step_from_checkpoint_path(path: Path, prefix: str) -> int | None:
+    stem = path.stem
+    if not stem.startswith(prefix):
+        return None
+    try:
+        return int(stem.split("_")[1])
+    except (IndexError, ValueError):
+        return None
+
+
+def _checkpoint_is_complete(checkpoint_dir: Path, step: int, world_size: int) -> bool:
+    if not (checkpoint_dir / f"model_{step:06d}.pt").exists():
+        return False
+    if not (checkpoint_dir / f"meta_{step:06d}.json").exists():
+        return False
+    return all((checkpoint_dir / f"optim_{step:06d}_rank{rank:d}.pt").exists() for rank in range(world_size))
+
+
+def _complete_checkpoint_steps(checkpoint_dir: Path, world_size: int) -> list[int]:
+    if not checkpoint_dir.exists():
+        return []
+    steps = []
+    for model_path in checkpoint_dir.glob("model_*.pt"):
+        step = _step_from_checkpoint_path(model_path, "model_")
+        if step is not None and _checkpoint_is_complete(checkpoint_dir, step, world_size):
+            steps.append(step)
+    return sorted(set(steps))
+
+
+def _resolve_resume_step(
+    checkpoint_dir: Path | None,
+    resume: bool,
+    resume_from_step: int,
+    world_size: int,
+    rank: int,
+    ddp: bool,
+) -> int | None:
+    if checkpoint_dir is None or not resume:
+        return None
+
+    step = None
+    if rank == 0:
+        if resume_from_step >= 0:
+            if not _checkpoint_is_complete(checkpoint_dir, resume_from_step, world_size):
+                raise FileNotFoundError(
+                    f"requested checkpoint step {resume_from_step} is incomplete in {checkpoint_dir}"
+                )
+            step = resume_from_step
+        else:
+            steps = _complete_checkpoint_steps(checkpoint_dir, world_size)
+            step = steps[-1] if steps else None
+
+    if ddp:
+        obj = [step]
+        torch.distributed.broadcast_object_list(obj, src=0)
+        step = obj[0]
+    return step
+
+
+def _optimizer_state_for_checkpoint(optimizer: torch.optim.Optimizer) -> dict:
+    """Drop callable/transient objects so optimizer checkpoints are torch.save-safe."""
+    raw = optimizer.state_dict()
+    state = {}
+    for key, value in raw["state"].items():
+        if isinstance(value, dict):
+            state[key] = {
+                k: v for k, v in value.items()
+                if k not in {"sigma_transform_obj", "metrics_cache"}
+            }
+        else:
+            state[key] = value
+
+    param_groups = []
+    for group in raw["param_groups"]:
+        param_groups.append({
+            k: v for k, v in group.items()
+            if k not in {"sigma_transform", "_capture_metrics"}
+        })
+    return {"state": state, "param_groups": param_groups}
+
+
+def _load_training_checkpoint(
+    checkpoint_dir: Path,
+    step: int,
+    model: torch.nn.Module,
+    optimizer: torch.optim.Optimizer,
+    device: torch.device,
+    rank: int,
+) -> dict:
+    model_path = checkpoint_dir / f"model_{step:06d}.pt"
+    optim_path = checkpoint_dir / f"optim_{step:06d}_rank{rank:d}.pt"
+    meta_path = checkpoint_dir / f"meta_{step:06d}.json"
+
+    model_data = torch.load(model_path, map_location=device)
+    model.load_state_dict(model_data, strict=True)
+    del model_data
+
+    optimizer_data = torch.load(optim_path, map_location=device)
+    optimizer.load_state_dict(optimizer_data)
+    del optimizer_data
+
+    return json.loads(meta_path.read_text())
+
+
+def _cleanup_old_checkpoints(checkpoint_dir: Path, keep_last: int, world_size: int) -> None:
+    if keep_last <= 0:
+        return
+    steps = _complete_checkpoint_steps(checkpoint_dir, world_size)
+    for step in steps[:-keep_last]:
+        for path in [
+            checkpoint_dir / f"model_{step:06d}.pt",
+            checkpoint_dir / f"meta_{step:06d}.json",
+            *[checkpoint_dir / f"optim_{step:06d}_rank{rank:d}.pt" for rank in range(world_size)],
+        ]:
+            try:
+                path.unlink()
+            except FileNotFoundError:
+                pass
+
+
+def _save_training_checkpoint(
+    checkpoint_dir: Path,
+    step: int,
+    model: torch.nn.Module,
+    optimizer: torch.optim.Optimizer,
+    meta: dict,
+    rank: int,
+    world_size: int,
+    ddp: bool,
+    keep_last: int,
+) -> None:
+    checkpoint_dir.mkdir(parents=True, exist_ok=True)
+    if rank == 0:
+        torch.save(model.state_dict(), checkpoint_dir / f"model_{step:06d}.pt")
+        (checkpoint_dir / f"meta_{step:06d}.json").write_text(json.dumps(meta, indent=2))
+    torch.save(
+        _optimizer_state_for_checkpoint(optimizer),
+        checkpoint_dir / f"optim_{step:06d}_rank{rank:d}.pt",
+    )
+    if ddp:
+        torch.distributed.barrier()
+    if rank == 0:
+        _cleanup_old_checkpoints(checkpoint_dir, keep_last, world_size)
+        print0(f"Saved checkpoint step {step} to {checkpoint_dir}")
+    if ddp:
+        torch.distributed.barrier()
+
+
+def _distributed_stop_requested(ddp: bool, device: torch.device) -> bool:
+    flag = torch.tensor([1 if _STOP_REQUESTED else 0], device=device, dtype=torch.int32)
+    if ddp:
+        torch.distributed.all_reduce(flag, op=torch.distributed.ReduceOp.MAX)
+    return bool(flag.item())
+
+
 # =============================================================================
 # Main
 # =============================================================================
 
 def main():
+    _install_signal_handlers()
     results = {
         "start_time": time.time(),
         "args": vars(args),
@@ -212,6 +398,20 @@ def main():
         else:
             device = torch.device("cpu")
         print0(f"Device: {device}")
+
+        checkpoint_dir = Path(args.checkpoint_dir) if args.checkpoint_dir else None
+        if checkpoint_dir is None and args.save_every > 0:
+            checkpoint_dir = Path(args.output_file).parent / "checkpoints"
+        if checkpoint_dir is not None:
+            checkpoint_dir = checkpoint_dir.resolve()
+        results["checkpointing"] = {
+            "enabled": checkpoint_dir is not None,
+            "checkpoint_dir": None if checkpoint_dir is None else str(checkpoint_dir),
+            "save_every": args.save_every,
+            "keep_last_checkpoints": args.keep_last_checkpoints,
+            "resume": args.resume,
+            "resume_from_step": args.resume_from_step,
+        }
 
         # --- Tokenizer ---
         tokenizer = get_tokenizer()
@@ -323,6 +523,34 @@ def main():
         for group in optimizer.param_groups:
             group["initial_lr"] = group["lr"]
 
+        resume_meta = None
+        resume_step = _resolve_resume_step(
+            checkpoint_dir,
+            args.resume,
+            args.resume_from_step,
+            world_size,
+            rank,
+            ddp,
+        )
+        if resume_step is not None:
+            print0(f"Resuming from checkpoint step {resume_step} in {checkpoint_dir}")
+            resume_meta = _load_training_checkpoint(
+                checkpoint_dir,
+                resume_step,
+                model,
+                optimizer,
+                device,
+                rank,
+            )
+            # Optimizer checkpoints intentionally omit callable sigma transforms.
+            # Restore them from the current run config after load_state_dict().
+            for group in optimizer.param_groups:
+                if group.get("kind") == "streaming_muon":
+                    group["sigma_transform"] = sigma_transform
+            results["resumed_from_step"] = resume_step
+        else:
+            results["resumed_from_step"] = None
+
         # --- Compile model ---
         # Keep the eager module for optional Hessian diagnostics. Higher-order
         # autograd through the compiled wrapper can fail with donated buffers.
@@ -330,13 +558,17 @@ def main():
         model = torch.compile(model, dynamic=False)
 
         # --- Data loader ---
-        train_loader = tokenizing_distributed_data_loader_bos_bestfit(
+        dataloader_resume_state_dict = (
+            None if resume_meta is None else resume_meta.get("dataloader_state_dict")
+        )
+        train_loader = tokenizing_distributed_data_loader_with_state_bos_bestfit(
             tokenizer, args.device_batch_size, args.max_seq_len, split="train", device=device,
+            resume_state_dict=dataloader_resume_state_dict,
         )
         build_val_loader = lambda: tokenizing_distributed_data_loader_bos_bestfit(
             tokenizer, args.device_batch_size, args.max_seq_len, split="val", device=device,
         )
-        x, y = next(train_loader)
+        x, y, dataloader_state_dict = next(train_loader)
 
         # --- LR / momentum / WD schedulers ---
         num_iterations = args.max_steps
@@ -369,10 +601,22 @@ def main():
 
         # --- Training loop ---
         print0(f"Training for {num_iterations} steps, batch_size={total_batch_size}")
-        smooth_train_loss = 0.0
-        train_losses = []
-        val_bpbs = []
-        best_val_bpb = float("inf")
+        if resume_meta is None:
+            start_step = 0
+            smooth_train_loss = 0.0
+            train_losses = []
+            val_bpbs = []
+            metric_logs = []
+            best_val_bpb = float("inf")
+        else:
+            start_step = int(resume_meta["step"])
+            loop_state = resume_meta.get("loop_state", {})
+            smooth_train_loss = float(loop_state.get("smooth_train_loss", 0.0))
+            train_losses = loop_state.get("train_losses", [])
+            val_bpbs = loop_state.get("val_bpbs", [])
+            metric_logs = loop_state.get("metric_logs", [])
+            best_val_bpb = float(loop_state.get("best_val_bpb", float("inf")))
+            print0(f"Restored loop state at step {start_step}; previous best_val_bpb={best_val_bpb}")
 
         # One forward/backward micro-step consumes tokens_per_batch on each rank.
         # For DDP, the optimizer averages gradients across ranks, so the global
@@ -385,13 +629,14 @@ def main():
         grad_accum_steps = max(1, total_batch_size // world_tokens_per_fwdbwd)
 
         metrics_enabled = args.metrics_every > 0
-        metric_logs = []
         last_hessian_space = None
         previous_gradient_projection = None
         if metrics_enabled:
             print0(f"Metric logging enabled every {args.metrics_every} steps.")
 
-        for step in range(num_iterations + 1):
+        interrupted_step = None
+        completed_steps = start_step
+        for step in range(start_step, num_iterations + 1):
             last_step = step == num_iterations
 
             # Evaluate
@@ -430,7 +675,7 @@ def main():
                 train_loss_sum += train_loss_val
                 loss = loss / grad_accum_steps
                 loss.backward()
-                x, y = next(train_loader)
+                x, y, dataloader_state_dict = next(train_loader)
 
             # Schedule
             for group in optimizer.param_groups:
@@ -557,8 +802,48 @@ def main():
             if step == 0:
                 gc.collect()
 
+            completed_steps = step + 1
+            stop_now = _distributed_stop_requested(ddp, device)
+            checkpoint_due = (
+                checkpoint_dir is not None
+                and (
+                    stop_now
+                    or completed_steps == num_iterations
+                    or (args.save_every > 0 and completed_steps % args.save_every == 0)
+                )
+            )
+            if checkpoint_due:
+                _save_training_checkpoint(
+                    checkpoint_dir,
+                    completed_steps,
+                    eager_model,
+                    optimizer,
+                    {
+                        "checkpoint_version": 1,
+                        "step": completed_steps,
+                        "args": vars(args),
+                        "candidate_params": candidate_params,
+                        "dataloader_state_dict": dataloader_state_dict,
+                        "loop_state": {
+                            "smooth_train_loss": smooth_train_loss,
+                            "best_val_bpb": best_val_bpb,
+                            "train_losses": train_losses,
+                            "val_bpbs": val_bpbs,
+                            "metric_logs": metric_logs,
+                        },
+                    },
+                    rank,
+                    world_size,
+                    ddp,
+                    args.keep_last_checkpoints,
+                )
+            if stop_now:
+                interrupted_step = completed_steps
+                print0(f"Stopping after checkpoint step {interrupted_step} due to preemption signal.")
+                break
+
         # --- Sigma profiling (optional) ---
-        if args.save_sigma_profile:
+        if interrupted_step is None and args.save_sigma_profile:
             from streaming_muon_torch import get_spectral_diagnostics
             diag = get_spectral_diagnostics(optimizer)
             if diag['sigma']:
@@ -585,15 +870,19 @@ def main():
                 results["sigma_profile"] = sigma_profile
 
         # --- Results ---
-        results["score"] = best_val_bpb
         results["val_bpb_final"] = val_bpbs[-1]["val_bpb"] if val_bpbs else None
         results["val_bpb_best"] = best_val_bpb
         results["train_loss_final"] = train_losses[-1]["loss"] if train_losses else None
         results["val_bpbs"] = val_bpbs
         results["train_losses"] = train_losses
         results["metric_logs"] = metric_logs
-        results["steps_completed"] = num_iterations
-        results["error"] = None
+        results["steps_completed"] = completed_steps
+        if interrupted_step is None:
+            results["score"] = best_val_bpb
+            results["error"] = None
+        else:
+            results["score"] = None
+            results["error"] = f"interrupted_after_checkpoint_step_{interrupted_step}"
 
     except Exception as e:
         import traceback
