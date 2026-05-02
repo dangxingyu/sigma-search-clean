@@ -28,8 +28,8 @@ the clean runtime surface. Historical results are still preserved under
 - `scripts/setup_env.sh`: create the vendored nanochat `uv` environment.
 - `scripts/download_climbmix.sh`: download ClimbMix shards.
 - `scripts/smoke_run.sh`: tiny sanity run.
-- `scripts/run_d12_sweep.sh`: standalone blessed d12 optimizer-quality sweep.
-- `scripts/run_d12_statistics.sh`: standalone dense d12 metrics/statistics run.
+- `scripts/run_d12_sweep.sh`: standalone optimizer-quality sweep wrapper; defaults to d12 but supports d8/d16 via `DEPTH` and `CHINCHILLA_MULT`.
+- `scripts/run_d12_statistics.sh`: standalone dense metrics/statistics wrapper; defaults to d12 but supports d8/d16 via `DEPTH` and `CHINCHILLA_MULT`.
 
 ## Analysis And Results
 

@@ -26,7 +26,9 @@ export MKL_NUM_THREADS="${MKL_NUM_THREADS:-1}"
 export NANOCHAT_FORCE_MATH_SDPA="${NANOCHAT_FORCE_MATH_SDPA:-1}"
 
 DEPTH="${DEPTH:-12}"
-TOKENS="${TOKENS:-1698693120}"
+CHINCHILLA_MULT="${CHINCHILLA_MULT:-1}"
+# Exact TOKENS remains available for smoke tests or custom truncated runs.
+TOKENS="${TOKENS:-}"
 METHODS="${METHODS:-streaming_identity top_aware_muon}"
 BATCHES="${BATCHES:-262144 1048576 4194304}"
 ALPHAS="${ALPHAS:-0.5}"
@@ -64,8 +66,8 @@ cmd=(
   --top-ks "$TOP_KS"
   --lrs "$LRS"
   --seeds "$SEEDS"
-  --tokens "$TOKENS"
   --depth "$DEPTH"
+  --chinchilla-mult "$CHINCHILLA_MULT"
   --nproc-per-node "$NPROC"
   --max-device-batch-size "$MAX_DEVICE_BATCH_SIZE"
   --save-every "$SAVE_EVERY"
@@ -84,6 +86,9 @@ cmd=(
   --metrics-projection-correlation-window "$METRICS_PROJECTION_CORRELATION_WINDOW"
 )
 
+if [[ -n "$TOKENS" ]]; then
+  cmd+=(--tokens "$TOKENS")
+fi
 if [[ "${ALLOW_TOP_K_SWEEP:-0}" == "1" ]]; then
   cmd+=(--allow-top-k-sweep)
 fi
@@ -100,9 +105,13 @@ if [[ "${RERUN_EXISTING:-0}" == "1" ]]; then
 fi
 cmd+=("$@")
 
-printf 'Running statistics/dynamics run (d12 defaults; DEPTH/TOKENS may override)\n'
+printf 'Running statistics/dynamics run (d12 defaults; DEPTH/CHINCHILLA_MULT may override)\n'
 printf 'OUT_ROOT=%s\nLOG_ROOT=%s\n' "$OUT_ROOT" "$LOG_ROOT"
-printf 'DEPTH=%s TOKENS=%s NPROC=%s\n' "$DEPTH" "$TOKENS" "$NPROC"
+if [[ -n "$TOKENS" ]]; then
+  printf 'DEPTH=%s TOKENS=%s NPROC=%s\n' "$DEPTH" "$TOKENS" "$NPROC"
+else
+  printf 'DEPTH=%s CHINCHILLA_MULT=%s TOKENS=auto NPROC=%s\n' "$DEPTH" "$CHINCHILLA_MULT" "$NPROC"
+fi
 printf 'METHODS=%s\nBATCHES=%s\nALPHAS=%s\nTOP_KS=%s\nLRS=%s\nSEEDS=%s\n' \
   "$METHODS" "$BATCHES" "$ALPHAS" "$TOP_KS" "$LRS" "$SEEDS"
 printf 'METRICS_EVERY=%s METRICS_HESSIAN_EVERY=%s METRICS_HESSIAN_TOP_K=%s\n' \

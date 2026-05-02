@@ -67,7 +67,7 @@ Default recipe:
 |---|---|
 | methods | `streaming_identity top_aware_muon` |
 | depth | `12` |
-| tokens | `1698693120` |
+| token budget | `CHINCHILLA_MULT=1`, auto-resolved from `DEPTH` |
 | batches | `262144 1048576 4194304` |
 | LRs | `0.005 0.01 0.02 0.04` |
 | Top-Aware | `top_k=1`, `alpha=0.5` |
@@ -76,8 +76,18 @@ Default recipe:
 | checkpointing | `SAVE_EVERY=100`, `KEEP_LAST_CHECKPOINTS=2`, `RESUME=1` |
 | adaptive LR | on by default |
 
-`1698693120` tokens is the d12 1x Chinchilla-style budget: `20 *`
-non-embedding params, rounded to be compatible with the 4M batch grid.
+The wrapper hard-codes the token table below, so normal runs should specify
+`DEPTH` and `CHINCHILLA_MULT` rather than a large raw token count.
+
+| depth | 1x Chinchilla tokens |
+|---:|---:|
+| `8` | `402653184` |
+| `12` | `1698693120` |
+| `16` | `4026531840` |
+
+These are the repo's 20-token-per-non-embedding-parameter budgets, rounded
+where needed to stay compatible with the main batch grid. `TOKENS=...` is still
+available for smoke tests or intentionally truncated custom runs.
 
 Inspect commands without launching training:
 
@@ -104,12 +114,32 @@ For d8 / 0.4B-token runs, reuse the same script with overrides:
 
 ```bash
 DEPTH=8 \
-TOKENS=402653184 \
+CHINCHILLA_MULT=1 \
 BATCHES="262144 1048576 4194304" \
 ALPHAS="0.5" \
 LRS="0.005 0.01 0.02 0.04" \
 ADAPTIVE_LR=1 \
 bash scripts/run_d12_sweep.sh
+```
+
+For d16 / 4.0B-token runs, use the same wrapper:
+
+```bash
+DEPTH=16 \
+CHINCHILLA_MULT=1 \
+BATCHES="262144 1048576 4194304" \
+ALPHAS="0.5" \
+LRS="0.005 0.01 0.02 0.04" \
+ADAPTIVE_LR=1 \
+STAMP=d16_main_001 \
+bash scripts/run_d12_sweep.sh
+```
+
+For a smaller multiple, change only the multiplier, for example
+`CHINCHILLA_MULT=0.5`. For a quick command/path smoke, override exact tokens:
+
+```bash
+DEPTH=16 TOKENS=16777216 STAMP=d16_smoke bash scripts/run_d12_sweep.sh
 ```
 
 ### Adaptive LR

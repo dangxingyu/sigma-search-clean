@@ -31,12 +31,12 @@
 
 ### 1. Confident enough to treat as correct
 
-- The standalone repo should not expose historical one-off launchers as primary interfaces. The stable pass-by surface is `run_eval.py`, `run_top_aware_muon_sweep.py`, `scripts/run_d12_sweep.sh`, `scripts/run_d12_statistics.sh`, and `analysis/build_sweep_catalog.py`. d8 runs should use `DEPTH=8 TOKENS=402653184` overrides rather than a separate script.
+- The standalone repo should not expose historical one-off launchers as primary interfaces. The stable pass-by surface is `run_eval.py`, `run_top_aware_muon_sweep.py`, `scripts/run_d12_sweep.sh`, `scripts/run_d12_statistics.sh`, and `analysis/build_sweep_catalog.py`. d8/d12/d16 runs should use `DEPTH` plus `CHINCHILLA_MULT`; exact `TOKENS` is only for smoke or custom truncated runs.
 - The handoff sweep surface should be standalone scripts, not wrapper chains. New users should start from `scripts/run_d12_sweep.sh`; it directly invokes `run_top_aware_muon_sweep.py`. Adaptive LR boundary extension is implemented and should be left on for optimizer-quality sweeps.
 - Split-batch alignment for the current study must be computed on optimizer input `M'`, not raw `M`. The clean StreamingMuon and native Muon metric paths now use `M' = (1 - beta)G + beta M_new`.
 - In 8-GPU runs, split-momentum diagnostics should average split gradients across DDP ranks before updating the diagnostic momenta. The corrected clean path now records global-DDP split alignment; previous rank-local split logs are weaker diagnostics.
 - For the requested d8 dynamics study, `262144` is the critical batch. The no-tuning grid should be `{262K,1M,4M}`, not `{262K,512K,1M,4M}`.
-- The d8 dynamics budget should be about `0.4B` tokens. `402,653,184` is a practical exact value because it is divisible by `262K`, `1M`, and `4M`.
+- The d8 dynamics budget should be about `0.4B` tokens. The clean repo hard-codes this as `DEPTH=8 CHINCHILLA_MULT=1 -> 402,653,184` tokens.
 
 ### 2. Multiple observations; likely true but still needs careful confirmation
 

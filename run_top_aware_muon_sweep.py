@@ -26,8 +26,15 @@ from typing import Any
 
 
 SEQ = 1024
-DEFAULT_TOKENS = 402_653_184
 METHOD_CHOICES = {"streaming_identity", "top_aware_muon"}
+CHINCHILLA_1X_TOKENS_BY_DEPTH = {
+    # 20x non-embedding/token-budget convention used by this handoff repo.
+    # Values are rounded down where needed to stay compatible with the main
+    # batch grid.
+    8: 402_653_184,
+    12: 1_698_693_120,
+    16: 4_026_531_840,
+}
 
 
 def parse_list_int(spec: str) -> list[int]:
@@ -51,6 +58,18 @@ def steps_for_batch(tokens: int, batch: int) -> int:
     if steps < 1:
         raise ValueError(f"tokens={tokens} is smaller than batch={batch}")
     return steps
+
+
+def tokens_from_chinchilla(depth: int, mult: float) -> int:
+    if depth not in CHINCHILLA_1X_TOKENS_BY_DEPTH:
+        supported = ", ".join(str(k) for k in sorted(CHINCHILLA_1X_TOKENS_BY_DEPTH))
+        raise ValueError(
+            f"no hard-coded Chinchilla token budget for depth={depth}; "
+            f"supported depths: {supported}. Pass --tokens for a custom run."
+        )
+    if not math.isfinite(float(mult)) or mult <= 0:
+        raise ValueError("--chinchilla-mult must be finite and > 0")
+    return max(1, int(math.floor(CHINCHILLA_1X_TOKENS_BY_DEPTH[depth] * mult)))
 
 
 def device_batch_for(batch: int, nproc: int, max_device_batch_size: int) -> int:
@@ -300,6 +319,9 @@ def write_manifest(args: argparse.Namespace, methods: list[str]) -> None:
         "alphas": args.alphas,
         "seeds": args.seeds,
         "tokens": args.tokens,
+        "token_budget_source": args.token_budget_source,
+        "chinchilla_mult": args.chinchilla_mult,
+        "chinchilla_1x_tokens": args.chinchilla_1x_tokens,
         "depth": args.depth,
         "seq": SEQ,
         "nproc_per_node": args.nproc_per_node,
@@ -539,8 +561,11 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--top-ks", type=parse_list_int, default=parse_list_int("1"))
     parser.add_argument("--alphas", type=parse_list_float, default=parse_list_float("0.5"))
     parser.add_argument("--seeds", type=parse_list_int, default=parse_list_int("42"))
-    parser.add_argument("--tokens", type=int, default=DEFAULT_TOKENS)
     parser.add_argument("--depth", type=int, default=8)
+    parser.add_argument("--tokens", type=int, default=None,
+                        help="Exact token budget override. If omitted, use --chinchilla-mult and --depth.")
+    parser.add_argument("--chinchilla-mult", type=float, default=1.0,
+                        help="Multiplier on the hard-coded 1x Chinchilla token table for this depth.")
     parser.add_argument("--nproc-per-node", type=int, default=8)
     parser.add_argument("--max-device-batch-size", type=int, default=16)
     parser.add_argument("--eval-tokens", type=int, default=524288)
@@ -586,6 +611,13 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--allow-config-mismatch", action="store_true",
                         help="Allow writing into an OUT_ROOT whose manifest has a different config.")
     args = parser.parse_args()
+    if args.tokens is None:
+        args.chinchilla_1x_tokens = CHINCHILLA_1X_TOKENS_BY_DEPTH.get(args.depth)
+        args.tokens = tokens_from_chinchilla(args.depth, args.chinchilla_mult)
+        args.token_budget_source = "chinchilla_table"
+    else:
+        args.chinchilla_1x_tokens = CHINCHILLA_1X_TOKENS_BY_DEPTH.get(args.depth)
+        args.token_budget_source = "manual_tokens"
 
     unknown = sorted(set(args.methods) - METHOD_CHOICES)
     if unknown:
@@ -637,6 +669,8 @@ def validate_args(args: argparse.Namespace) -> None:
         raise ValueError("--tokens must be > 0")
     if args.depth <= 0:
         raise ValueError("--depth must be > 0")
+    if not math.isfinite(float(args.chinchilla_mult)) or args.chinchilla_mult <= 0:
+        raise ValueError("--chinchilla-mult must be finite and > 0")
     if args.nproc_per_node <= 0:
         raise ValueError("--nproc-per-node must be > 0")
     if args.max_device_batch_size <= 0:
@@ -703,6 +737,11 @@ def main() -> None:
     print(f"OUT_ROOT={args.out_root}", flush=True)
     print(f"LOG_ROOT={args.log_root}", flush=True)
     print(f"methods={args.methods}", flush=True)
+    print(
+        f"depth={args.depth} tokens={args.tokens} "
+        f"source={args.token_budget_source} chinchilla_mult={args.chinchilla_mult:g}",
+        flush=True,
+    )
     print(f"batches={args.batches} lrs={args.lrs} top_ks={args.top_ks} alphas={args.alphas} seeds={args.seeds}", flush=True)
 
     for method, batch, lr, seed, top_k, alpha in iter_case_specs(args, args.methods):
