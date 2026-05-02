@@ -19,7 +19,17 @@ Latest update:
 - v43 best result is Top-Aware `c=0.5, lr=0.02` at `1.176648`, about `0.030 BPB` better than best identity in the same metrics run.
 - v43 artifacts are in `results/metrics_v43_4m_best/`: `v43_4m_metrics_summary.md`, `v43_4m_metrics_summary.json`, and `v43_4m_metrics_dynamics.svg`.
 - Current metrics path is no-SVD for the active StreamingMuon study: it logs cached streaming `sigma`, cached basis-derived alignments, `weight_norm`, `grad_norm`, `momentum_after_nesterov_*`, global selected-subspace Hessian probes, and fixed-Hessian-subspace gradient projection correlations.
-- Launched v44 transition sweep while analyzing v43: `search_evals/v44_d8_c05_transition_2m8m`, batches `{2097152, 8388608}`, methods `{streaming_identity, top_aware_muon}`, `alpha=0.5`, LR grid `{0.01,0.02,0.04,0.08}`, metrics off.
+- v44/v45 transition sweep completed for `{2M,8M}` and closed the 2M high-LR boundary with `lr=0.16`.
+- v44/v45 best rows:
+
+| batch | identity best | c=0.5 best | c=0.5 - identity | winner |
+|---:|---:|---:|---:|---|
+| 2097152 | `1.068525 @ 0.08` | `1.082541 @ 0.08` | `+0.014016` | identity |
+| 8388608 | `1.456445 @ 0.02` | `1.421837 @ 0.02` | `-0.034608` | c=0.5 |
+
+- v44/v45 artifacts are in `results/sweep_catalog/v44_v45_transition_summary.*`.
+- Caveat: the transition is not monotone in this one-seed sweep. 1M has a tiny, not-yet-LR-closed `c=0.5` edge; 2M favors identity after LR closure; 4M/8M strongly favor `c=0.5`.
+- Launched v46 dynamics run at the 2M best-LR comparison: identity and Top-Aware `c=0.5`, both `lr=0.08`, metrics every step, Hessian every 48 steps.
 
 ## 2026-05-02 — logging audit fix and user-facing handoff sweep interface
 

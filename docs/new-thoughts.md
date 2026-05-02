@@ -10,19 +10,20 @@
 
 ### 2. Multiple observations; likely true but still needs careful confirmation
 
-- The Top-Aware advantage grows with batch size under the d8 0.4B-token clean recipe. Current best deltas for `c=0.5 - identity` are `+0.0014` at 262K, `-0.0007` at 1M, and `-0.0323` at 4M.
-- 262K looks like the critical/no-benefit regime for `c=0.5`: identity is slightly better after LR tuning, while the 1M result is too small to claim a robust win.
+- The Top-Aware advantage is clearly positive at 4M and 8M under the d8 0.4B-token clean recipe. Current best deltas for `c=0.5 - identity` are `-0.0323` at 4M and `-0.0346` at 8M.
+- 262K looks like a no-benefit regime for `c=0.5`: identity is slightly better after LR tuning.
 - Dense no-SVD metrics are feasible at d8: 4M runs with metrics every step and Hessian every 24 steps produced usable JSONs around `6.8MB` per run.
 
 ### 3. Some observations suggest
 
 - Top-Aware can improve BPB while the measured selected-subspace sharpness is higher than identity. The mechanism is therefore not simply "reduce all measured sharpness"; it may be allowing useful progress while controlling the top sigma direction's effective update.
+- The transition region is currently not monotone in one seed: 1M has a tiny, not-LR-closed `c=0.5` edge, 2M favors identity after LR closure, and 4M favors `c=0.5`. This could be seed noise, schedule interaction, or a real nonmonotone finite-horizon effect.
 - The fixed-Hessian-subspace gradient projection cosine is strongly negative late in 4M runs, suggesting oscillatory behavior in the sharp subspace. This needs more interpretation before becoming a central claim.
 
 ### 4. Hypotheses
 
 - Top-Aware `c=0.5` helps in high-batch regimes because the top sigma direction imposes an edge-of-stability-style global LR bound; damping that direction lets the remaining directions use a larger effective stable LR.
-- The transition between identity and `c=0.5` is likely between 1M and 4M for d8 under the current 0.4B-token recipe. v44 `{2M,8M}` should refine this transition and test whether the 4M signal continues monotonically.
+- The transition between identity and `c=0.5` may not be described by batch size alone under the current finite-token schedule. A more stable predictor may require dynamics metrics, more seeds, or a schedule-normalized statistic rather than only final BPB at one seed.
 
 ## Current conclusion ledger addendum (2026-05-02)
 

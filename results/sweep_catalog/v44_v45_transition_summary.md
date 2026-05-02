@@ -1,0 +1,15 @@
+# v42/v44/v45 Transition Sweep Summary
+
+Clean d8 / 0.4B-token StreamingMuon sweep, same driver, seed 42. Lower BPB is better. `c=0.5` is Top-Aware Muon with `top_k=1, alpha=0.5`.
+
+| batch | identity best | c=0.5 best | c=0.5 - identity | winner | LR closed? |
+|---:|---:|---:|---:|---|---|
+| 262144 | 0.967732 @ 0.04 | 0.969135 @ 0.02 | +0.001403 | identity | yes |
+| 1048576 | 1.010557 @ 0.02 | 1.009856 @ 0.08 | -0.000700 | c=0.5 | edge |
+| 2097152 | 1.068525 @ 0.08 | 1.082541 @ 0.08 | +0.014016 | identity | yes |
+| 4194304 | 1.206814 @ 0.04 | 1.174488 @ 0.02 | -0.032326 | c=0.5 | yes |
+| 8388608 | 1.456445 @ 0.02 | 1.421837 @ 0.02 | -0.034608 | c=0.5 | yes |
+
+Notes:
+- 2M was explicitly extended to `lr=0.16`; both methods got worse, so the `0.08` optima are closed on the high-LR side.
+- The current pattern is not perfectly monotone: 1M is a tiny c=0.5 edge, 2M favors identity, while 4M/8M strongly favor c=0.5. Treat the transition region as not settled without more seeds or nearby batch points.
