@@ -1,0 +1,52 @@
+[
+  {
+    "case": "identity_lr0.08",
+    "label": "identity c=1",
+    "lr": "0.08",
+    "score": 1.0677657289987728,
+    "error": null,
+    "metric_logs": 192,
+    "hessian_steps": [
+      0,
+      48,
+      96,
+      144
+    ],
+    "sharpness": [
+      0.05993754044175148,
+      0.12068168073892593,
+      0.08675790578126907,
+      0.2255554050207138
+    ],
+    "projection_norm_mean": 0.01082391279472157,
+    "projection_norm_last10": 0.003456428891513497,
+    "projection_corr_mean": -0.852489365214158,
+    "projection_corr_last10": -0.972823315858841,
+    "json_size_mb": 12.08851146697998
+  },
+  {
+    "case": "topaware_lr0.08",
+    "label": "top-aware c=0.5",
+    "lr": "0.08",
+    "score": 1.0833901202445928,
+    "error": null,
+    "metric_logs": 192,
+    "hessian_steps": [
+      0,
+      48,
+      96,
+      144
+    ],
+    "sharpness": [
+      0.05988558754324913,
+      0.18172688782215118,
+      0.15815900266170502,
+      0.21853621304035187
+    ],
+    "projection_norm_mean": 0.01724632613517547,
+    "projection_norm_last10": 0.0016167178197065367,
+    "projection_corr_mean": -0.8591754464938751,
+    "projection_corr_last10": -0.685824203491211,
+    "json_size_mb": 12.079543113708496
+  }
+]

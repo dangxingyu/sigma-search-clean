@@ -61,5 +61,5 @@
 <text x="676" y="350" font-family="monospace" font-size="12" fill="#222">1.4564 @ 0.02</text>
 <text x="834" y="350" font-family="monospace" font-size="12" fill="#222">1.4218 @ 0.02</text>
 <text x="986" y="350" font-family="monospace" font-size="12" fill="#222">c=0.5</text>
-<text x="560.0" y="502" text-anchor="middle" font-family="sans-serif" font-size="12" fill="#554d44">Negative delta means Top-Aware c=0.5 wins. 2M has explicit lr=0.16 boundary closure.</text>
+<text x="560.0" y="502" text-anchor="middle" font-family="sans-serif" font-size="12" fill="#554d44">Negative delta means Top-Aware c=0.5 wins. 1M and 2M have explicit high-LR boundary checks.</text>
 </svg>

@@ -29,7 +29,11 @@ Latest update:
 
 - v44/v45 artifacts are in `results/sweep_catalog/v44_v45_transition_summary.*`.
 - Caveat: the transition is not monotone in this one-seed sweep. 1M has a tiny, not-yet-LR-closed `c=0.5` edge; 2M favors identity after LR closure; 4M/8M strongly favor `c=0.5`.
-- Launched v46 dynamics run at the 2M best-LR comparison: identity and Top-Aware `c=0.5`, both `lr=0.08`, metrics every step, Hessian every 48 steps.
+- v46 completed the 2M best-LR dynamics comparison: identity `1.067766 @ lr=0.08`, Top-Aware `c=0.5` `1.083390 @ lr=0.08`, metrics every step, Hessian every 48 steps. Artifacts are in `results/metrics_v46_2m_best/`.
+- v46 sharpness probes: identity `[0.060, 0.121, 0.087, 0.226]`, Top-Aware `[0.060, 0.182, 0.158, 0.219]`. Projection-correlation means are similar (`-0.852` identity, `-0.859` Top-Aware), so the current simple metrics do not yet explain the 2M degradation.
+- v47 closed the 1M Top-Aware high-LR boundary: `lr=0.16` scored `1.022783`, worse than the existing `lr=0.08` score `1.009856`, so the 1M best row remains `c=0.5 @ lr=0.08`.
+- The updated transition artifact `results/sweep_catalog/v44_v45_transition_summary.md` now includes the v47 1M boundary check.
+- Launched v48 8M best-LR dynamics run: identity and Top-Aware `c=0.5`, both `lr=0.02`, metrics every step, Hessian every 12 steps.
 
 ## 2026-05-02 — logging audit fix and user-facing handoff sweep interface
 

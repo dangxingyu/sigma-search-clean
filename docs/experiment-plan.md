@@ -6,8 +6,9 @@ Status checkpoint:
 - v42 completed the core `c=1` vs `c=0.5` d8 / 0.4B-token sweep at `{262K,1M,4M}`. Treat the current evidence as: `262K` identity slight win, `1M` effectively tie/tiny `c=0.5` win only after LR extension, `4M` strong `c=0.5` win.
 - v43 completed the first dense dynamics run at `4M` with metrics every step and Hessian top-4 probes every 24 steps. Use `results/metrics_v43_4m_best/` for the current dynamics sanity plots.
 - v44/v45 completed the transition sweep: `2M` favors identity after explicit `lr=0.16` boundary closure, while `8M` strongly favors `c=0.5`. Use `results/sweep_catalog/v44_v45_transition_summary.*`.
-- v46 is the active dynamics sweep: `2M`, identity and Top-Aware `c=0.5`, both at `lr=0.08`, metrics every step, Hessian top-4 every 48 steps.
-- The 1M `c=0.5` point is still formally on the high-LR edge (`lr=0.08`). If using the 1M tiny win in a report, first run `c=0.5, lr=0.16` or explicitly mark it as not LR-closed.
+- v46 completed the 2M dynamics sweep: identity and Top-Aware `c=0.5`, both at `lr=0.08`, metrics every step, Hessian top-4 every 48 steps. Use `results/metrics_v46_2m_best/`.
+- v47 closed the 1M `c=0.5` high-LR edge: `lr=0.16` is worse than `0.08`, so the current 1M best row is closed.
+- v48 is active for 8M dynamics: identity and Top-Aware `c=0.5`, both `lr=0.02`, metrics every step, Hessian top-4 every 12 steps.
 
 Immediate standalone-repo priorities:
 - Use the clean method set: `top_aware_muon` and `streaming_identity`. Keep native Muon/LITE code as deprecated targeted validation controls, not as default sweep methods.

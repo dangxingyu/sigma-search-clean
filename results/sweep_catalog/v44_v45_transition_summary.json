@@ -359,6 +359,14 @@
       "lr": 0.16,
       "score": 1.0892244792498937,
       "source": "search_evals/v45_d8_2m_lr016_boundary/top_aware_sweep_rows.csv"
+    },
+    {
+      "batch": 1048576,
+      "method": "top_aware_muon",
+      "alpha": "0.5",
+      "lr": 0.16,
+      "score": 1.0227828333847784,
+      "source": "search_evals/v47_1m_topaware_lr016_boundary/top_aware_sweep_rows.csv"
     }
   ],
   "best": [

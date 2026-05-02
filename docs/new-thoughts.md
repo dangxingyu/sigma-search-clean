@@ -17,7 +17,8 @@
 ### 3. Some observations suggest
 
 - Top-Aware can improve BPB while the measured selected-subspace sharpness is higher than identity. The mechanism is therefore not simply "reduce all measured sharpness"; it may be allowing useful progress while controlling the top sigma direction's effective update.
-- The transition region is currently not monotone in one seed: 1M has a tiny, not-LR-closed `c=0.5` edge, 2M favors identity after LR closure, and 4M favors `c=0.5`. This could be seed noise, schedule interaction, or a real nonmonotone finite-horizon effect.
+- The transition region is currently not monotone in one seed: 1M has a tiny LR-closed `c=0.5` edge, 2M favors identity after LR closure, and 4M favors `c=0.5`. This could be seed noise, schedule interaction, or a real nonmonotone finite-horizon effect.
+- v46 2M dynamics does not provide an obvious scalar explanation: identity wins despite similar late sharpness/projection-correlation aggregates. This suggests the mechanism is likely trajectory- or spectrum-shape-dependent, not captured by the current aggregate sharpness alone.
 - The fixed-Hessian-subspace gradient projection cosine is strongly negative late in 4M runs, suggesting oscillatory behavior in the sharp subspace. This needs more interpretation before becoming a central claim.
 
 ### 4. Hypotheses
