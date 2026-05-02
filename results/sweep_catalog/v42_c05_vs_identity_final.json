@@ -1,0 +1,26 @@
+{
+  "262144": {
+    "identity_score": 0.967732123762332,
+    "identity_lr": 0.04,
+    "c05_score": 0.9691346536172205,
+    "c05_lr": 0.02,
+    "diff_c05_minus_identity": 0.0014025298548885345,
+    "winner": "identity"
+  },
+  "1048576": {
+    "identity_score": 1.0105565956286775,
+    "identity_lr": 0.02,
+    "c05_score": 1.009856417484363,
+    "c05_lr": 0.08,
+    "diff_c05_minus_identity": -0.000700178144314556,
+    "winner": "c=0.5"
+  },
+  "4194304": {
+    "identity_score": 1.2068139791623371,
+    "identity_lr": 0.04,
+    "c05_score": 1.174487687423776,
+    "c05_lr": 0.02,
+    "diff_c05_minus_identity": -0.032326291738561164,
+    "winner": "c=0.5"
+  }
+}
