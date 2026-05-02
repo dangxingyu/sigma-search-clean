@@ -11,12 +11,14 @@ REPO="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$REPO"
 
 export DEPTH="${DEPTH:-12}"
-# 1x Chinchilla-style d12 budget. This scales the d8 0.4B recipe by
-# d12/d8 scaling-parameter ratio, then rounds to be divisible by 4M.
-export TOKENS="${TOKENS:-977272832}"
+# 1x Chinchilla-style d12 budget: 20 tokens per non-embedding parameter.
+# For nanochat d12 this is 20 * 84,935,570 = 1,698,711,400 tokens,
+# rounded down by 18,280 tokens so it is divisible by the 4M batch grid.
+export TOKENS="${TOKENS:-1698693120}"
 export METHODS="${METHODS:-streaming_identity top_aware_muon}"
 export BATCHES="${BATCHES:-262144 1048576 4194304}"
 export ALPHAS="${ALPHAS:-0.5}"
+export TOP_KS="${TOP_KS:-1}"
 export LRS="${LRS:-0.005 0.01 0.02 0.04}"
 export SEEDS="${SEEDS:-42}"
 export ADAPTIVE_LR="${ADAPTIVE_LR:-1}"
@@ -36,7 +38,7 @@ echo "Running blessed d12 sweep"
 echo "  DEPTH=$DEPTH TOKENS=$TOKENS NPROC=$NPROC"
 echo "  METHODS=$METHODS"
 echo "  BATCHES=$BATCHES"
-echo "  ALPHAS=$ALPHAS"
+echo "  ALPHAS=$ALPHAS TOP_KS=$TOP_KS"
 echo "  LRS=$LRS"
 echo "  SEEDS=$SEEDS"
 echo "  OUT_ROOT=$OUT_ROOT"

@@ -15,10 +15,13 @@ SHARD_BY="${SHARD_BY:-batch}"  # batch | batch_alpha | batch_lr | batch_alpha_lr
 METHODS="${METHODS:-streaming_identity top_aware_muon}"
 BATCHES="${BATCHES:-262144 1048576 4194304}"
 ALPHAS="${ALPHAS:-0.5}"
+TOP_KS="${TOP_KS:-1}"
 LRS="${LRS:-0.005 0.01 0.02 0.04}"
 SEEDS="${SEEDS:-42}"
 
-TOKENS="${TOKENS:-977272832}"
+# Match scripts/run_d12_sweep.sh: 1x Chinchilla-style d12 budget rounded
+# to the default 4M-compatible grid.
+TOKENS="${TOKENS:-1698693120}"
 DEPTH="${DEPTH:-12}"
 NPROC="${NPROC:-8}"
 MAX_DEVICE_BATCH_SIZE="${MAX_DEVICE_BATCH_SIZE:-16}"
@@ -116,6 +119,7 @@ write_job_script() {
     printf 'export METHODS=%q\n' "$METHODS"
     printf 'export BATCHES=%q\n' "$batch_spec"
     printf 'export ALPHAS=%q\n' "$alpha_spec"
+    printf 'export TOP_KS=%q\n' "$TOP_KS"
     printf 'export LRS=%q\n' "$lr_spec"
     printf 'export SEEDS=%q\n' "$SEEDS"
     printf 'export TOKENS=%q\n' "$TOKENS"

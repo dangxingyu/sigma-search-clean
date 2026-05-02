@@ -1,50 +1,30 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-REPO="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-cd "$REPO"
+# Canonical d8 dense-metrics grid. This is a thin wrapper around the main
+# handoff sweep so optimizer, checkpoint, and metrics flags stay in one place.
 
-PARENT_REPO="$(cd "$REPO/.." && pwd)"
-if [[ -f "$PARENT_REPO/nanochat/.venv/bin/activate" ]]; then
-  # Prefer the live cluster venv when this repo is used in-place.
-  # shellcheck disable=SC1091
-  source "$PARENT_REPO/nanochat/.venv/bin/activate"
-elif [[ -f "$REPO/nanochat/.venv/bin/activate" ]]; then
-  # shellcheck disable=SC1091
-  source "$REPO/nanochat/.venv/bin/activate"
-fi
+export DEPTH="${DEPTH:-8}"
+export TOKENS="${TOKENS:-402653184}"
+export METHODS="${METHODS:-streaming_identity top_aware_muon}"
+export BATCHES="${BATCHES:-262144 1048576 4194304}"
+export ALPHAS="${ALPHAS:-0.5}"
+export TOP_KS="${TOP_KS:-1}"
+export LRS="${LRS:-0.02}"
+export SEEDS="${SEEDS:-42}"
+export ADAPTIVE_LR="${ADAPTIVE_LR:-0}"
 
-export PYTHONPATH="$REPO:$REPO/nanochat"
-export PYTORCH_ALLOC_CONF="${PYTORCH_ALLOC_CONF:-expandable_segments:True}"
-export OMP_NUM_THREADS="${OMP_NUM_THREADS:-1}"
-export MKL_NUM_THREADS="${MKL_NUM_THREADS:-1}"
+export METRICS_EVERY="${METRICS_EVERY:-1}"
+export METRICS_TOP_K="${METRICS_TOP_K:-4}"
+export METRICS_MAX_MODULES="${METRICS_MAX_MODULES:-0}"
+export METRICS_HESSIAN_EVERY="${METRICS_HESSIAN_EVERY:-50}"
+export METRICS_HESSIAN_TOP_K="${METRICS_HESSIAN_TOP_K:-4}"
+export METRICS_HESSIAN_ITERS="${METRICS_HESSIAN_ITERS:-6}"
+export METRICS_HESSIAN_MAX_MODULES="${METRICS_HESSIAN_MAX_MODULES:-0}"
 export NANOCHAT_FORCE_MATH_SDPA="${NANOCHAT_FORCE_MATH_SDPA:-1}"
 
-STAMP="${STAMP:-$(date +%Y%m%d_%H%M%S)}"
-OUT_ROOT="${OUT_ROOT:-search_evals/d8_metrics_alpha_grid_${STAMP}}"
-LOG_ROOT="${LOG_ROOT:-logs/d8_metrics_alpha_grid_${STAMP}}"
+export STAMP="${STAMP:-d8_metrics_grid_$(date +%Y%m%d_%H%M%S)}"
+export OUT_ROOT="${OUT_ROOT:-search_evals/${STAMP}}"
+export LOG_ROOT="${LOG_ROOT:-logs/${STAMP}}"
 
-python run_top_aware_muon_sweep.py \
-  --out-root "$OUT_ROOT" \
-  --log-root "$LOG_ROOT" \
-  --nanochat-dir nanochat \
-  --methods "${METHODS:-streaming_identity top_aware_muon}" \
-  --batches "${BATCHES:-262144 1048576 4194304}" \
-  --alphas "${ALPHAS:-0.5}" \
-  --lrs "${LRS:-0.02}" \
-  --seeds "${SEEDS:-42}" \
-  --tokens "${TOKENS:-402653184}" \
-  --depth "${DEPTH:-8}" \
-  --nproc-per-node "${NPROC:-8}" \
-  --max-device-batch-size "${MAX_DEVICE_BATCH_SIZE:-16}" \
-  --pure-qr \
-  --streaming-num-iters "${STREAMING_NUM_ITERS:-2}" \
-  --fallback-ortho-tol "${FALLBACK_ORTHO_TOL:-0.01}" \
-  --metrics-every "${METRICS_EVERY:-1}" \
-  --metrics-top-k "${METRICS_TOP_K:-4}" \
-  --metrics-module-regex "${METRICS_MODULE_REGEX:-transformer\\.h\\.(?:[0-9]+)\\.(?:attn\\.(?:c_q|c_k|c_v|c_proj)|mlp\\.(?:c_fc|c_proj))\\.weight$}" \
-  --metrics-max-modules "${METRICS_MAX_MODULES:-0}" \
-  --metrics-hessian-every "${METRICS_HESSIAN_EVERY:-50}" \
-  --metrics-hessian-top-k "${METRICS_HESSIAN_TOP_K:-4}" \
-  --metrics-hessian-iters "${METRICS_HESSIAN_ITERS:-6}" \
-  --metrics-hessian-max-modules "${METRICS_HESSIAN_MAX_MODULES:-0}"
+bash "$(dirname "${BASH_SOURCE[0]}")/run_handoff_sweep.sh" "$@"

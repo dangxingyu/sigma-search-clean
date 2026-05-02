@@ -4,7 +4,7 @@ Standalone handoff repo for StreamingMuon-family optimizer experiments on nanoch
 
 > At fixed model/data recipe, how does Top-Aware Muon compare to the same-driver StreamingMuon identity baseline across batch size, LR, and Top-Aware `alpha`?
 
-The code is self-contained: it includes `nanochat/`, StreamingMuon, Top-Aware Muon, optional native controls, sweep launchers, metric logging, and curated result folders.
+The code is self-contained: it includes `nanochat/`, StreamingMuon, Top-Aware Muon, sweep launchers, metric logging, and curated result folders. Current runnable sweeps intentionally expose only `streaming_identity` and `top_aware_muon`.
 
 ## Quick Start
 
@@ -14,7 +14,7 @@ If you only want one command for the main d12 optimizer-quality sweep, use a fix
 STAMP=d12_main_001 bash scripts/run_d12_sweep.sh
 ```
 
-This runs the current mainline comparison, `streaming_identity` vs Top-Aware Muon `alpha=0.5`, at d12 with the default batch/LR grid and a 1x Chinchilla-style token budget (`977272832` tokens). Run it from a node/session that already has the intended GPUs visible; wrap it with your local scheduler outside the repo if needed.
+This runs the current mainline comparison, `streaming_identity` vs Top-Aware Muon `alpha=0.5`, at d12 with the default batch/LR grid and a 1x Chinchilla-style token budget (`1698693120` tokens). Here 1x means `20 * non_embedding_params`; for nanochat d12, non-embedding params are `84,935,570`, then the token count is rounded to the nearest 4M-batch-compatible value. Run it from a node/session that already has the intended GPUs visible; wrap it with your local scheduler outside the repo if needed.
 
 `STAMP` controls the output directory. If you omit it, the wrapper creates a timestamped directory, which is useful for one-off runs but not for preemption resume.
 
@@ -113,6 +113,7 @@ CAMPAIGN=d12_alpha_scan \
 SHARD_BY=batch_alpha \
 METHODS=top_aware_muon \
 ALPHAS="0.25 0.5 0.75 1.0" \
+TOP_KS="1" \
 SBATCH_GPU_DIRECTIVE="--gres=gpu:8" \
 bash scripts/submit_d12_sweep_shards_slurm.sh
 ```
@@ -123,11 +124,9 @@ bash scripts/submit_d12_sweep_shards_slurm.sh
 
 ```text
 nanochat/                    vendored nanochat source
-candidates/                  sigma transforms: identity, LITE-like, Top-Aware
+candidates/                  sigma transforms: identity and Top-Aware
 run_eval.py                  StreamingMuon candidate train/eval runner
 run_top_aware_muon_sweep.py  main reusable sweep engine
-run_native_muon_v9.py        deprecated native Muon validation runner
-run_lite_v9.py               deprecated native LITE validation runner; single-process only
 metric_logging.py            opt-in optimizer dynamics metrics
 scripts/run_handoff_sweep.sh user-facing sweep wrapper
 scripts/run_d12_sweep.sh     blessed d12 optimizer-quality sweep
@@ -167,9 +166,6 @@ Supported sweep method names:
 |---|---|---|
 | `streaming_identity` | `run_eval.py + candidates/identity.py` | StreamingMuon with `f(sigma)=1` |
 | `top_aware_muon` | `run_eval.py + candidates/top_aware_muon.py` | scale top-`k` singular directions by `alpha` |
-| `native_muon` | `run_native_muon_v9.py` | deprecated validation control; not a main sweep target |
-| `native_lite` | `run_lite_v9.py` | deprecated validation control; single-process only |
-| `streaming_lite` | `run_eval.py + candidates/lite_chi2_rs01.py` | implementation sanity check, not a main baseline |
 
 Stable StreamingMuon DDP settings are:
 
@@ -204,9 +200,10 @@ Useful overrides:
 STAMP=d12_c001_b262k \
 BATCHES="262144 1048576 4194304" \
 ALPHAS="0.5 1.0" \
+TOP_KS="1" \
 LRS="0.005 0.01 0.02 0.04" \
 SEEDS="42 43" \
-TOKENS=977272832 \
+TOKENS=1698693120 \
 bash scripts/run_d12_sweep.sh
 ```
 
@@ -218,6 +215,7 @@ Run statistics only after the sweep identifies the LR points worth inspecting. T
 METHODS="streaming_identity top_aware_muon" \
 BATCHES="262144 1048576 4194304" \
 ALPHAS="0.5" \
+TOP_KS="1" \
 LRS="0.02" \
 SEEDS="42" \
 bash scripts/run_d12_statistics.sh
@@ -238,6 +236,7 @@ For optimizer-quality comparisons, keep dense metrics off and sweep LR carefully
 METHODS="streaming_identity top_aware_muon" \
 BATCHES="262144 1048576 4194304" \
 ALPHAS="0.5" \
+TOP_KS="1" \
 LRS="0.005 0.01 0.02 0.04" \
 SEEDS="42" \
 TOKENS=402653184 \
@@ -245,7 +244,7 @@ ADAPTIVE_LR=1 \
 bash scripts/run_handoff_sweep.sh
 ```
 
-Defaults use `METHODS="streaming_identity top_aware_muon"`, where `streaming_identity` is `c=1` and Top-Aware uses `alpha/c=0.5`. The default batches are `{262144,1048576,4194304}`, with d8, seq1024, 8 GPUs, max device batch size 16, and `402,653,184` tokens. That is the d8 Chinchilla-style `~0.4B` token recipe. Native Muon/LITE code is retained for targeted validation, but it is not part of the default sweep.
+Defaults use `METHODS="streaming_identity top_aware_muon"`, where `streaming_identity` is `c=1` and Top-Aware uses `alpha/c=0.5`. The default batches are `{262144,1048576,4194304}`, with d8, seq1024, 8 GPUs, max device batch size 16, and `402,653,184` tokens. That is the d8 Chinchilla-style `~0.4B` token recipe.
 
 ### Adaptive LR Behavior
 
@@ -309,7 +308,9 @@ Canonical logged metrics:
 | `momentum_after_nesterov_hessian_alignment/selected_subspace` | global cosine alignment between Hessian eigenvector and `M'` |
 | `gradient_projection_on_last_hessian_space_coefficients/selected_subspace` | coefficients of current gradient projected onto the most recent Hessian eigenspace |
 | `gradient_projection_on_last_hessian_space_norm/selected_subspace` | norm of the current gradient projection onto the most recent Hessian eigenspace |
-| `gradient_projection_on_last_hessian_space_consecutive_correlation/selected_subspace` | cosine between consecutive gradient projection vectors using the same last Hessian eigenspace, e.g. project steps 51 and 52 onto step-50 space |
+| `gradient_projection_on_last_hessian_space_top1_abs_fraction/selected_subspace` | fraction of projected-gradient norm explained by the top Hessian direction |
+| `gradient_projection_on_last_hessian_space_consecutive_cosine/selected_subspace` | cosine between consecutive projected-gradient vectors using the same last Hessian eigenspace |
+| `gradient_projection_on_last_hessian_top1_lag1_pearson/selected_subspace` | rolling lag-1 Pearson correlation of scalar top-Hessian-direction gradient projection coefficients |
 | `hessian_eigenvector_block_norm/{module}` | norm of the global Hessian eigenvector restricted to this module |
 | `gradient_hessian_alignment/{module}` | per-module cosine between Hessian block and gradient block |
 | `momentum_after_nesterov_hessian_alignment/{module}` | per-module cosine between Hessian block and `M'` block |
@@ -321,7 +322,15 @@ Canonical logged metrics:
 
 Hessian probes use post-update weights and a representative rank0 microbatch from the same optimizer step. The Hessian routine runs one global Lanczos probe over all normal transformer matrix weights selected by `METRICS_MODULE_REGEX`, including cross-module Hessian blocks. Per-module Muon-component alignment uses cached StreamingMuon basis/sigma; if that cache is unavailable, component alignment is reported as unavailable. Set `NANOCHAT_FORCE_MATH_SDPA=1` when Hessian probes are enabled.
 
-Use `METRICS_HESSIAN_TOP_K=4` for projection-correlation studies. With `top_k=1`, projecting consecutive gradients onto the same one-dimensional Hessian space makes the cosine nearly always `+1` or `-1`, so it mostly measures sign flips rather than subspace stability.
+Use `METRICS_HESSIAN_TOP_K=4` for subspace projection-cosine studies. With `top_k=1`, consecutive projection cosine is necessarily `+1` or `-1`, so use `gradient_projection_on_last_hessian_top1_lag1_pearson/selected_subspace` for largest-eigen-direction temporal correlation instead. That metric treats the signed coefficient sequence `c_t = <g_t, e_1>` as a scalar time series and reports a rolling lag-1 Pearson correlation over `METRICS_PROJECTION_CORRELATION_WINDOW` steps.
+
+Analyze existing dense-metrics runs with:
+
+```bash
+python analysis/analyze_metrics_dynamics.py
+```
+
+This writes `results/metrics_dynamics_analysis/` with per-step CSVs, a summary table, and plots for sharpness, Hessian alignment, projection correlation, optimizer-state norms, and validation BPB deltas.
 
 ## D8 Recipe Table
 
@@ -367,8 +376,6 @@ When comparing results, compare within the same recipe family first. Historical 
 
 ## Caveats
 
-- Native Muon/LITE runners are deprecated controls. Keep them for targeted validation only; new sweeps should use `streaming_identity` and `top_aware_muon`.
-- `native_lite` is not DDP-safe here. Do not include it in 8-GPU DDP sweeps until a distributed LITE optimizer is implemented.
-- `streaming_lite` is not a primary claim baseline; it is mainly an implementation sanity check.
+- The current handoff runner does not launch native Muon/LITE or LITE-like streaming variants. Historical results may still appear in `results/` for context, but new sweeps should compare only `streaming_identity` and `top_aware_muon` unless a separate validation script is added deliberately.
 - Dense metrics can be much slower than no-metrics training. Report measured `eval_time_seconds` from `result.json`.
 - New d8 dynamics runs should use the `0.4B` recipe unless the question explicitly needs longer training.

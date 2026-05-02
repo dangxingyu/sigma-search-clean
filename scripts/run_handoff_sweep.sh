@@ -25,6 +25,7 @@ LOG_ROOT="${LOG_ROOT:-logs/handoff_sweep_${STAMP}}"
 METHODS="${METHODS:-streaming_identity top_aware_muon}"
 BATCHES="${BATCHES:-262144 1048576 4194304}"
 ALPHAS="${ALPHAS:-0.5}"
+TOP_KS="${TOP_KS:-1}"
 LRS="${LRS:-0.005 0.01 0.02 0.04}"
 SEEDS="${SEEDS:-42}"
 
@@ -59,6 +60,7 @@ cmd=(
   --methods "$METHODS"
   --batches "$BATCHES"
   --alphas "$ALPHAS"
+  --top-ks "$TOP_KS"
   --lrs "$LRS"
   --seeds "$SEEDS"
   --tokens "$TOKENS"
@@ -78,6 +80,7 @@ cmd=(
   --metrics-hessian-top-k "${METRICS_HESSIAN_TOP_K:-4}"
   --metrics-hessian-iters "${METRICS_HESSIAN_ITERS:-6}"
   --metrics-hessian-max-modules "${METRICS_HESSIAN_MAX_MODULES:-0}"
+  --metrics-projection-correlation-window "${METRICS_PROJECTION_CORRELATION_WINDOW:-16}"
   --lr-extend-factor "$LR_EXTEND_FACTOR"
   --lr-min "$LR_MIN"
   --lr-max "$LR_MAX"
@@ -87,6 +90,9 @@ cmd=(
 
 if [[ "$ADAPTIVE_LR" == "1" ]]; then
   cmd+=(--adaptive-lr)
+fi
+if [[ "${ALLOW_TOP_K_SWEEP:-0}" == "1" ]]; then
+  cmd+=(--allow-top-k-sweep)
 fi
 if [[ "$RESUME" == "1" ]]; then
   cmd+=(--resume)
@@ -103,7 +109,7 @@ fi
 cmd+=("$@")
 
 printf 'OUT_ROOT=%s\nLOG_ROOT=%s\n' "$OUT_ROOT" "$LOG_ROOT"
-printf 'METHODS=%s\nBATCHES=%s\nALPHAS=%s\nLRS=%s\nSEEDS=%s\n' "$METHODS" "$BATCHES" "$ALPHAS" "$LRS" "$SEEDS"
+printf 'METHODS=%s\nBATCHES=%s\nALPHAS=%s\nTOP_KS=%s\nLRS=%s\nSEEDS=%s\n' "$METHODS" "$BATCHES" "$ALPHAS" "$TOP_KS" "$LRS" "$SEEDS"
 printf 'CHECKPOINTING=save_every:%s keep_last:%s resume:%s\n' "$SAVE_EVERY" "$KEEP_LAST_CHECKPOINTS" "$RESUME"
 printf 'ADAPTIVE_LR=%s LR_EXTEND_FACTOR=%s LR_MIN=%s LR_MAX=%s MAX_ROUNDS=%s\n' \
   "$ADAPTIVE_LR" "$LR_EXTEND_FACTOR" "$LR_MIN" "$LR_MAX" "$MAX_LR_EXTENSION_ROUNDS"

@@ -2,37 +2,43 @@
 
 ## Project Structure & Module Organization
 
-This repository searches for spectral transforms for StreamingMuon on top of an in-tree `nanochat/` checkout. Core optimizer code lives in `streaming_muon_torch.py`, `streaming_muon.py`, `muon_lite.py`, and `spectra_optim.py`. Experiment entrypoints are root-level scripts such as `run_eval.py`, `run_streaming_base_train.py`, `run_lite.py`, and `run_native_muon.py`. Candidate transforms belong in `candidates/` and should define `def f(sigma, state)`. Root tests are `test_*.py`; embedded nanochat tests are in `nanochat/tests/`. Generated sweep outputs live under `sweep_results*/`; search runtime artifacts such as `search_pool/`, `search_evals/`, `eval_logs/`, `wandb/`, and `*.log` should stay untracked.
+This clean repo studies StreamingMuon spectral transforms on top of an in-tree `nanochat/` checkout. Current runtime code is `run_eval.py`, `streaming_muon_torch.py`, `streaming_muon.py`, `metric_logging.py`, and `run_top_aware_muon_sweep.py`. Candidate transforms live in `candidates/` and must define `def f(sigma, state)`. The supported candidates are `identity.py` and `top_aware_muon.py`. User-facing launchers are in `scripts/`; generated outputs belong under `search_evals/`, `logs/`, `wandb/`, and checkpoint directories, which should stay untracked. Curated summaries and plots live under `results/` and `figures/`.
 
-## Build, Test, and Development Commands
+## Build, Test, And Development Commands
 
-Set up dependencies from the embedded nanochat project:
+Set up the vendored nanochat environment:
 
 ```bash
-cd nanochat && uv sync --extra gpu --group dev
+bash scripts/setup_env.sh
 source nanochat/.venv/bin/activate
+export PYTHONPATH="$PWD:$PWD/nanochat"
+bash scripts/download_climbmix.sh 170 8
 ```
 
-Common workflows:
+Common checks:
 
 ```bash
-PYTHONPATH=.:nanochat pytest test_streaming_muon.py test_muon_lite.py nanochat/tests
-python search_harness.py seed          # create baseline candidate pool
-python search_harness.py summary       # show candidate rankings
-python run_eval.py --nanochat-dir ./nanochat --candidate-file candidates/identity.py --output-file result.json --max-steps 500 --depth 4
-./submit_eval.sh --candidate-file candidates/identity.py --output-file result.json --max-steps 500 --depth 4 --wait
+python -m py_compile run_eval.py run_top_aware_muon_sweep.py metric_logging.py
+PYTHONPATH=.:nanochat pytest tests
+DRY_RUN=1 bash scripts/run_d12_sweep.sh
+bash scripts/smoke_run.sh
 ```
 
-Use `torchrun --standalone --nproc_per_node=N run_streaming_base_train.py ...` for full distributed training runs.
+Main experiment entrypoints:
+
+```bash
+STAMP=d12_main_001 bash scripts/run_d12_sweep.sh
+BATCHES="262144" LRS="0.02" bash scripts/run_d12_statistics.sh
+```
 
 ## Coding Style & Naming Conventions
 
-Use Python 3.10+ and PyTorch-first implementations for nanochat integration. Keep root scripts executable from the CLI; `run_eval.py` parses arguments at module import time, so do not import it from tests or libraries. Prefer explicit names for experiment files and outputs, e.g. `run_lrsweep_v2.sh`, `probe_warmup500.json`, and `phase_medium/lite_bsz1048576_lr0.02_s42.json`. Candidate files should be lowercase snake_case and side-effect light.
+Use Python 3.10+ and PyTorch-first implementations. Keep CLI scripts executable from repo root and prefer explicit environment variables in shell wrappers. Candidate files should be lowercase snake_case and side-effect light. Use descriptive result names that encode method, batch, LR, alpha, top-k, and seed.
 
 ## Testing Guidelines
 
-Add or update `test_*.py` when changing optimizer math, candidate mechanics, or training wrappers. Run fast CPU-compatible tests before committing; mark or isolate GPU/SLURM-only checks. For training changes, record `max_steps`, `depth`, seed, hardware, and val BPB in the result JSON or report note.
+Keep default tests CPU-compatible and fast. Do not add heavy training or SLURM jobs to pytest. For optimizer math changes, test both direct tensor behavior and candidate integration. For training changes, record `depth`, `tokens`, `batch`, `lr`, `seed`, hardware, and final val BPB in `result.json` or the relevant report.
 
 ## Commit & Pull Request Guidelines
 
-Recent commits use short, descriptive subjects such as `Fix StreamingMuon SCQR drift; add Muon-LITE and SPECTRA optimizers` or `v3: Modal H100 follow-up sweep...`. Use an imperative fix/add/update subject or an experiment version prefix. PRs should state the hypothesis, changed files or scripts, exact commands run, validation metrics, and any generated artifacts intentionally added. Do not commit secrets, hardcoded WANDB keys, local `.claude/` state, or one-off launcher scripts with absolute paths.
+Use short imperative subjects such as `Simplify StreamingMuon sweep runner` or experiment prefixes when appropriate. PRs should include the hypothesis, commands run, validation results, and any generated artifacts intentionally added. Do not commit secrets, local venvs, raw data, checkpoints, `wandb/`, or one-off scheduler scripts with site-specific absolute paths.

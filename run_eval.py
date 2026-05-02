@@ -97,6 +97,8 @@ parser.add_argument("--metrics-hessian-iters", type=int, default=6,
                     help="Power iterations per Hessian direction.")
 parser.add_argument("--metrics-hessian-max-modules", type=int, default=0,
                     help="Maximum modules in Hessian selected subspace; 0 means all normal matrix weights.")
+parser.add_argument("--metrics-projection-correlation-window", type=int, default=16,
+                    help="Window length for lag-1 Pearson correlation of top Hessian-direction gradient projections.")
 # Device
 parser.add_argument("--device-type", type=str, default="", help="cuda|cpu|mps (empty=auto)")
 parser.add_argument("--seed", type=int, default=42, help="Random seed for model init and data")
@@ -631,6 +633,7 @@ def main():
         metrics_enabled = args.metrics_every > 0
         last_hessian_space = None
         previous_gradient_projection = None
+        gradient_projection_top1_history = []
         if metrics_enabled:
             print0(f"Metric logging enabled every {args.metrics_every} steps.")
 
@@ -700,7 +703,8 @@ def main():
                     collect_muon_metrics,
                     gradient_projection_onto_hessian_space,
                     hessian_power_probe,
-                    projection_vector_correlation,
+                    projection_lag1_pearson,
+                    projection_vector_cosine,
                 )
                 metric_entry, hessian_refs = collect_muon_metrics(
                     optimizer,
@@ -751,6 +755,7 @@ def main():
                                 new_hessian_space["step"] = step
                                 last_hessian_space = new_hessian_space
                                 previous_gradient_projection = None
+                                gradient_projection_top1_history = []
                             metric_entry["hessian"] = hessian_stats
                             metric_entry["scalars"].update(hessian_stats.get("scalars", {}))
                             metric_entry["vectors"].update(hessian_stats.get("vectors", {}))
@@ -774,19 +779,36 @@ def main():
                             metric_entry["scalars"][
                                 "gradient_projection_on_last_hessian_space_norm/selected_subspace"
                             ] = current_projection["norm"]
+                            metric_entry["scalars"][
+                                "gradient_projection_on_last_hessian_space_top1_abs_fraction/selected_subspace"
+                            ] = current_projection["top1_abs_fraction"]
                             if (
                                 previous_gradient_projection is not None
                                 and previous_gradient_projection.get("hessian_step") == hstep
                             ):
                                 metric_entry["scalars"][
-                                    "gradient_projection_on_last_hessian_space_consecutive_correlation/selected_subspace"
-                                ] = projection_vector_correlation(
+                                    "gradient_projection_on_last_hessian_space_consecutive_cosine/selected_subspace"
+                                ] = projection_vector_cosine(
                                     previous_gradient_projection,
                                     current_projection,
                                 )
                                 metric_entry["metadata"][
-                                    "gradient_projection_correlation_previous_step"
+                                    "gradient_projection_cosine_previous_step"
                                 ] = previous_gradient_projection.get("step")
+                            coeffs = current_projection.get("coefficients") or []
+                            if coeffs:
+                                gradient_projection_top1_history.append(float(coeffs[0]))
+                                lag1 = projection_lag1_pearson(
+                                    gradient_projection_top1_history,
+                                    window=args.metrics_projection_correlation_window,
+                                )
+                                if math.isfinite(lag1):
+                                    metric_entry["scalars"][
+                                        "gradient_projection_on_last_hessian_top1_lag1_pearson/selected_subspace"
+                                    ] = lag1
+                                    metric_entry["metadata"][
+                                        "gradient_projection_lag1_pearson_window"
+                                    ] = args.metrics_projection_correlation_window
                             current_projection["step"] = step
                             previous_gradient_projection = current_projection
 

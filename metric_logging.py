@@ -342,18 +342,20 @@ def gradient_projection_onto_hessian_space(
     norm_sq = torch.zeros((), dtype=torch.float32)
     for block in projection:
         norm_sq = norm_sq + torch.sum(block * block)
+    coeff_norm = math.sqrt(sum(c * c for c in coeffs))
     return {
         "names": list(names),
         "hessian_step": hessian_space.get("step"),
         "coefficients": coeffs,
         "projection": [block.cpu() for block in projection],
         "norm": float(torch.sqrt(norm_sq).cpu()),
+        "top1_abs_fraction": abs(coeffs[0]) / coeff_norm if coeff_norm > 0.0 else float("nan"),
     }
 
 
 @torch.no_grad()
-def projection_vector_correlation(a: dict[str, Any], b: dict[str, Any]) -> float:
-    """Cosine/correlation between two fixed-space gradient projection vectors."""
+def projection_vector_cosine(a: dict[str, Any], b: dict[str, Any]) -> float:
+    """Cosine between two fixed-space gradient projection vectors."""
     if a.get("names") != b.get("names"):
         return float("nan")
     avec = a.get("projection") or []
@@ -373,6 +375,29 @@ def projection_vector_correlation(a: dict[str, Any], b: dict[str, Any]) -> float
     if float(denom.cpu()) == 0.0:
         return float("nan")
     return float((dot / denom).cpu())
+
+
+def projection_lag1_pearson(values: list[float], window: int = 16, min_pairs: int = 4) -> float:
+    """Lag-1 Pearson correlation for a scalar projection time series."""
+    vals = [float(v) for v in values if math.isfinite(float(v))]
+    if window > 0:
+        vals = vals[-(window + 1) :]
+    if len(vals) < min_pairs + 1:
+        return float("nan")
+    x = vals[:-1]
+    y = vals[1:]
+    mx = sum(x) / len(x)
+    my = sum(y) / len(y)
+    num = sum((a - mx) * (b - my) for a, b in zip(x, y))
+    vx = sum((a - mx) * (a - mx) for a in x)
+    vy = sum((b - my) * (b - my) for b in y)
+    denom = math.sqrt(vx * vy)
+    return num / denom if denom > 0.0 else float("nan")
+
+
+# Deprecated compatibility name. This has always returned a cosine, not a
+# Pearson correlation.
+projection_vector_correlation = projection_vector_cosine
 
 
 @torch.enable_grad()
@@ -549,11 +574,10 @@ def hessian_power_probe(
     ]
 
     def _component_basis(ref: dict[str, Any], count: int) -> tuple[list[torch.Tensor], str]:
-        """Return unit-norm streaming Muon components, falling back to exact SVD.
+        """Return unit-norm components reconstructed from cached StreamingMuon state.
 
-        StreamingMuon already has the right-side basis and sigma from the
-        optimizer step. Reconstructing components from them avoids per-module
-        SVD on Hessian logging steps.
+        If the optimizer cache is unavailable, component metrics are omitted
+        rather than running a per-module SVD on Hessian logging steps.
         """
         m_tilde = ref["momentum_after_nesterov"].float()
         basis = ref.get("streaming_basis")
