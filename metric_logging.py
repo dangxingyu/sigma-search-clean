@@ -405,7 +405,7 @@ projection_vector_correlation = projection_coefficients_pearson
 @torch.enable_grad()
 def hessian_power_probe(
     model: torch.nn.Module,
-    batch: tuple[torch.Tensor, torch.Tensor],
+    batch: tuple[torch.Tensor, torch.Tensor] | list[tuple[torch.Tensor, torch.Tensor]],
     references: dict[str, dict[str, torch.Tensor]],
     name_to_param: dict[str, torch.nn.Parameter],
     *,
@@ -413,6 +413,8 @@ def hessian_power_probe(
     iters: int = 6,
     module_regex: str | None = r"transformer\.h",
     max_modules: int = 0,
+    selected_names: list[str] | None = None,
+    return_stats: bool = True,
 ) -> dict[str, Any]:
     """Approximate top Hessian directions over the selected-parameter subspace.
 
@@ -420,9 +422,11 @@ def hessian_power_probe(
     blocks inside this subspace. The resulting eigenvectors are split back into
     per-module blocks for gradient/momentum/Muon-component projections.
     """
-    x, y = batch
+    batches = batch if isinstance(batch, list) else [batch]
+    rank, world_size, ddp = _rank_info()
+    source_names = selected_names if selected_names is not None else list(references)
     names = [
-        n for n in references
+        n for n in source_names
         if n in name_to_param and _is_normal_matrix_weight(n) and _match_module(n, module_regex)
     ]
     names = _limit_modules(names, max_modules)
@@ -436,6 +440,10 @@ def hessian_power_probe(
         "vectors": {},
         "metadata": {
             "hessian_probe_method": "selected_subspace_lanczos_top_algebraic",
+            "hessian_probe_scope": "distributed_rank_average_loss_hvp" if ddp else "single_process_loss_hvp",
+            "hessian_grad_accum_scope": "caller_supplied_batches",
+            "local_hessian_batches": len(batches),
+            "world_size": world_size,
             "selected_modules": names,
         },
     }
@@ -463,29 +471,44 @@ def hessian_power_probe(
     def _zeros_like_params() -> list[torch.Tensor]:
         return [torch.zeros_like(p, dtype=torch.float32) for p in params]
 
+    def _broadcast_vecs(vecs: list[torch.Tensor]) -> list[torch.Tensor]:
+        if ddp:
+            for v in vecs:
+                torch.distributed.broadcast(v, src=0)
+        return vecs
+
     def hvp_for(vecs: list[torch.Tensor]) -> list[torch.Tensor]:
-        model.zero_grad(set_to_none=True)
-        with _math_sdpa_context():
-            loss = model(x, y)
-        grads = torch.autograd.grad(
-            loss,
-            params,
-            create_graph=True,
-            retain_graph=True,
-            allow_unused=True,
-        )
-        dot = torch.zeros((), device=params[0].device, dtype=torch.float32)
-        for grad, vec in zip(grads, vecs):
-            if grad is not None:
-                dot = dot + torch.sum(grad.float() * vec.to(grad.device).float())
-        hvps = torch.autograd.grad(dot, params, retain_graph=False, allow_unused=True)
-        return [
-            torch.zeros_like(p, dtype=torch.float32) if hv is None else hv.detach().float()
-            for p, hv in zip(params, hvps)
-        ]
+        accum = _zeros_like_params()
+        for x, y in batches:
+            model.zero_grad(set_to_none=True)
+            with _math_sdpa_context():
+                loss = model(x, y)
+            grads = torch.autograd.grad(
+                loss,
+                params,
+                create_graph=True,
+                retain_graph=True,
+                allow_unused=True,
+            )
+            dot = torch.zeros((), device=params[0].device, dtype=torch.float32)
+            for grad, vec in zip(grads, vecs):
+                if grad is not None:
+                    dot = dot + torch.sum(grad.float() * vec.to(grad.device).float())
+            hvps = torch.autograd.grad(dot, params, retain_graph=False, allow_unused=True)
+            for i, (p, hv) in enumerate(zip(params, hvps)):
+                accum[i] = accum[i] + (
+                    torch.zeros_like(p, dtype=torch.float32) if hv is None else hv.detach().float()
+                )
+        scale = 1.0 / max(1, len(batches))
+        accum = [v * scale for v in accum]
+        if ddp:
+            for v in accum:
+                torch.distributed.all_reduce(v, op=torch.distributed.ReduceOp.AVG)
+        return accum
 
     def lanczos_top_eigenpairs(num_pairs: int, lanczos_steps: int) -> tuple[list[float], list[list[torch.Tensor]]]:
         q = [torch.randn_like(p, dtype=torch.float32) for p in params]
+        q = _broadcast_vecs(q)
         q = _scale_vecs(q, 1.0 / (_global_norm(q) + 1e-12))
         q_prev = _zeros_like_params()
         beta_prev = torch.tensor(0.0, device=q[0].device, dtype=torch.float32)
@@ -543,6 +566,12 @@ def hessian_power_probe(
     )
     out["global_hessian_top_eigenvalues"] = evals
     out["global_sharpness"] = evals[0] if evals else float("nan")
+    if not return_stats:
+        model.zero_grad(set_to_none=True)
+        if not was_training:
+            model.eval()
+        return out
+
     out["scalars"]["sharpness/selected_subspace"] = out["global_sharpness"]
     out["_transient"] = {
         "hessian_space": {
@@ -550,6 +579,13 @@ def hessian_power_probe(
             "evecs": [[block.detach().float().cpu() for block in vecs] for vecs in evecs],
         }
     }
+    missing_refs = [n for n in names if n not in references]
+    if missing_refs:
+        out["metadata"]["missing_reference_modules"] = missing_refs
+        model.zero_grad(set_to_none=True)
+        if not was_training:
+            model.eval()
+        return out
     global_grad = [references[n]["grad"].to(params[i].device) for i, n in enumerate(names)]
     global_mtilde = [references[n]["momentum_after_nesterov"].to(params[i].device) for i, n in enumerate(names)]
 

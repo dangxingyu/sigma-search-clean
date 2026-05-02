@@ -64,6 +64,8 @@ search_evals/<stamp>/<case_name>/checkpoints/
 
 The default is `SAVE_EVERY=100`, `KEEP_LAST_CHECKPOINTS=2`, and `RESUME=1`. Re-submit the same command with the same `STAMP`/`OUT_ROOT` after preemption: completed cases with valid `result.json` are skipped, and incomplete cases resume from their latest complete checkpoint. A complete DDP checkpoint requires `model_<step>.pt`, `meta_<step>.json`, and every `optim_<step>_rank*.pt`; half-written checkpoints are ignored.
 
+The sweep runner writes a `manifest.json` with a config signature. If you reuse an `OUT_ROOT` with changed recipe knobs, the runner fails fast instead of silently mixing old and new results. Use a new `STAMP` for changed recipes; only pass `--allow-config-mismatch` if you intentionally want mixed configs in one folder.
+
 Example preemption-safe pattern:
 
 ```bash
@@ -282,7 +284,7 @@ Canonical logged metrics:
 | `hessian_muon_component_alignment_matrix/{module}` | Hessian-vs-cached-StreamingMuon component alignment matrix |
 | `hessian_muon_component_signed_projection_matrix/{module}` | signed Hessian-block projection onto cached StreamingMuon components |
 
-In DDP, per-module optimizer metrics are gathered from the rank that owns each StreamingMuon parameter chunk, and `train/loss` is all-reduced across ranks. Hessian probes currently use post-update weights and a representative rank0 microbatch from the same optimizer step; they are rank0-local loss HVPs, not full distributed-batch Hessians. The Hessian routine runs one Lanczos probe over all normal transformer matrix weights selected by `METRICS_MODULE_REGEX`, including cross-module Hessian blocks within that selected parameter subspace. Per-module Muon-component alignment uses cached StreamingMuon basis/sigma; if that cache is unavailable, component alignment is reported as unavailable. Set `NANOCHAT_FORCE_MATH_SDPA=1` when Hessian probes are enabled.
+In DDP, per-module optimizer metrics are gathered from the rank that owns each StreamingMuon parameter chunk, and `train/loss` is all-reduced across ranks. Hessian probes use post-update weights and one local microbatch per rank from the same optimizer step; each rank computes its local HVP and the HVP blocks are averaged with `all_reduce`, so the probe is distributed across ranks. It is still a representative-microbatch Hessian, not the full grad-accum optimizer-batch Hessian. The Hessian routine runs one Lanczos probe over all normal transformer matrix weights selected by `METRICS_MODULE_REGEX`, including cross-module Hessian blocks within that selected parameter subspace. Per-module Muon-component alignment uses cached StreamingMuon basis/sigma; if that cache is unavailable, component alignment is reported as unavailable. Set `NANOCHAT_FORCE_MATH_SDPA=1` when Hessian probes are enabled.
 
 Use `METRICS_HESSIAN_TOP_K=4` for subspace projection-correlation studies. With `top_k=1`, component-wise correlation is undefined, so use `gradient_projection_on_last_hessian_top1_lag1_pearson/selected_subspace` for largest-eigen-direction temporal correlation instead. That metric treats the signed coefficient sequence `c_t = <g_t, e_1>` as a scalar time series and reports a rolling lag-1 Pearson correlation over `METRICS_PROJECTION_CORRELATION_WINDOW` steps.
 

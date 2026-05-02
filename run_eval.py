@@ -52,17 +52,10 @@ parser.add_argument("--final-lr-frac", type=float, default=0.05, help="Final LR 
 parser.add_argument("--mom-decay", action="store_true", default=True, help="Decay momentum 0.97→0.90 during warmdown")
 parser.add_argument("--no-mom-decay", dest="mom_decay", action="store_false", help="Keep momentum constant at 0.97")
 # StreamingMuon
-parser.add_argument("--use-scqr", action="store_true", default=True, help="Use Shifted Cholesky QR")
 parser.add_argument("--k", type=int, default=-1, help="Number of singular vectors (-1 = full rank)")
 parser.add_argument("--num-iters", type=int, default=1, help="Number of streaming power iterations (1 or 2)")
-parser.add_argument("--fnorm-update", action="store_true", default=False, help="Frobenius-normalize update to UV^T scale (test fix for divergence)")
-parser.add_argument("--pe-cleanup", action="store_true", default=False, help="Apply 5-step Polar Express cleanup on streaming muon's update output")
-parser.add_argument("--qr-left-vectors", action="store_true", default=False, help="Use SCQR instead of column-norm for left_vectors (forces orthonormality)")
-parser.add_argument("--pure-qr", action="store_true", default=False, help="Replace all SCQR with Householder QR (diagnostic: test if SCQR drift causes divergence)")
-parser.add_argument("--fallback-ortho-tol", type=float, default=0.02, help="SCQR fallback orthogonality tolerance: when max ||Q^T Q - I|| > tol, fall back to Householder QR. Default 0.02 is safe at matrix_lr=0.02/d8/1B; tol>=0.05 diverges. Pass a negative value to disable (routes to unsafe fused fast path).")
-parser.add_argument("--basis-reset-every", type=int, default=0, help="Reset basis to I every N steps (0 = never; tests warm-start drift hypothesis)")
-parser.add_argument("--input-normalize", action="store_true", default=False, help="Normalize input by Frobenius norm before gram (matches native muon)")
-parser.add_argument("--sigma-spread", type=float, default=0.0, help="Multiply left_vectors by per-col uniform[1-s, 1+s] to simulate polar express σ∈[0.5,1.5]")
+parser.add_argument("--pure-qr", action="store_true", default=False, help="Use Householder QR instead of SCQR in StreamingMuon orthogonalization.")
+parser.add_argument("--fallback-ortho-tol", type=float, default=0.02, help="SCQR fallback orthogonality tolerance: when max ||Q^T Q - I|| > tol, fall back to Householder QR. Pass a negative value to disable the orthogonality check.")
 # Eval
 parser.add_argument("--eval-every", type=int, default=100, help="Evaluate val BPB every N steps")
 parser.add_argument("--eval-tokens", type=int, default=524288, help="Tokens for val eval")
@@ -507,17 +500,10 @@ def main():
                 momentum=0.95,
                 weight_decay=args.weight_decay,
                 sigma_transform=sigma_transform,
-                use_scqr=args.use_scqr,
                 k=k_val,
                 num_iters=args.num_iters,
-                fnorm_update=args.fnorm_update,
-                pe_cleanup=args.pe_cleanup,
-                qr_left_vectors=args.qr_left_vectors,
                 pure_qr=args.pure_qr,
                 fallback_orthogonality_tol=(None if args.fallback_ortho_tol is not None and args.fallback_ortho_tol < 0 else args.fallback_ortho_tol),
-                basis_reset_every=args.basis_reset_every,
-                input_normalize=args.input_normalize,
-                sigma_spread=args.sigma_spread,
             ))
 
         OptimizerClass = DistStreamingMuonAdamW if ddp else StreamingMuonAdamW
@@ -632,6 +618,7 @@ def main():
 
         metrics_enabled = args.metrics_every > 0
         last_hessian_space = None
+        hessian_space_active = False
         previous_gradient_projection = None
         gradient_projection_top1_history = []
         if metrics_enabled:
@@ -720,9 +707,41 @@ def main():
                     train_loss=train_loss_mean,
                     lr_multiplier=lrm,
                     muon_momentum=muon_momentum,
-                    collect_hessian_refs=hessian_due or last_hessian_space is not None,
+                    collect_hessian_refs=hessian_due or hessian_space_active,
                 )
                 clear_metric_caches(optimizer)
+
+                run_hessian = hessian_due
+                hessian_stats = None
+                hessian_error_text = None
+                hessian_success = False
+                if run_hessian:
+                    model.zero_grad(set_to_none=True)
+                    try:
+                        hessian_stats = hessian_power_probe(
+                            eager_model,
+                            hessian_batch if hessian_batch is not None else (x, y),
+                            hessian_refs,
+                            matrix_params_named,
+                            top_k=args.metrics_hessian_top_k,
+                            iters=args.metrics_hessian_iters,
+                            module_regex=args.metrics_module_regex,
+                            max_modules=args.metrics_hessian_max_modules,
+                            selected_names=list(matrix_params_named.keys()),
+                            return_stats=(rank == 0),
+                        )
+                        hessian_success = True
+                    except Exception as hessian_error:
+                        hessian_error_text = str(hessian_error)
+                    if ddp:
+                        success_flag = torch.tensor(
+                            1 if hessian_success else 0,
+                            device=device,
+                            dtype=torch.int32,
+                        )
+                        torch.distributed.all_reduce(success_flag, op=torch.distributed.ReduceOp.MIN)
+                        hessian_success = bool(success_flag.item())
+                    hessian_space_active = hessian_success
 
                 if rank == 0 and metric_entry is not None:
                     metric_entry.setdefault("metadata", {})
@@ -733,42 +752,29 @@ def main():
                         "optimizer_metric_scope": "gathered_parameter_owner_ranks" if ddp else "single_process",
                         "hessian_weight_state": "post_optimizer_step",
                         "hessian_batch_source": "first_microbatch_same_optimizer_step" if hessian_batch is not None else None,
-                        "hessian_batch_scope": "rank0_local_microbatch" if ddp and hessian_batch is not None else "single_process",
-                        "hessian_probe_scope": "rank0_local_loss_hvp" if ddp and hessian_batch is not None else "single_process",
+                        "hessian_batch_scope": "one_local_microbatch_per_rank_averaged" if ddp and hessian_batch is not None else "single_process",
+                        "hessian_grad_accum_scope": "first_microbatch_only",
+                        "hessian_probe_scope": "distributed_rank_average_loss_hvp" if ddp and hessian_batch is not None else "single_process_loss_hvp",
                     })
                     metric_entry["scalars"]["train/loss_ema"] = debiased
 
-                    run_hessian = (
-                        args.metrics_hessian_every > 0
-                        and step % args.metrics_hessian_every == 0
-                        and hessian_refs
-                    )
                     if run_hessian:
-                        model.zero_grad(set_to_none=True)
-                        try:
-                            hessian_stats = hessian_power_probe(
-                                eager_model,
-                                hessian_batch if hessian_batch is not None else (x, y),
-                                hessian_refs,
-                                matrix_params_named,
-                                top_k=args.metrics_hessian_top_k,
-                                iters=args.metrics_hessian_iters,
-                                module_regex=args.metrics_module_regex,
-                                max_modules=args.metrics_hessian_max_modules,
-                            )
+                        if hessian_success and hessian_stats is not None:
                             transient = hessian_stats.pop("_transient", {})
                             new_hessian_space = transient.get("hessian_space")
                             if new_hessian_space is not None:
                                 new_hessian_space["step"] = step
                                 last_hessian_space = new_hessian_space
+                                hessian_space_active = True
                                 previous_gradient_projection = None
                                 gradient_projection_top1_history = []
                             metric_entry["hessian"] = hessian_stats
                             metric_entry["scalars"].update(hessian_stats.get("scalars", {}))
                             metric_entry["vectors"].update(hessian_stats.get("vectors", {}))
-                        except Exception as hessian_error:
+                        else:
+                            hessian_space_active = last_hessian_space is not None
                             metric_entry["hessian"] = {
-                                "error": str(hessian_error),
+                                "error": hessian_error_text or "hessian_probe_failed_on_at_least_one_rank",
                                 "note": "Hessian HVP is best-effort; some attention kernels do not support double backward.",
                             }
 

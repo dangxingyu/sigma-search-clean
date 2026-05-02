@@ -16,6 +16,7 @@ from __future__ import annotations
 import argparse
 import csv
 import json
+import math
 import shlex
 import subprocess
 import time
@@ -273,10 +274,25 @@ def run_case(args: argparse.Namespace, method: str, batch: int, lr: float, seed:
 
 def write_manifest(args: argparse.Namespace, methods: list[str]) -> None:
     args.out_root.mkdir(parents=True, exist_ok=True)
+    signature = sweep_signature(args, methods)
+    manifest_path = args.out_root / "manifest.json"
+    if manifest_path.exists() and not args.allow_config_mismatch:
+        try:
+            previous = json.loads(manifest_path.read_text())
+        except JSONDecodeError:
+            previous = {}
+        previous_signature = previous.get("config_signature")
+        if previous_signature is not None and previous_signature != signature:
+            raise ValueError(
+                f"{manifest_path} already exists with a different sweep configuration. "
+                "Use a new STAMP/OUT_ROOT for a changed recipe, or pass "
+                "--allow-config-mismatch if you intentionally want to mix configs."
+            )
     manifest = {
         "created_at": time.strftime("%Y-%m-%d %H:%M:%S %Z"),
         "out_root": str(args.out_root),
         "log_root": str(args.log_root),
+        "config_signature": signature,
         "methods": methods,
         "batches": args.batches,
         "lrs": args.lrs,
@@ -330,7 +346,48 @@ def write_manifest(args: argparse.Namespace, methods: list[str]) -> None:
             "top_aware_muon": "StreamingMuon with top-k sigma-direction scale alpha",
         },
     }
-    (args.out_root / "manifest.json").write_text(json.dumps(manifest, indent=2))
+    manifest_path.write_text(json.dumps(manifest, indent=2))
+
+
+def sweep_signature(args: argparse.Namespace, methods: list[str]) -> dict[str, Any]:
+    """Configuration fields that must stay fixed inside one OUT_ROOT."""
+    return {
+        "methods": methods,
+        "batches": args.batches,
+        "lrs": args.lrs,
+        "top_ks": args.top_ks,
+        "alphas": args.alphas,
+        "seeds": args.seeds,
+        "tokens": args.tokens,
+        "depth": args.depth,
+        "seq": SEQ,
+        "nproc_per_node": args.nproc_per_node,
+        "max_device_batch_size": args.max_device_batch_size,
+        "eval_tokens": args.eval_tokens,
+        "eval_every": args.eval_every,
+        "warmup_ratio": args.warmup_ratio,
+        "warmdown_ratio": args.warmdown_ratio,
+        "final_lr_frac": args.final_lr_frac,
+        "streaming_num_iters": args.streaming_num_iters,
+        "streaming_rank_k": args.streaming_rank_k,
+        "fallback_ortho_tol": args.fallback_ortho_tol,
+        "pure_qr": args.pure_qr,
+        "metrics_every": args.metrics_every,
+        "metrics_top_k": args.metrics_top_k,
+        "metrics_module_regex": args.metrics_module_regex,
+        "metrics_max_modules": args.metrics_max_modules,
+        "metrics_hessian_every": args.metrics_hessian_every,
+        "metrics_hessian_top_k": args.metrics_hessian_top_k,
+        "metrics_hessian_iters": args.metrics_hessian_iters,
+        "metrics_hessian_max_modules": args.metrics_hessian_max_modules,
+        "metrics_projection_correlation_window": args.metrics_projection_correlation_window,
+        "adaptive_lr": args.adaptive_lr,
+        "lr_extend_factor": args.lr_extend_factor,
+        "lr_min": args.lr_min,
+        "lr_max": args.lr_max,
+        "max_lr_extension_rounds": args.max_lr_extension_rounds,
+        "adaptive_min_edge_improvement": args.adaptive_min_edge_improvement,
+    }
 
 
 def write_summary_csv(args: argparse.Namespace, methods: list[str]) -> Path:
@@ -523,20 +580,118 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--adaptive-lr", action="store_true")
     parser.add_argument("--lr-extend-factor", type=float, default=2.0)
     parser.add_argument("--lr-min", type=float, default=1e-4)
-    parser.add_argument("--lr-max", type=float, default=0.08)
+    parser.add_argument("--lr-max", type=float, default=0.16)
     parser.add_argument("--max-lr-extension-rounds", type=int, default=2)
     parser.add_argument("--adaptive-min-edge-improvement", type=float, default=0.0)
+    parser.add_argument("--allow-config-mismatch", action="store_true",
+                        help="Allow writing into an OUT_ROOT whose manifest has a different config.")
     args = parser.parse_args()
 
     unknown = sorted(set(args.methods) - METHOD_CHOICES)
     if unknown:
         raise ValueError(f"unknown methods {unknown}; choices={sorted(METHOD_CHOICES)}")
+    validate_args(args)
     if args.top_ks != [1] and not args.allow_top_k_sweep:
         raise ValueError(
             f"current clean recipe fixes top_k=1; got --top-ks {args.top_ks}. "
             "Pass --allow-top-k-sweep only for an explicit ablation."
         )
     return args
+
+
+def _require_nonempty(name: str, values: list[Any]) -> None:
+    if not values:
+        raise ValueError(f"--{name.replace('_', '-')} must not be empty")
+
+
+def _require_finite_positive(name: str, values: list[float], *, allow_zero: bool = False) -> None:
+    for value in values:
+        if not math.isfinite(float(value)):
+            raise ValueError(f"--{name.replace('_', '-')} contains non-finite value {value}")
+        if allow_zero:
+            if value < 0:
+                raise ValueError(f"--{name.replace('_', '-')} values must be >= 0")
+        elif value <= 0:
+            raise ValueError(f"--{name.replace('_', '-')} values must be > 0")
+
+
+def validate_args(args: argparse.Namespace) -> None:
+    _require_nonempty("methods", args.methods)
+    _require_nonempty("batches", args.batches)
+    _require_nonempty("lrs", args.lrs)
+    _require_nonempty("seeds", args.seeds)
+    if "top_aware_muon" in args.methods:
+        _require_nonempty("top_ks", args.top_ks)
+        _require_nonempty("alphas", args.alphas)
+
+    if any(batch <= 0 for batch in args.batches):
+        raise ValueError("--batches values must be > 0")
+    _require_finite_positive("lrs", args.lrs)
+    _require_finite_positive("alphas", args.alphas, allow_zero=True)
+    if any(top_k <= 0 for top_k in args.top_ks):
+        raise ValueError("--top-ks values must be > 0")
+    if any(seed < 0 for seed in args.seeds):
+        raise ValueError("--seeds values must be >= 0")
+
+    if args.tokens <= 0:
+        raise ValueError("--tokens must be > 0")
+    if args.depth <= 0:
+        raise ValueError("--depth must be > 0")
+    if args.nproc_per_node <= 0:
+        raise ValueError("--nproc-per-node must be > 0")
+    if args.max_device_batch_size <= 0:
+        raise ValueError("--max-device-batch-size must be > 0")
+    if args.eval_tokens <= 0:
+        raise ValueError("--eval-tokens must be > 0")
+    if args.eval_every < 0:
+        raise ValueError("--eval-every must be >= 0")
+    if args.warmup_ratio < 0:
+        raise ValueError("--warmup-ratio must be >= 0")
+    if not (0 < args.warmdown_ratio <= 1):
+        raise ValueError("--warmdown-ratio must be in (0, 1]")
+    if args.final_lr_frac < 0:
+        raise ValueError("--final-lr-frac must be >= 0")
+
+    if args.save_every < 0:
+        raise ValueError("--save-every must be >= 0")
+    if args.keep_last_checkpoints < 0:
+        raise ValueError("--keep-last-checkpoints must be >= 0")
+    if args.streaming_num_iters <= 0:
+        raise ValueError("--streaming-num-iters must be > 0")
+    if args.streaming_rank_k == 0 or args.streaming_rank_k < -1:
+        raise ValueError("--streaming-rank-k must be -1 or > 0")
+    if args.fallback_ortho_tol is not None and not math.isfinite(args.fallback_ortho_tol):
+        raise ValueError("--fallback-ortho-tol must be finite")
+
+    if args.metrics_every < 0:
+        raise ValueError("--metrics-every must be >= 0")
+    if args.metrics_top_k <= 0:
+        raise ValueError("--metrics-top-k must be > 0")
+    if args.metrics_max_modules < 0:
+        raise ValueError("--metrics-max-modules must be >= 0")
+    if args.metrics_hessian_every < 0:
+        raise ValueError("--metrics-hessian-every must be >= 0")
+    if args.metrics_hessian_every > 0 and args.metrics_every <= 0:
+        raise ValueError("--metrics-hessian-every requires --metrics-every > 0")
+    if args.metrics_hessian_top_k <= 0:
+        raise ValueError("--metrics-hessian-top-k must be > 0")
+    if args.metrics_hessian_iters <= 0:
+        raise ValueError("--metrics-hessian-iters must be > 0")
+    if args.metrics_hessian_max_modules < 0:
+        raise ValueError("--metrics-hessian-max-modules must be >= 0")
+    if args.metrics_projection_correlation_window < 0:
+        raise ValueError("--metrics-projection-correlation-window must be >= 0")
+
+    if args.lr_extend_factor <= 1:
+        raise ValueError("--lr-extend-factor must be > 1")
+    if args.lr_min <= 0 or args.lr_max <= 0:
+        raise ValueError("--lr-min and --lr-max must be > 0")
+    if args.lr_min > args.lr_max:
+        raise ValueError("--lr-min must be <= --lr-max")
+    if args.max_lr_extension_rounds < 0:
+        raise ValueError("--max-lr-extension-rounds must be >= 0")
+    if args.adaptive_min_edge_improvement < 0:
+        raise ValueError("--adaptive-min-edge-improvement must be >= 0")
 
 
 def main() -> None:

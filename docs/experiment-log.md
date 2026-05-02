@@ -1,5 +1,23 @@
 # Experiment Log — LITE vs Muon diagnostic campaign
 
+## 2026-05-02 — sweep audit and StreamingMuon cleanup
+
+Latest update:
+- Audited `run_top_aware_muon_sweep.py` argparse usage and wrappers. No active sweep args were unused after cleanup.
+- Fixed Python sweep default `--lr-max` to `0.16` to match wrappers/README and the intended two-round boundary closure from `0.04 -> 0.08 -> 0.16`.
+- Added sweep argument validation for empty grids, invalid numeric values, `top_k != 1` without explicit ablation opt-in, and Hessian metrics requested without `metrics_every`.
+- Added `manifest.json` config signatures. Reusing a `STAMP/OUT_ROOT` with changed core recipe now fails fast instead of silently skipping old compatible-looking result filenames.
+- Simplified `streaming_muon_torch.py`: removed unused compiled fused/unsafe SCQR fast paths, duplicate Polar Express constants, unused imports, old built-in tikhonov/clip/sigmoid transforms, the no-op `--use-scqr` run arg, and historical diagnostic knobs not used by the clean sweep.
+- Current optimizer core keeps the stable path used by handoff sweeps: StreamingMuon with optional `CustomTransform`, strict fallback/pure QR, DDP reduce-scatter/all-gather, cached sigma metrics, and Top-Aware candidates from `candidates/`.
+
+## 2026-05-02 — distributed Hessian HVP metrics fix
+
+Latest update:
+- Fixed the clean metrics Hessian path so DDP probes are no longer rank0-local HVPs. On Hessian logging steps, every rank computes local HVP blocks on its local representative microbatch, then `all_reduce(AVG)` averages those blocks for Lanczos.
+- Kept the probe efficient by default: it averages one local microbatch per rank, not every grad-accum microbatch in the full optimizer step.
+- Fixed the follow-up projection path so all ranks continue gathering gradient references after a Hessian space is active; rank0 can then compute `E^T g_t` projection coefficients against the last Hessian eigenspace using complete owner-rank references.
+- Updated README and active plan wording to distinguish distributed representative-microbatch HVPs from full optimizer-batch Hessians.
+
 ## 2026-05-02 — sweep surface cleanup for handoff
 
 Latest update:

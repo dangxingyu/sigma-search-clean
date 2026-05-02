@@ -10,22 +10,8 @@ Drop-in replacement for nanochat's MuonAdamW / DistMuonAdamW.
 """
 
 import torch
-import torch.nn.functional as F
 from torch import Tensor
 from typing import Protocol, Optional
-import math
-
-
-# Polar Express msign coefficients (from Polar Express paper, same as nanochat).
-# 5-step quintic iteration that maps singular values toward 1.
-# Robust to close/equal singular values (unlike power iteration on A^T A).
-_POLAR_EXPRESS_COEFFS = (
-    (8.156554524902461, -22.48329292557795, 15.878769915207462),
-    (4.042929935166739, -2.808917465908714, 0.5000178451051316),
-    (3.8916678022926607, -2.772484153217685, 0.5060648178503393),
-    (3.285753657755655, -2.3681294933425376, 0.46449024233003106),
-    (2.3465413258596377, -1.7097828382687081, 0.42323551169305323),
-)
 
 
 # =============================================================================
@@ -70,57 +56,6 @@ class TopAwareTransform:
         return scale
 
 
-class TikhonovTransform:
-    """f(σ) = λ / (σ + λ). Soft suppression of sharp directions."""
-    def __init__(self, lam: float = 1.0):
-        self.lam = lam
-    def __call__(self, sigma: Tensor, state: dict) -> Tensor:
-        return self.lam / (sigma + self.lam)
-
-
-class ClipTransform:
-    """f(σ) = min(1, c / σ). Hard clipping of sharp directions."""
-    def __init__(self, c: float = 1.0, adaptive: bool = False, gamma: float = 1.0,
-                 ema_beta: float = 0.99):
-        self.c = c
-        self.adaptive = adaptive
-        self.gamma = gamma
-        self.ema_beta = ema_beta
-
-    def __call__(self, sigma: Tensor, state: dict) -> Tensor:
-        if self.adaptive:
-            if 'sigma_ema' not in state:
-                state['sigma_ema'] = sigma.clone()
-            else:
-                state['sigma_ema'].lerp_(sigma, 1 - self.ema_beta)
-            c = self.gamma * state['sigma_ema'].median(dim=-1, keepdim=True).values
-        else:
-            c = self.c
-        return torch.clamp(c / (sigma + 1e-8), max=1.0)
-
-
-class SigmoidTransform:
-    """f(σ) = 1 / (1 + (σ/c)^p). Smooth sigmoid-like suppression."""
-    def __init__(self, c: float = 1.0, p: float = 2.0, adaptive: bool = False,
-                 gamma: float = 1.0, ema_beta: float = 0.99):
-        self.c = c
-        self.p = p
-        self.adaptive = adaptive
-        self.gamma = gamma
-        self.ema_beta = ema_beta
-
-    def __call__(self, sigma: Tensor, state: dict) -> Tensor:
-        if self.adaptive:
-            if 'sigma_ema' not in state:
-                state['sigma_ema'] = sigma.clone()
-            else:
-                state['sigma_ema'].lerp_(sigma, 1 - self.ema_beta)
-            c = self.gamma * state['sigma_ema'].median(dim=-1, keepdim=True).values
-        else:
-            c = self.c
-        return 1.0 / (1.0 + (sigma / (c + 1e-8)) ** self.p)
-
-
 class CustomTransform:
     """Wraps an arbitrary callable for sigma-search candidates."""
     def __init__(self, fn):
@@ -132,9 +67,6 @@ class CustomTransform:
 SIGMA_TRANSFORMS = {
     'identity': IdentityTransform,
     'top_aware': TopAwareTransform,
-    'tikhonov': TikhonovTransform,
-    'clip': ClipTransform,
-    'sigmoid': SigmoidTransform,
 }
 
 
@@ -186,310 +118,6 @@ def _scqr_once(matrix: Tensor, gram: Tensor, ridge_epsilon: float,
     # Q = A R^{-1}: solve L X = A^T => X^T = Q
     scqr_q = torch.linalg.solve_triangular(chol_lower, matrix.mT.float(), upper=False).mT
     return scqr_q
-
-
-@torch.compile(dynamic=False, fullgraph=True)
-def _scqr_fused(matrix: Tensor, gram: Tensor, ridge_epsilon: float) -> Tensor:
-    """
-    Fused SCQR path (no fallback, no orthogonality check).
-    Compiled for speed: all ops in one CUDA graph. All fp32 for stability.
-    """
-    gram = 0.5 * (gram + gram.mT)
-    diagonal = torch.diagonal(gram, dim1=-2, dim2=-1).clamp(min=0.0)
-    ridge_floor = torch.finfo(gram.dtype).eps
-    ridge_diag = torch.clamp(diagonal * ridge_epsilon, min=ridge_floor)
-    regularized = gram + torch.diag_embed(ridge_diag)
-    chol_lower = torch.linalg.cholesky(regularized)
-    scqr_q = torch.linalg.solve_triangular(chol_lower, matrix.mT, upper=False).mT
-    return scqr_q
-
-
-@torch.compile(dynamic=False, fullgraph=True)
-def _streaming_power_step_fused(
-    working: Tensor,
-    basis: Tensor,
-    gram_matrix: Tensor,
-    ridge_epsilon: float,
-) -> Tensor:
-    """Single step of streaming power iteration with dual SCQR."""
-    first_pass = torch.matmul(gram_matrix, basis)
-    first_gram = torch.matmul(basis.mT, first_pass)
-    second_pass = _scqr_fused(first_pass, first_gram, ridge_epsilon)
-    second_gram = torch.matmul(second_pass.mT, second_pass)
-    new_basis = _scqr_fused(second_pass, second_gram, ridge_epsilon)
-    return new_basis
-
-
-# NOTE: Matmul-only orthogonalization attempts (ColNorm+NS, Polar Express
-# on gram @ V, etc.) were tested and all failed. The fundamental issue is
-# that power iteration requires proper QR decomposition, not msign (polar
-# factor). For arbitrary/SPD intermediate matrices, msign-based methods
-# collapse to wrong answers (e.g., msign of SPD → I).
-# Cholesky-based SCQR is the fastest stable QR for this use case on GPU,
-# despite being slower than pure matmul (tensor cores).
-
-
-@torch.compile(dynamic=False, fullgraph=True)
-def _streaming_muon_fused_1iter(
-    stacked_grads: Tensor,
-    stacked_params: Tensor,
-    momentum_buffer: Tensor,
-    basis_state: Tensor,
-    momentum_t: Tensor,
-    lr_t: Tensor,
-    wd_t: Tensor,
-    ridge_epsilon: float,
-    muon_eps: float,
-) -> Tensor:
-    """Fully fused StreamingMuon step with num_iters=1."""
-    mt = momentum_t.to(stacked_grads.dtype)
-    momentum_buffer.lerp_(stacked_grads, 1 - mt)
-    g = stacked_grads.lerp_(momentum_buffer, mt)
-
-    working = g.float()
-    basis = basis_state.float()
-
-    gram_matrix = torch.matmul(working.mT, working)
-
-    # 1 iteration of dual SCQR
-    first_pass = torch.matmul(gram_matrix, basis)
-    first_gram = torch.matmul(basis.mT, first_pass)
-    second_pass = _scqr_fused(first_pass, first_gram, ridge_epsilon)
-    second_gram = torch.matmul(second_pass.mT, second_pass)
-    basis = _scqr_fused(second_pass, second_gram, ridge_epsilon)
-
-    rotated = torch.matmul(working, basis)
-    sigma = torch.linalg.norm(rotated, dim=-2).clamp(min=muon_eps)
-    left_vectors = rotated / sigma.unsqueeze(-2)
-    update = torch.matmul(left_vectors, basis.mT)
-
-    lr = lr_t.to(update.dtype)
-    wd = wd_t.to(update.dtype)
-    stacked_params.sub_(lr * update + lr * wd * stacked_params)
-
-    return basis
-
-
-# Polar Express coefficients (from nanochat/optim.py, ns_steps=5)
-_POLAR_EXPRESS_COEFFS = [
-    (8.156554524902461, -22.48329292557795, 15.878769915207462),
-    (4.042929935166739, -2.808917465908714, 0.5000178451051316),
-    (3.8916678022926607, -2.772484153217685, 0.5060648178503393),
-    (3.285753657755655, -2.3681294933425376, 0.46449024233003106),
-    (2.3465413258596377, -1.7097828382687081, 0.42323551169305323),
-]
-
-
-@torch.compile(dynamic=False, fullgraph=True)
-def _streaming_muon_fused_1iter_pe(
-    stacked_grads: Tensor,
-    stacked_params: Tensor,
-    momentum_buffer: Tensor,
-    basis_state: Tensor,
-    momentum_t: Tensor,
-    lr_t: Tensor,
-    wd_t: Tensor,
-    ridge_epsilon: float,
-    muon_eps: float,
-) -> Tensor:
-    """Streaming muon + polar express cleanup. Tests whether close-singular-value
-    drift in the basis is the root cause of divergence by snapping the output
-    back toward the polar factor with native muon's NS5 coefficients."""
-    mt = momentum_t.to(stacked_grads.dtype)
-    momentum_buffer.lerp_(stacked_grads, 1 - mt)
-    g = stacked_grads.lerp_(momentum_buffer, mt)
-
-    working = g.float()
-    basis = basis_state.float()
-
-    gram_matrix = torch.matmul(working.mT, working)
-
-    first_pass = torch.matmul(gram_matrix, basis)
-    first_gram = torch.matmul(basis.mT, first_pass)
-    second_pass = _scqr_fused(first_pass, first_gram, ridge_epsilon)
-    second_gram = torch.matmul(second_pass.mT, second_pass)
-    basis = _scqr_fused(second_pass, second_gram, ridge_epsilon)
-
-    rotated = torch.matmul(working, basis)
-    sigma = torch.linalg.norm(rotated, dim=-2).clamp(min=muon_eps)
-    left_vectors = rotated / sigma.unsqueeze(-2)
-    update = torch.matmul(left_vectors, basis.mT)
-
-    # Polar express cleanup — ensure spectral norm ≈ 1 even if basis is wrong
-    # Normalize input (polar express requires spec norm ≤ 1)
-    X = update / (update.flatten(-2, -1).norm(dim=-1, keepdim=True).unsqueeze(-1) * 1.01 + 1e-6)
-    # Fast path always sees n >= m (transposed), so matrix is tall
-    for a, b, c in _POLAR_EXPRESS_COEFFS:
-        A = X.mT @ X
-        B = b * A + c * (A @ A)
-        X = a * X + X @ B
-    update = X
-
-    lr = lr_t.to(update.dtype)
-    wd = wd_t.to(update.dtype)
-    stacked_params.sub_(lr * update + lr * wd * stacked_params)
-
-    return basis
-
-
-@torch.compile(dynamic=False, fullgraph=True)
-def _streaming_muon_fused_1iter_fnorm(
-    stacked_grads: Tensor,
-    stacked_params: Tensor,
-    momentum_buffer: Tensor,
-    basis_state: Tensor,
-    momentum_t: Tensor,
-    lr_t: Tensor,
-    wd_t: Tensor,
-    ridge_epsilon: float,
-    muon_eps: float,
-    expected_fnorm: float,
-) -> Tensor:
-    """Same as _streaming_muon_fused_1iter but enforces Frobenius norm of update.
-    Fixes divergence at high lr by bounding the step magnitude to UV^T scale."""
-    mt = momentum_t.to(stacked_grads.dtype)
-    momentum_buffer.lerp_(stacked_grads, 1 - mt)
-    g = stacked_grads.lerp_(momentum_buffer, mt)
-
-    working = g.float()
-    basis = basis_state.float()
-
-    gram_matrix = torch.matmul(working.mT, working)
-
-    first_pass = torch.matmul(gram_matrix, basis)
-    first_gram = torch.matmul(basis.mT, first_pass)
-    second_pass = _scqr_fused(first_pass, first_gram, ridge_epsilon)
-    second_gram = torch.matmul(second_pass.mT, second_pass)
-    basis = _scqr_fused(second_pass, second_gram, ridge_epsilon)
-
-    rotated = torch.matmul(working, basis)
-    sigma = torch.linalg.norm(rotated, dim=-2).clamp(min=muon_eps)
-    left_vectors = rotated / sigma.unsqueeze(-2)
-    update = torch.matmul(left_vectors, basis.mT)
-
-    # Enforce expected Frobenius norm of UV^T (= sqrt(min(m,n))) per matrix in batch.
-    fnorm = update.flatten(-2, -1).norm(dim=-1, keepdim=True).unsqueeze(-1).clamp(min=muon_eps)
-    update = update * (expected_fnorm / fnorm)
-
-    lr = lr_t.to(update.dtype)
-    wd = wd_t.to(update.dtype)
-    stacked_params.sub_(lr * update + lr * wd * stacked_params)
-
-    return basis
-
-
-@torch.compile(dynamic=False, fullgraph=True)
-def _streaming_muon_fused_1iter_qr(
-    stacked_grads: Tensor,
-    stacked_params: Tensor,
-    momentum_buffer: Tensor,
-    basis_state: Tensor,
-    momentum_t: Tensor,
-    lr_t: Tensor,
-    wd_t: Tensor,
-    ridge_epsilon: float,
-    muon_eps: float,
-) -> Tensor:
-    """Streaming muon (num_iters=1) with left_vectors obtained via SCQR instead
-    of column-normalization. Guarantees update = left_vectors @ basis^T has
-    orthonormal factors (spec norm = 1) even when basis has not converged
-    (close singular values, per 苏剑林 Part 4 warning about power iteration
-    failure at σ_i ≈ σ_{i+1}).
-    """
-    mt = momentum_t.to(stacked_grads.dtype)
-    momentum_buffer.lerp_(stacked_grads, 1 - mt)
-    g = stacked_grads.lerp_(momentum_buffer, mt)
-
-    working = g.float()
-    basis = basis_state.float()
-
-    gram_matrix = torch.matmul(working.mT, working)
-
-    first_pass = torch.matmul(gram_matrix, basis)
-    first_gram = torch.matmul(basis.mT, first_pass)
-    second_pass = _scqr_fused(first_pass, first_gram, ridge_epsilon)
-    second_gram = torch.matmul(second_pass.mT, second_pass)
-    basis = _scqr_fused(second_pass, second_gram, ridge_epsilon)
-
-    # rotated = M V ≈ U Σ (orthogonal columns only if basis = true V)
-    rotated = torch.matmul(working, basis)
-    # True orthogonalization via SCQR — not column-norm — to guarantee
-    # orthonormal left_vectors even when basis is imperfect.
-    rotated_gram = torch.matmul(rotated.mT, rotated)
-    left_vectors = _scqr_fused(rotated, rotated_gram, ridge_epsilon)
-
-    update = torch.matmul(left_vectors, basis.mT)
-
-    lr = lr_t.to(update.dtype)
-    wd = wd_t.to(update.dtype)
-    stacked_params.sub_(lr * update + lr * wd * stacked_params)
-
-    return basis
-
-
-@torch.compile(dynamic=False, fullgraph=True)
-def _streaming_muon_fused_2iter(
-    stacked_grads: Tensor,
-    stacked_params: Tensor,
-    momentum_buffer: Tensor,
-    basis_state: Tensor,
-    momentum_t: Tensor,
-    lr_t: Tensor,
-    wd_t: Tensor,
-    ridge_epsilon: float,
-    muon_eps: float,
-) -> Tensor:
-    """
-    Fully fused StreamingMuon step (num_iters=2) with SCQR orthogonalization.
-
-    Algorithm (苏剑林 Part 3 reordered dual orthogonalization):
-        gram = M^T M                            # O(nm²), ONCE (Part 3 trick)
-        for i in range(2):
-            first_pass = gram @ basis
-            first_gram = basis^T @ first_pass
-            second_pass = SCQR(first_pass, first_gram)   # inner (Part 2 dual)
-            basis = SCQR(second_pass)                    # outer
-        rotated = M @ basis
-        update = ColNorm(rotated) @ basis^T
-
-    All fp32 for numerical stability (SCQR requires fp32 Cholesky).
-    Fused into a single compiled graph to minimize Python/kernel-launch overhead.
-    """
-    mt = momentum_t.to(stacked_grads.dtype)
-    momentum_buffer.lerp_(stacked_grads, 1 - mt)
-    g = stacked_grads.lerp_(momentum_buffer, mt)
-
-    working = g.float()
-    basis = basis_state.float()
-
-    # Gram: M^T M (ONCE, reused across iterations)
-    gram_matrix = torch.matmul(working.mT, working)
-
-    # Iteration 1 (dual SCQR)
-    first_pass = torch.matmul(gram_matrix, basis)
-    first_gram = torch.matmul(basis.mT, first_pass)
-    second_pass = _scqr_fused(first_pass, first_gram, ridge_epsilon)
-    second_gram = torch.matmul(second_pass.mT, second_pass)
-    basis = _scqr_fused(second_pass, second_gram, ridge_epsilon)
-
-    # Iteration 2 (gram reused)
-    first_pass = torch.matmul(gram_matrix, basis)
-    first_gram = torch.matmul(basis.mT, first_pass)
-    second_pass = _scqr_fused(first_pass, first_gram, ridge_epsilon)
-    second_gram = torch.matmul(second_pass.mT, second_pass)
-    basis = _scqr_fused(second_pass, second_gram, ridge_epsilon)
-
-    # msign: U @ V^T where U = ColNorm(M V)
-    rotated = torch.matmul(working, basis)
-    sigma = torch.linalg.norm(rotated, dim=-2).clamp(min=muon_eps)
-    left_vectors = rotated / sigma.unsqueeze(-2)
-    update = torch.matmul(left_vectors, basis.mT)
-
-    lr = lr_t.to(update.dtype)
-    wd = wd_t.to(update.dtype)
-    stacked_params.sub_(lr * update + lr * wd * stacked_params)
-
-    return basis
 
 
 def _orthogonalize_columns(
@@ -554,9 +182,6 @@ def streaming_msign(
     sigma_transform: Optional[SigmaTransform] = None,
     sigma_state: Optional[dict] = None,
     poly_order: int = 1,
-    qr_left_vectors: bool = False,
-    input_normalize: bool = False,
-    sigma_spread: float = 0.0,
     pure_qr: bool = False,
 ) -> tuple[Tensor, Tensor, Tensor]:
     """
@@ -599,12 +224,6 @@ def streaming_msign(
     if transposed:
         working = working.mT  # now n >= m
 
-    # Optional: normalize input by Frobenius norm (matches native muon's
-    # polar express convention). Keeps gram entries O(1) regardless of ‖g‖.
-    if input_normalize:
-        fnorm = working.flatten(-2, -1).norm(dim=-1, keepdim=True).unsqueeze(-1)
-        working = working / (fnorm * 1.01 + 1e-6)
-
     basis_dim = working.shape[-1]
     batch_shape = working.shape[:-2]
 
@@ -643,11 +262,7 @@ def streaming_msign(
     # Singular values = column norms of rotated (for diagnostics and f(Σ) input)
     sigma = torch.linalg.norm(rotated, dim=-2).clamp(min=muon_eps)
 
-    # Left singular vectors. Two variants:
-    #   column-norm (default): fast, but only orthonormal if basis = true V
-    #   SCQR (qr_left_vectors): guarantees orthonormality even when power iter
-    #     hasn't converged (close singular values, per 苏剑林 Part 4)
-    if qr_left_vectors or pure_qr:
+    if pure_qr:
         left_vectors = _orthogonalize_columns(
             rotated, gram=None,
             ridge_epsilon=ridge_epsilon, fallback_to_qr=fallback_to_qr,
@@ -664,11 +279,6 @@ def streaming_msign(
         scaling = torch.where(torch.isfinite(scaling), scaling, torch.ones_like(scaling))
     else:
         scaling = torch.ones_like(sigma)
-
-    if sigma_spread > 0.0:
-        # Simulate polar express's σ ∈ [1-s, 1+s] per-direction noise.
-        noise = torch.empty_like(sigma).uniform_(1.0 - sigma_spread, 1.0 + sigma_spread)
-        scaling = scaling * noise
 
     update = torch.matmul(left_vectors * scaling.unsqueeze(-2), basis.mT)
 
@@ -699,10 +309,6 @@ class StreamingMuonAdamW(torch.optim.Optimizer):
         self._adamw_beta2_t = torch.tensor(0.0, dtype=torch.float32, device="cpu")
         self._adamw_eps_t = torch.tensor(0.0, dtype=torch.float32, device="cpu")
         self._adamw_wd_t = torch.tensor(0.0, dtype=torch.float32, device="cpu")
-        # Streaming muon 0-D CPU tensors (avoid recompilation on value change)
-        self._sm_momentum_t = torch.tensor(0.0, dtype=torch.float32, device="cpu")
-        self._sm_lr_t = torch.tensor(0.0, dtype=torch.float32, device="cpu")
-        self._sm_wd_t = torch.tensor(0.0, dtype=torch.float32, device="cpu")
 
     def _get_sigma_transform(self, group: dict) -> SigmaTransform:
         st = group.get('sigma_transform', 'identity')
@@ -769,12 +375,6 @@ class StreamingMuonAdamW(torch.optim.Optimizer):
         sigma_state = state["sigma_state"]
         sigma_transform = state["sigma_transform_obj"]
 
-        # Optional: reset basis to identity on specified interval (diagnostic for warm-start drift)
-        basis_reset_every = group.get("basis_reset_every", 0)
-        if basis_reset_every > 0 and state["step_count"] > 0 and state["step_count"] % basis_reset_every == 0:
-            basis_state.copy_(torch.eye(effective_dim, dtype=torch.float32, device=device)
-                              .unsqueeze(0).expand(num_params, -1, -1))
-
         # Sigma history: ring buffer of shape (window, num_params, k)
         # Automatically maintained; f can access via state['sigma_history']
         sigma_window = group.get("sigma_window", 100)
@@ -789,83 +389,10 @@ class StreamingMuonAdamW(torch.optim.Optimizer):
         num_iters = group.get("num_iters", 1)
         poly_order = group.get("poly_order", 1)
         ridge_epsilon = group.get("ridge_epsilon", 1e-9)
-        # Default tol=0.02: SCQR numerical drift accumulates in the warm-started
-        # basis and causes divergence after ~3000 steps at matrix_lr=0.02
-        # (validated on d8/1B). tol=0.02 catches the drift early and falls back
-        # to Householder QR for those steps; tol>=0.05 is not safe. Pass
-        # fallback_orthogonality_tol=None in the group dict to opt into the
-        # fused SCQR fast path (unsafe at lr=0.02 long-horizon training).
         fallback_orthogonality_tol = group.get("fallback_orthogonality_tol", 0.02)
-
-        # Fast path: fully-fused compiled step (all fp32 SCQR in one graph)
-        # Eliminates Python overhead between SCQR calls. Falls through to
-        # unfused path if Cholesky fails or conditions not met.
         pure_qr = group.get("pure_qr", False)
-        use_fast_path = (
-            num_iters in (1, 2)
-            and poly_order == 1
-            and fallback_orthogonality_tol is None
-            and isinstance(sigma_transform, IdentityTransform)
-            and device.type == 'cuda'
-            and not pure_qr
-            and not group.get("_capture_metrics", False)
-        )
 
-        if use_fast_path:
-            self._sm_momentum_t.fill_(momentum_val)
-            self._sm_lr_t.fill_(lr)
-            self._sm_wd_t.fill_(wd)
-            # Transpose wide matrices so fused path always sees n >= m
-            if n < m:
-                stacked_grads = stacked_grads.mT.contiguous()
-                stacked_params_t = stacked_params.mT.contiguous()
-                momentum_buffer_orig = momentum_buffer
-                if state.get("_transposed_mb") is None:
-                    state["_transposed_mb"] = torch.zeros_like(stacked_grads)
-                mb_t = state["_transposed_mb"]
-            else:
-                stacked_params_t = stacked_params
-                mb_t = momentum_buffer
-            try:
-                fnorm_update = group.get("fnorm_update", False)
-                pe_cleanup = group.get("pe_cleanup", False)
-                qr_left = group.get("qr_left_vectors", False)
-                if qr_left and num_iters == 1:
-                    new_basis = _streaming_muon_fused_1iter_qr(
-                        stacked_grads, stacked_params_t, mb_t, basis_state,
-                        self._sm_momentum_t, self._sm_lr_t, self._sm_wd_t,
-                        ridge_epsilon, 1e-8,
-                    )
-                elif pe_cleanup and num_iters == 1:
-                    new_basis = _streaming_muon_fused_1iter_pe(
-                        stacked_grads, stacked_params_t, mb_t, basis_state,
-                        self._sm_momentum_t, self._sm_lr_t, self._sm_wd_t,
-                        ridge_epsilon, 1e-8,
-                    )
-                elif fnorm_update and num_iters == 1:
-                    m_eff, n_eff = stacked_grads.shape[-2], stacked_grads.shape[-1]
-                    expected_fnorm = float(min(m_eff, n_eff)) ** 0.5
-                    new_basis = _streaming_muon_fused_1iter_fnorm(
-                        stacked_grads, stacked_params_t, mb_t, basis_state,
-                        self._sm_momentum_t, self._sm_lr_t, self._sm_wd_t,
-                        ridge_epsilon, 1e-8, expected_fnorm,
-                    )
-                else:
-                    fused_fn = _streaming_muon_fused_1iter if num_iters == 1 else _streaming_muon_fused_2iter
-                    new_basis = fused_fn(
-                        stacked_grads, stacked_params_t, mb_t, basis_state,
-                        self._sm_momentum_t, self._sm_lr_t, self._sm_wd_t,
-                        ridge_epsilon, 1e-8,
-                    )
-                state["basis_state"] = new_basis
-                if n < m:
-                    stacked_params.copy_(stacked_params_t.mT)
-                torch._foreach_copy_(params, list(stacked_params.unbind(0)))
-                return
-            except (RuntimeError, torch.linalg.LinAlgError):
-                pass
-
-        # Slow path: unfused, supports transpose / poly_order / ortho check / f(Σ)
+        # Single stable path: supports transpose, pure QR, metrics, and f(Σ).
         capture_metrics = bool(group.get("_capture_metrics", False))
         metrics_raw_grad = stacked_grads.detach().clone() if capture_metrics else None
         momentum_buffer.lerp_(stacked_grads, 1 - momentum_val)
@@ -881,7 +408,6 @@ class StreamingMuonAdamW(torch.optim.Optimizer):
             fallback_orthogonality_tol=fallback_orthogonality_tol,
             sigma_transform=sigma_transform,
             sigma_state=sigma_state,
-            qr_left_vectors=group.get("qr_left_vectors", False),
             pure_qr=pure_qr,
         )
         state["basis_state"] = new_basis
@@ -894,7 +420,7 @@ class StreamingMuonAdamW(torch.optim.Optimizer):
                 "sigma": sigma.detach().clone(),
                 "streaming_basis": new_basis.detach().clone(),
                 "streaming_transposed": bool(n < m),
-                "streaming_left_uses_qr": bool(group.get("qr_left_vectors", False) or pure_qr),
+                "streaming_left_uses_qr": bool(pure_qr),
             }
 
         # Auto-track sigma history as ring buffer in sigma_state
@@ -1046,12 +572,6 @@ class DistStreamingMuonAdamW(torch.optim.Optimizer):
         num_iters = group.get("num_iters", 1)
         poly_order = group.get("poly_order", 1)
         ridge_epsilon = group.get("ridge_epsilon", 1e-9)
-        # Default tol=0.02: SCQR numerical drift accumulates in the warm-started
-        # basis and causes divergence after ~3000 steps at matrix_lr=0.02
-        # (validated on d8/1B). tol=0.02 catches the drift early and falls back
-        # to Householder QR for those steps; tol>=0.05 is not safe. Pass
-        # fallback_orthogonality_tol=None in the group dict to opt into the
-        # fused SCQR fast path (unsafe at lr=0.02 long-horizon training).
         fallback_orthogonality_tol = group.get("fallback_orthogonality_tol", 0.02)
 
         state = self.state[p0]
@@ -1069,13 +589,6 @@ class DistStreamingMuonAdamW(torch.optim.Optimizer):
         basis_state = state["basis_state"]
         sigma_state = state["sigma_state"]
         sigma_transform = state["sigma_transform_obj"]
-
-        # Optional: reset basis periodically (diagnostic for warm-start drift)
-        basis_reset_every = group.get("basis_reset_every", 0)
-        step_count = sigma_state.get('step', 0)
-        if basis_reset_every > 0 and step_count > 0 and step_count % basis_reset_every == 0:
-            basis_state.copy_(torch.eye(effective_dim, dtype=torch.float32, device=device)
-                              .unsqueeze(0).expand(chunk_size, -1, -1))
 
         updated_params = torch.empty(chunk_size, *shape, dtype=dtype, device=device)
 
@@ -1103,9 +616,6 @@ class DistStreamingMuonAdamW(torch.optim.Optimizer):
                 fallback_orthogonality_tol=fallback_orthogonality_tol,
                 sigma_transform=sigma_transform,
                 sigma_state=sigma_state,
-                qr_left_vectors=group.get("qr_left_vectors", False),
-                input_normalize=group.get("input_normalize", False),
-                sigma_spread=group.get("sigma_spread", 0.0),
                 pure_qr=group.get("pure_qr", False),
             )
             basis_state[:num_owned].copy_(new_basis)
@@ -1118,30 +628,8 @@ class DistStreamingMuonAdamW(torch.optim.Optimizer):
                     "sigma": sigma.detach().clone(),
                     "streaming_basis": new_basis.detach().clone(),
                     "streaming_transposed": bool(n < m),
-                    "streaming_left_uses_qr": bool(group.get("qr_left_vectors", False) or group.get("pure_qr", False)),
+                    "streaming_left_uses_qr": bool(group.get("pure_qr", False)),
                 }
-
-            # Optional: Frobenius-normalize update to expected UV^T scale
-            if group.get("fnorm_update", False):
-                expected_fnorm = float(min(n, m)) ** 0.5
-                fnorm = update.flatten(-2, -1).norm(dim=-1, keepdim=True).unsqueeze(-1).clamp(min=1e-8)
-                update = update * (expected_fnorm / fnorm)
-
-            # Optional: Polar Express cleanup (robust to close/equal σ where power iter fails)
-            if group.get("pe_cleanup", False):
-                X = update.float()
-                X = X / (X.flatten(-2, -1).norm(dim=-1, keepdim=True).unsqueeze(-1) * 1.01 + 1e-6)
-                tall = X.shape[-2] >= X.shape[-1]
-                for a, b, c in _POLAR_EXPRESS_COEFFS:
-                    if tall:
-                        A = torch.matmul(X.mT, X)
-                        B = b * A + c * torch.matmul(A, A)
-                        X = a * X + torch.matmul(X, B)
-                    else:
-                        A = torch.matmul(X, X.mT)
-                        B = b * A + c * torch.matmul(A, A)
-                        X = a * X + torch.matmul(B, X)
-                update = X.to(stacked_owned.dtype)
 
             stacked_owned.sub_(lr * update + lr * wd * stacked_owned)
             updated_params[:num_owned].copy_(stacked_owned)
@@ -1196,31 +684,6 @@ class DistStreamingMuonAdamW(torch.optim.Optimizer):
                 self._compute_streaming_muon(group, info, gather_list, rank)
 
         self._finish_gathers(gather_list)
-
-
-# =============================================================================
-# Utilities
-# =============================================================================
-
-def patch_setup_optimizer(model, sigma_transform='identity', sigma_transform_kwargs=None, k=None):
-    """Monkey-patch a nanochat GPT model to use StreamingMuon."""
-    original_setup = model.setup_optimizer.__func__
-
-    def new_setup_optimizer(self, **kwargs):
-        optimizer = original_setup(self, **kwargs)
-        new_param_groups = []
-        for group in optimizer.param_groups:
-            if group['kind'] == 'muon':
-                group['kind'] = 'streaming_muon'
-                group['sigma_transform'] = sigma_transform
-                group['sigma_transform_kwargs'] = sigma_transform_kwargs or {}
-                if k is not None:
-                    group['k'] = k
-            new_param_groups.append(group)
-        return StreamingMuonAdamW(new_param_groups)
-
-    import types
-    model.setup_optimizer = types.MethodType(new_setup_optimizer, model)
 
 
 def get_spectral_diagnostics(optimizer) -> dict:
