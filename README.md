@@ -8,13 +8,15 @@ The code is self-contained: it includes `nanochat/`, StreamingMuon, Top-Aware Mu
 
 ## Quick Start
 
-If you only want one command for the main d12 optimizer-quality sweep, use:
+If you only want one command for the main d12 optimizer-quality sweep, use a fixed `STAMP`:
 
 ```bash
-bash scripts/run_d12_sweep.sh
+STAMP=d12_main_001 bash scripts/run_d12_sweep.sh
 ```
 
 This runs the current mainline comparison, `streaming_identity` vs Top-Aware Muon `alpha=0.5`, at d12 with the default batch/LR grid and a 1x Chinchilla-style token budget (`977272832` tokens). Run it from a node/session that already has the intended GPUs visible; wrap it with your local scheduler outside the repo if needed.
+
+`STAMP` controls the output directory. If you omit it, the wrapper creates a timestamped directory, which is useful for one-off runs but not for preemption resume.
 
 To inspect the exact expanded `torchrun` commands without launching training:
 
@@ -73,6 +75,16 @@ STAMP=d12_main_001 bash scripts/run_d12_sweep.sh
 # if preempted, submit exactly the same command again
 STAMP=d12_main_001 bash scripts/run_d12_sweep.sh
 ```
+
+For many scheduler jobs, shard the grid explicitly and give each shard its own stable `STAMP`. Do not launch multiple jobs that write the same `OUT_ROOT` at the same time.
+
+```bash
+STAMP=d12_c001_b262k BATCHES="262144" bash scripts/run_d12_sweep.sh
+STAMP=d12_c001_b1m   BATCHES="1048576" bash scripts/run_d12_sweep.sh
+STAMP=d12_c001_b4m   BATCHES="4194304" bash scripts/run_d12_sweep.sh
+```
+
+If a shard is preempted, resubmit only that shard with the same `STAMP`. If you change core recipe knobs such as `DEPTH`, `TOKENS`, `BATCHES`, `LRS`, `ALPHAS`, or `SEEDS`, use a new `STAMP` rather than reusing an old checkpoint directory.
 
 ## Repository Layout
 
@@ -149,12 +161,13 @@ Current clean recipe: keep `top_k=1`; sweep `alpha`, batch size, and LR. The swe
 For the standard d12 handoff sweep, prefer the consolidated wrapper. This is an optimizer-quality sweep: dense metrics and Hessian logging are off.
 
 ```bash
-bash scripts/run_d12_sweep.sh
+STAMP=d12_main_001 bash scripts/run_d12_sweep.sh
 ```
 
 Useful overrides:
 
 ```bash
+STAMP=d12_c001_b262k \
 BATCHES="262144 1048576 4194304" \
 ALPHAS="0.5 1.0" \
 LRS="0.005 0.01 0.02 0.04" \
