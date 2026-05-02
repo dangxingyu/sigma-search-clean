@@ -1,0 +1,37 @@
+{
+  "result_json": "search_evals/v41_clean_no_svd_metrics_smoke/top_aware_k1_a1_bsz262144_lr0p02_s42/result.json",
+  "score": 1.412854294620069,
+  "metric_logs": 200,
+  "series": {
+    "train/loss_ema": {
+      "n": 200,
+      "y_min": 4.612516625896915,
+      "y_max": 10.397386074066162,
+      "x_min": 0,
+      "x_max": 199
+    },
+    "sharpness": {
+      "n": 4,
+      "y_min": 0.03211775794625282,
+      "y_max": 4.558290004730225,
+      "x_min": 0,
+      "x_max": 150
+    },
+    "proj_norm": {
+      "n": 196,
+      "y_min": 3.6038795769854914e-06,
+      "y_max": 0.16575412452220917,
+      "x_min": 1,
+      "x_max": 199
+    },
+    "proj_corr": {
+      "n": 192,
+      "y_min": -1.0000004768371582,
+      "y_max": 1.0000003576278687,
+      "x_min": 2,
+      "x_max": 199
+    }
+  },
+  "figure": "results/metrics_smoke/v41_no_svd_metrics_smoke.svg",
+  "note": "top_k=1 projection cosine is mostly sign (+/-1); use hessian top_k>1 for nontrivial subspace correlation."
+}
