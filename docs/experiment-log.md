@@ -1,5 +1,15 @@
 # Experiment Log — LITE vs Muon diagnostic campaign
 
+## 2026-05-01 — clean-repo result organization and 128K near-identity alpha test
+
+Latest update:
+- Added machine-readable result summaries under `results/` in the clean repo. `docs/experiment-log.md` is no longer the only place where result state is recorded.
+- `results/topaware_128k_near_identity_lr001/summary.json` records the fixed-LR 128K near-identity alpha curve.
+- `results/topaware_128k_alpha125_lrsweep/summary.json` records the 128K `alpha=1.25` LR sweep.
+- `results/dynamics_128k_200step/summary.json` records the realistic 200-step metrics smoke runs.
+- v36 completed: `alpha=0.85 -> 0.9167656900`, `alpha=1.15 -> 0.9165686200` at fixed `lr=0.01`, 128K, d8, seq1024, seed `42`.
+- Current interpretation: `alpha=1.15` is the best current fixed-LR 128K Top-Aware point and slightly beats the existing native Muon control, but the margin is tiny and one-seed; confirm with seeds/LR before a strong claim.
+
 ## 2026-05-01 — mainline method focus
 
 User clarified the main experiment should focus on four method families:

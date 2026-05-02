@@ -58,8 +58,8 @@
     {
       "method": "top_aware_muon",
       "alpha": 1.15,
-      "score": null,
-      "status": "running",
+      "score": 0.9165686200379373,
+      "status": "complete",
       "source": "search_evals/v36_topaware_128k_near_identity_lr001_20260501/top_aware_k1_a1p15_bsz131072_lr0p01_s42/result.json"
     },
     {
@@ -71,13 +71,13 @@
     }
   ],
   "current_best_completed": {
-    "method": "native_muon",
-    "alpha": null,
-    "score": 0.9166915714360024
+    "method": "top_aware_muon",
+    "alpha": 1.15,
+    "score": 0.9165686200379373
   },
   "current_best_completed_topaware": {
-    "alpha": 0.85,
-    "score": 0.916765690045443
+    "alpha": 1.15,
+    "score": 0.9165686200379373
   },
-  "interpretation": "At fixed lr=0.01, alpha=0.85 is the best completed Top-Aware point so far and nearly matches native Muon, but it does not clearly beat the native control. Alpha=1.15 is still running."
+  "interpretation": "At fixed lr=0.01, alpha=1.15 is the best completed point and slightly beats the existing native Muon and streaming identity controls. The margin is small and one-seed; treat it as a local near-identity alpha signal that needs seed/LR confirmation."
 }
