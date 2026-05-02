@@ -193,6 +193,8 @@ Canonical logged metrics:
 
 Hessian probes use post-update weights and a representative rank0 microbatch from the same optimizer step. The Hessian routine runs one global Lanczos probe over all normal transformer matrix weights selected by `METRICS_MODULE_REGEX`, including cross-module Hessian blocks. Per-module Muon-component alignment uses cached StreamingMuon basis/sigma; if that cache is unavailable, component alignment is reported as unavailable rather than falling back to SVD. Set `NANOCHAT_FORCE_MATH_SDPA=1` when Hessian probes are enabled.
 
+Use `METRICS_HESSIAN_TOP_K=4` for projection-correlation studies. With `top_k=1`, projecting consecutive gradients onto the same one-dimensional Hessian space makes the cosine nearly always `+1` or `-1`, so it mostly measures sign flips rather than subspace stability.
+
 ## D8 Recipe Table
 
 | batch | role | steps at 0.4B tokens | device batch | grad accum | base matrix LR | effective matrix LR |

@@ -69,7 +69,7 @@ cmd=(
   --metrics-module-regex "${METRICS_MODULE_REGEX:-transformer\\.h\\.(?:[0-9]+)\\.(?:attn\\.(?:c_q|c_k|c_v|c_proj)|mlp\\.(?:c_fc|c_proj))\\.weight$}"
   --metrics-max-modules "$METRICS_MAX_MODULES"
   --metrics-hessian-every "$METRICS_HESSIAN_EVERY"
-  --metrics-hessian-top-k "${METRICS_HESSIAN_TOP_K:-1}"
+  --metrics-hessian-top-k "${METRICS_HESSIAN_TOP_K:-4}"
   --metrics-hessian-iters "${METRICS_HESSIAN_ITERS:-6}"
   --metrics-hessian-max-modules "${METRICS_HESSIAN_MAX_MODULES:-0}"
   --lr-extend-factor "$LR_EXTEND_FACTOR"
