@@ -151,7 +151,7 @@ DRY_RUN=1 bash scripts/run_handoff_sweep.sh
 
 ## Dynamics Metrics
 
-For dynamics studies, enable logging on StreamingMuon runs. Metrics are off by default. The metrics path uses no explicit SVD: it reuses StreamingMuon's cached `sigma` and basis from the optimizer step.
+For dynamics studies, enable logging on StreamingMuon runs. Metrics are off by default. The metrics path reuses StreamingMuon's cached `sigma` and basis from the optimizer step.
 
 Recommended dense-metrics smoke:
 
@@ -164,36 +164,36 @@ bash scripts/run_handoff_sweep.sh
 
 Canonical logged metrics:
 
-| Metric key | Meaning | SVD? |
+| Metric key | Meaning |
 |---|---|
-| `train/loss` | raw mean cross-entropy over the optimizer step's grad-accum microbatches | no |
-| `train/loss_ema` | debiased EMA of `train/loss` | no |
-| `train/lr_multiplier` | current LR schedule multiplier | no |
-| `train/muon_momentum` | current Muon momentum schedule value | no |
-| `weight_norm/<module>` | RMS of the module weight | no |
-| `grad_norm/<module>` | RMS of the full-batch gradient | no |
-| `momentum_after_nesterov_norm/<module>` | RMS of `M' = beta M_t + (1 - beta) G_t` | no |
-| `momentum_after_nesterov_spectral_norm/<module>` | top cached StreamingMuon `sigma` for `M'` | no |
-| `muon_singular_values/<module>` | top-k cached StreamingMuon sigma values, sorted descending | no |
-| `streaming_sigma_values/<module>` | same cached StreamingMuon sigma values, kept explicit for sigma-transform analysis | no |
-| `sharpness/selected_subspace` | top Hessian eigenvalue from one global Lanczos HVP over selected matrix weights | no |
-| `gradient_hessian_projection/selected_subspace` | global signed projection `<e_H, G>` | no |
-| `momentum_after_nesterov_hessian_projection/selected_subspace` | global signed projection `<e_H, M'>` | no |
-| `gradient_hessian_alignment/selected_subspace` | global cosine alignment between Hessian eigenvector and gradient | no |
-| `momentum_after_nesterov_hessian_alignment/selected_subspace` | global cosine alignment between Hessian eigenvector and `M'` | no |
-| `gradient_projection_on_last_hessian_space_coefficients/selected_subspace` | coefficients of current gradient projected onto the most recent Hessian eigenspace | no |
-| `gradient_projection_on_last_hessian_space_norm/selected_subspace` | norm of the current gradient projection onto the most recent Hessian eigenspace | no |
-| `gradient_projection_on_last_hessian_space_consecutive_correlation/selected_subspace` | cosine between consecutive gradient projection vectors using the same last Hessian eigenspace, e.g. project steps 51 and 52 onto step-50 space | no |
-| `hessian_eigenvector_block_norm/<module>` | norm of the global Hessian eigenvector restricted to this module | no |
-| `gradient_hessian_alignment/<module>` | per-module cosine between Hessian block and gradient block | no |
-| `momentum_after_nesterov_hessian_alignment/<module>` | per-module cosine between Hessian block and `M'` block | no |
-| `gradient_hessian_projection/<module>` | per-module signed projection of gradient onto the unnormalized Hessian block | no |
-| `momentum_after_nesterov_hessian_projection/<module>` | per-module signed projection of `M'` onto the unnormalized Hessian block | no |
-| `alignment_between_covariance_hessian_at_k_th_component/<module>` | alignment between Hessian block and cached StreamingMuon component `u_k v_k^T` | no |
-| `hessian_muon_component_alignment_matrix/<module>` | Hessian-vs-cached-StreamingMuon component alignment matrix | no |
-| `hessian_muon_component_signed_projection_matrix/<module>` | signed Hessian-block projection onto cached StreamingMuon components | no |
+| `train/loss` | raw mean cross-entropy over the optimizer step's grad-accum microbatches |
+| `train/loss_ema` | debiased EMA of `train/loss` |
+| `train/lr_multiplier` | current LR schedule multiplier |
+| `train/muon_momentum` | current Muon momentum schedule value |
+| `weight_norm/{module}` | RMS of the module weight |
+| `grad_norm/{module}` | RMS of the full-batch gradient |
+| `momentum_after_nesterov_norm/{module}` | RMS of `M' = beta M_t + (1 - beta) G_t` |
+| `momentum_after_nesterov_spectral_norm/{module}` | top cached StreamingMuon `sigma` for `M'` |
+| `muon_singular_values/{module}` | top-k cached StreamingMuon sigma values, sorted descending |
+| `streaming_sigma_values/{module}` | same cached StreamingMuon sigma values, kept explicit for sigma-transform analysis |
+| `sharpness/selected_subspace` | top Hessian eigenvalue from one global Lanczos HVP over selected matrix weights |
+| `gradient_hessian_projection/selected_subspace` | global signed projection `dot(e_H, G)` |
+| `momentum_after_nesterov_hessian_projection/selected_subspace` | global signed projection `dot(e_H, M')` |
+| `gradient_hessian_alignment/selected_subspace` | global cosine alignment between Hessian eigenvector and gradient |
+| `momentum_after_nesterov_hessian_alignment/selected_subspace` | global cosine alignment between Hessian eigenvector and `M'` |
+| `gradient_projection_on_last_hessian_space_coefficients/selected_subspace` | coefficients of current gradient projected onto the most recent Hessian eigenspace |
+| `gradient_projection_on_last_hessian_space_norm/selected_subspace` | norm of the current gradient projection onto the most recent Hessian eigenspace |
+| `gradient_projection_on_last_hessian_space_consecutive_correlation/selected_subspace` | cosine between consecutive gradient projection vectors using the same last Hessian eigenspace, e.g. project steps 51 and 52 onto step-50 space |
+| `hessian_eigenvector_block_norm/{module}` | norm of the global Hessian eigenvector restricted to this module |
+| `gradient_hessian_alignment/{module}` | per-module cosine between Hessian block and gradient block |
+| `momentum_after_nesterov_hessian_alignment/{module}` | per-module cosine between Hessian block and `M'` block |
+| `gradient_hessian_projection/{module}` | per-module signed projection of gradient onto the unnormalized Hessian block |
+| `momentum_after_nesterov_hessian_projection/{module}` | per-module signed projection of `M'` onto the unnormalized Hessian block |
+| `alignment_between_covariance_hessian_at_k_th_component/{module}` | alignment between Hessian block and cached StreamingMuon component `u_k v_k^T` |
+| `hessian_muon_component_alignment_matrix/{module}` | Hessian-vs-cached-StreamingMuon component alignment matrix |
+| `hessian_muon_component_signed_projection_matrix/{module}` | signed Hessian-block projection onto cached StreamingMuon components |
 
-Hessian probes use post-update weights and a representative rank0 microbatch from the same optimizer step. The Hessian routine runs one global Lanczos probe over all normal transformer matrix weights selected by `METRICS_MODULE_REGEX`, including cross-module Hessian blocks. Per-module Muon-component alignment uses cached StreamingMuon basis/sigma; if that cache is unavailable, component alignment is reported as unavailable rather than falling back to SVD. Set `NANOCHAT_FORCE_MATH_SDPA=1` when Hessian probes are enabled.
+Hessian probes use post-update weights and a representative rank0 microbatch from the same optimizer step. The Hessian routine runs one global Lanczos probe over all normal transformer matrix weights selected by `METRICS_MODULE_REGEX`, including cross-module Hessian blocks. Per-module Muon-component alignment uses cached StreamingMuon basis/sigma; if that cache is unavailable, component alignment is reported as unavailable. Set `NANOCHAT_FORCE_MATH_SDPA=1` when Hessian probes are enabled.
 
 Use `METRICS_HESSIAN_TOP_K=4` for projection-correlation studies. With `top_k=1`, projecting consecutive gradients onto the same one-dimensional Hessian space makes the cosine nearly always `+1` or `-1`, so it mostly measures sign flips rather than subspace stability.
 

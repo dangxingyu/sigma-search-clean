@@ -2,6 +2,8 @@
 
 Best available dense-metrics comparison for each batch. Lower BPB is better; negative delta means Top-Aware c=0.5 wins.
 
+Dynamics plot: [hessian_dynamics_overview.md](hessian_dynamics_overview.md) embeds the cross-batch sharpness, gradient-Hessian alignment, and fixed-Hessian projection-correlation curves.
+
 | batch | identity | c=0.5 | delta | winner | identity sharp last | c=0.5 sharp last | identity corr mean | c=0.5 corr mean |
 |---:|---:|---:|---:|---|---:|---:|---:|---:|
 | 2097152 | 1.067766 @ 0.08 | 1.083390 @ 0.08 | +0.015624 | identity | 0.226 | 0.219 | -0.852 | -0.859 |
