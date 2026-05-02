@@ -35,20 +35,31 @@ parser.add_argument("--eval-tokens", type=int, default=524288)
 parser.add_argument("--metrics-every", type=int, default=0,
                     help="If >0, log Muon diagnostics every N optimizer steps into result.json.")
 parser.add_argument("--metrics-top-k", type=int, default=4)
-parser.add_argument("--metrics-module-regex", type=str, default=r"transformer\.h")
+parser.add_argument("--metrics-module-regex", type=str,
+                    default=r"transformer\.h\.(?:[0-9]+)\.(?:attn\.(?:c_q|c_k|c_v|c_proj)|mlp\.(?:c_fc|c_proj))\.weight$")
 parser.add_argument("--metrics-max-modules", type=int, default=0,
                     help="Maximum modules to log per step; 0 means all selected modules.")
+parser.add_argument("--metrics-exact-svd", action="store_true",
+                    help="Compute exact SVD for metrics. Native Muon is deprecated and always needs SVD for singular values.")
+parser.add_argument("--metrics-full-per-module", action="store_true",
+                    help="Store full duplicate per-module rows in result.json. Default keeps compact metadata only.")
 parser.add_argument("--metrics-save-components", action="store_true")
 parser.add_argument("--metrics-component-dir", type=str, default=None)
 parser.add_argument("--metrics-split-momentum", action="store_true")
+parser.add_argument("--metrics-split-svd-every", type=int, default=0)
 parser.add_argument("--metrics-alignment-side", type=str, default="lite", choices=("left", "right", "lite"))
 parser.add_argument("--metrics-hessian-every", type=int, default=0)
 parser.add_argument("--metrics-hessian-top-k", type=int, default=1)
 parser.add_argument("--metrics-hessian-iters", type=int, default=6)
-parser.add_argument("--metrics-hessian-max-modules", type=int, default=1)
+parser.add_argument("--metrics-hessian-max-modules", type=int, default=0)
 parser.add_argument("--device-type", type=str, default="")
 parser.add_argument("--seed", type=int, default=42)
 args = parser.parse_args()
+if args.metrics_every > 0:
+    raise ValueError(
+        "Native Muon metrics are disabled in the clean repo. "
+        "Use run_eval.py with StreamingMuon for dynamics logging."
+    )
 
 import random; random.seed(args.seed); torch.manual_seed(args.seed)
 if torch.cuda.is_available(): torch.cuda.manual_seed_all(args.seed)
@@ -208,6 +219,9 @@ def main():
                     n for n in matrix_params_named
                     if module_pattern is None or module_pattern.search(n) is not None
                 ]
+                from metric_logging import _is_normal_matrix_weight, _limit_modules
+                split_reduce = [n for n in split_reduce if _is_normal_matrix_weight(n)]
+                split_reduce = _limit_modules(split_reduce, args.metrics_max_modules)
                 if args.metrics_max_modules > 0:
                     split_reduce = split_reduce[:args.metrics_max_modules]
                 split_reduce_names = set(split_reduce)
@@ -348,6 +362,9 @@ def main():
                     muon_momentum=mom,
                     save_components=args.metrics_save_components,
                     component_dir=component_dir,
+                    collect_hessian_refs=hessian_due,
+                    exact_svd=args.metrics_exact_svd,
+                    compact=not args.metrics_full_per_module,
                 )
                 clear_metric_caches(optimizer)
 
@@ -361,7 +378,17 @@ def main():
                         "split_momentum_alignment_source": "momentum_after_nesterov",
                         "split_momentum_alignment_scope": "global_ddp_average" if split_reduce_names else "rank_local_or_single_process",
                     })
-                    if args.metrics_split_momentum and do_momentum_d1 and mt_A is not None and mt_B is not None:
+                    split_svd_due = (
+                        args.metrics_split_momentum
+                        and do_momentum_d1
+                        and mt_A is not None
+                        and mt_B is not None
+                        and (
+                            args.metrics_split_svd_every <= 0
+                            or step % args.metrics_split_svd_every == 0
+                        )
+                    )
+                    if split_svd_due:
                         split_stats = split_momentum_alignment(
                             mt_A,
                             mt_B,
@@ -372,6 +399,7 @@ def main():
                         )
                         split_stats["tensor"] = "momentum_after_nesterov"
                         split_stats["definition"] = "M_tilde = (1 - beta) * G_split + beta * M_split_new"
+                        split_stats["svd_every_steps"] = args.metrics_split_svd_every or args.metrics_every
                         metric_entry["split_momentum_alignment"] = split_stats
                         for key, value in split_stats.get("vectors", {}).items():
                             metric_entry["vectors"][key] = value

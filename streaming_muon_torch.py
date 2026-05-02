@@ -890,9 +890,11 @@ class StreamingMuonAdamW(torch.optim.Optimizer):
                 "param_start_idx": 0,
                 "num_owned": num_params,
                 "grad": metrics_raw_grad,
-                "momentum": momentum_buffer.detach().clone(),
                 "momentum_after_nesterov": g.detach().clone(),
                 "sigma": sigma.detach().clone(),
+                "streaming_basis": new_basis.detach().clone(),
+                "streaming_transposed": bool(n < m),
+                "streaming_left_uses_qr": bool(group.get("qr_left_vectors", False) or pure_qr),
             }
 
         # Auto-track sigma history as ring buffer in sigma_state
@@ -1112,9 +1114,11 @@ class DistStreamingMuonAdamW(torch.optim.Optimizer):
                     "param_start_idx": start_idx,
                     "num_owned": num_owned,
                     "grad": metrics_raw_grad,
-                    "momentum": mb.detach().clone(),
                     "momentum_after_nesterov": g.detach().clone(),
                     "sigma": sigma.detach().clone(),
+                    "streaming_basis": new_basis.detach().clone(),
+                    "streaming_transposed": bool(n < m),
+                    "streaming_left_uses_qr": bool(group.get("qr_left_vectors", False) or group.get("pure_qr", False)),
                 }
 
             # Optional: Frobenius-normalize update to expected UV^T scale
@@ -1149,7 +1153,6 @@ class DistStreamingMuonAdamW(torch.optim.Optimizer):
                     "param_start_idx": start_idx,
                     "num_owned": 0,
                     "grad": None,
-                    "momentum": None,
                     "momentum_after_nesterov": None,
                     "sigma": None,
                 }

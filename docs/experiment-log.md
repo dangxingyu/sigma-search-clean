@@ -3,10 +3,14 @@
 ## 2026-05-02 — logging audit fix and user-facing handoff sweep interface
 
 Latest update:
+- Follow-up logging cleanup: removed raw momentum-buffer logging from the main StreamingMuon metric path. Metrics now focus on gradients and optimizer input `M'` only.
+- StreamingMuon per-step spectrum metrics now reuse cached `sigma`; the clean metrics path has no explicit SVD. Hessian Muon-component alignment uses cached StreamingMuon basis/sigma when available and otherwise marks the component unavailable.
+- `METRICS_MAX_MODULES` now only throttles high-frequency per-step metric rows. Hessian selected-subspace probes default to all normal attention/MLP matrix weights with `METRICS_HESSIAN_MAX_MODULES=0`.
+- Native Muon/LITE runners remain in the repo as deprecated validation controls; new sweeps should default to `streaming_identity` and `top_aware_muon`.
 - Audited clean-repo metric logging while v38 was starting. Stopped the partially-running v38 metrics grid before completion because StreamingMuon split alignment was logging split momentum buffer `M`, not optimizer input `M'`.
 - Fixed `run_eval.py`: split-half alignment now uses `M' = (1 - beta) * G_split + beta * M_split_new`, matching the matrix sent to StreamingMuon. In DDP, split gradients are all-reduced before updating diagnostic split momenta, so the split alignment is global-batch rather than rank-local.
 - Fixed `run_eval.py` and `run_native_muon_v9.py`: `train/loss` now records the raw mean cross-entropy across the optimizer step's grad-accum microbatches; `train/loss_ema` stores the smoothed value.
-- Fixed Hessian probe batch semantics: Hessian uses post-update weights and the first microbatch from the same optimizer step. In DDP this remains a rank0-local HVP, not a global-batch HVP; metadata records this caveat.
+- Fixed Hessian probe semantics: Hessian uses post-update weights and the first rank0 microbatch from the same optimizer step. The current clean version uses one global selected-matrix-subspace Lanczos HVP over all normal transformer matrix weights, not separate per-module block HVPs.
 - Verified the corrected logging path with a real 8xB200 200-step run: `search_evals/d8_metrics_alpha_grid_v38_logging_smoke_20260502_020957/top_aware_k1_a1_bsz262144_lr0p02_s42/result.json`. It wrote 200 metric entries, global-DDP split `M'` alignment, and Hessian/sharpness entries at steps 0 and 100.
 - Rewrote `README.md` to be handoff-oriented: quick start, recommended sweep, optimizer definitions, adaptive LR behavior, metrics caveats, output layout, and d8 recipe table.
 - Added `scripts/run_handoff_sweep.sh`, a user-facing wrapper around `run_top_aware_muon_sweep.py`.
@@ -56,13 +60,13 @@ Current v29 status:
 
 Implemented opt-in diagnostic logging for the clean StreamingMuon/Top-Aware path:
 - Added `metric_logging.py`.
-- Updated `run_eval.py` with `--metrics-every`, `--metrics-top-k`, `--metrics-module-regex`, `--metrics-max-modules`, `--metrics-split-momentum`, `--metrics-save-components`, and best-effort Hessian flags.
+- Updated `run_eval.py` with `--metrics-every`, `--metrics-top-k`, `--metrics-module-regex`, `--metrics-max-modules`, and best-effort Hessian flags.
 - Updated `streaming_muon_torch.py` so requested logging steps cache the exact post-allreduce gradient, momentum buffer, Nesterov-corrected momentum, and streaming sigma tensors used by the optimizer step. Normal runs do not cache these tensors.
 - Updated `run_top_aware_muon_sweep.py` to pass metric flags through to StreamingMuon-family methods.
 - Synced the handoff bundle under `refactored-repo/`, including README/MANIFEST documentation.
 
 Logged metrics:
-- `train/loss`, per-module `weight_norm`, `grad_norm`, `momentum_norm`, `momentum_after_nesterov_norm`, `momentum_spectral_norm`, `momentum_after_nesterov_spectral_norm`.
+- `train/loss`, per-module `weight_norm`, `grad_norm`, `momentum_after_nesterov_norm`, `momentum_after_nesterov_spectral_norm`.
 - Per-module short vectors for Muon/Nesterov singular values and StreamingMuon sigma values.
 - Optional split-half momentum alignment as `variance_of_u_i/<module>` using side-aware `lite` alignment by default.
 - Optional Hessian power probe records `sharpness/<module>` and Hessian-gradient/momentum/component alignments when the kernel supports double backward. Hessian failures are stored under `metric_logs[*].hessian.error` and do not abort training.

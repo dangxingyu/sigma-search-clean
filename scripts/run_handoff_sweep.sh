@@ -22,9 +22,9 @@ STAMP="${STAMP:-$(date +%Y%m%d_%H%M%S)}"
 OUT_ROOT="${OUT_ROOT:-search_evals/handoff_sweep_${STAMP}}"
 LOG_ROOT="${LOG_ROOT:-logs/handoff_sweep_${STAMP}}"
 
-METHODS="${METHODS:-streaming_identity native_muon top_aware_muon}"
-BATCHES="${BATCHES:-262144 524288 1048576 2097152}"
-ALPHAS="${ALPHAS:-0.5 0.75 1.0 1.25}"
+METHODS="${METHODS:-streaming_identity top_aware_muon}"
+BATCHES="${BATCHES:-262144 1048576 4194304}"
+ALPHAS="${ALPHAS:-0.5 1.0}"
 LRS="${LRS:-0.005 0.01 0.02 0.04}"
 SEEDS="${SEEDS:-42}"
 
@@ -41,7 +41,7 @@ MAX_LR_EXTENSION_ROUNDS="${MAX_LR_EXTENSION_ROUNDS:-2}"
 ADAPTIVE_MIN_EDGE_IMPROVEMENT="${ADAPTIVE_MIN_EDGE_IMPROVEMENT:-0.0}"
 
 METRICS_EVERY="${METRICS_EVERY:-0}"
-METRICS_MAX_MODULES="${METRICS_MAX_MODULES:-8}"
+METRICS_MAX_MODULES="${METRICS_MAX_MODULES:-0}"
 METRICS_HESSIAN_EVERY="${METRICS_HESSIAN_EVERY:-0}"
 if [[ "$METRICS_HESSIAN_EVERY" != "0" ]]; then
   export NANOCHAT_FORCE_MATH_SDPA="${NANOCHAT_FORCE_MATH_SDPA:-1}"
@@ -66,13 +66,12 @@ cmd=(
   --fallback-ortho-tol "${FALLBACK_ORTHO_TOL:-0.01}"
   --metrics-every "$METRICS_EVERY"
   --metrics-top-k "${METRICS_TOP_K:-4}"
-  --metrics-module-regex "${METRICS_MODULE_REGEX:-transformer\\.h}"
+  --metrics-module-regex "${METRICS_MODULE_REGEX:-transformer\\.h\\.(?:[0-9]+)\\.(?:attn\\.(?:c_q|c_k|c_v|c_proj)|mlp\\.(?:c_fc|c_proj))\\.weight$}"
   --metrics-max-modules "$METRICS_MAX_MODULES"
-  --metrics-alignment-side "${METRICS_ALIGNMENT_SIDE:-lite}"
   --metrics-hessian-every "$METRICS_HESSIAN_EVERY"
   --metrics-hessian-top-k "${METRICS_HESSIAN_TOP_K:-1}"
-  --metrics-hessian-iters "${METRICS_HESSIAN_ITERS:-2}"
-  --metrics-hessian-max-modules "${METRICS_HESSIAN_MAX_MODULES:-8}"
+  --metrics-hessian-iters "${METRICS_HESSIAN_ITERS:-6}"
+  --metrics-hessian-max-modules "${METRICS_HESSIAN_MAX_MODULES:-0}"
   --lr-extend-factor "$LR_EXTEND_FACTOR"
   --lr-min "$LR_MIN"
   --lr-max "$LR_MAX"
@@ -82,9 +81,6 @@ cmd=(
 
 if [[ "$ADAPTIVE_LR" == "1" ]]; then
   cmd+=(--adaptive-lr)
-fi
-if [[ "${METRICS_SPLIT_MOMENTUM:-0}" == "1" ]]; then
-  cmd+=(--metrics-split-momentum)
 fi
 if [[ "${DRY_RUN:-0}" == "1" ]]; then
   cmd+=(--dry-run)

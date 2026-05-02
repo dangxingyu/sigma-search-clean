@@ -148,12 +148,7 @@ def streaming_metrics_args(args: argparse.Namespace) -> list[str]:
         "--metrics-top-k", str(args.metrics_top_k),
         "--metrics-module-regex", args.metrics_module_regex,
         "--metrics-max-modules", str(args.metrics_max_modules),
-        "--metrics-alignment-side", args.metrics_alignment_side,
     ]
-    if args.metrics_split_momentum:
-        out.append("--metrics-split-momentum")
-    if args.metrics_save_components:
-        out.append("--metrics-save-components")
     if args.metrics_hessian_every > 0:
         out += [
             "--metrics-hessian-every", str(args.metrics_hessian_every),
@@ -207,8 +202,12 @@ def build_command(args: argparse.Namespace, method: str, batch: int, lr: float, 
             *metrics,
         ]
     if method == "native_muon":
+        if args.metrics_every > 0:
+            raise ValueError("metrics logging is supported only for StreamingMuon methods in the clean repo")
         return cmd + ["run_native_muon_v9.py", *common, "--ns-steps", str(args.ns_steps), *metrics]
     if method == "native_lite":
+        if args.metrics_every > 0:
+            raise ValueError("metrics logging is supported only for StreamingMuon methods in the clean repo")
         if args.nproc_per_node != 1:
             raise ValueError(
                 "native_lite is single-process only in this repo. "
@@ -322,9 +321,6 @@ def write_manifest(args: argparse.Namespace, methods: list[str]) -> None:
             "top_k": args.metrics_top_k,
             "module_regex": args.metrics_module_regex,
             "max_modules": args.metrics_max_modules,
-            "split_momentum": args.metrics_split_momentum,
-            "alignment_side": args.metrics_alignment_side,
-            "save_components": args.metrics_save_components,
             "hessian_every": args.metrics_hessian_every,
             "hessian_top_k": args.metrics_hessian_top_k,
             "hessian_iters": args.metrics_hessian_iters,
@@ -521,7 +517,12 @@ def main() -> None:
     parser.add_argument("--log-root", type=Path, default=Path(f"logs/top_aware_muon_sweep_{stamp}"))
     parser.add_argument("--nanochat-dir", type=str, default="nanochat")
     parser.add_argument("--methods", type=parse_list_str,
-                        default=parse_list_str("streaming_identity streaming_lite native_muon native_lite top_aware_muon"))
+                        default=parse_list_str("streaming_identity top_aware_muon"),
+                        help=(
+                            "Space/comma separated methods. Default is the current streaming-first recipe: "
+                            "streaming_identity top_aware_muon. Native baselines remain available by explicitly "
+                            "passing native_muon or native_lite."
+                        ))
     parser.add_argument("--batches", type=parse_list_int, default=parse_list_int("131072"))
     parser.add_argument("--lrs", type=parse_list_float, default=parse_list_float("0.005 0.01 0.02 0.04"))
     parser.add_argument("--top-ks", type=parse_list_int, default=parse_list_int("1"))
@@ -543,15 +544,13 @@ def main() -> None:
     parser.add_argument("--metrics-every", type=int, default=0,
                         help="Pass diagnostic logging interval to StreamingMuon run_eval.py; 0 disables.")
     parser.add_argument("--metrics-top-k", type=int, default=4)
-    parser.add_argument("--metrics-module-regex", type=str, default=r"transformer\.h")
+    parser.add_argument("--metrics-module-regex", type=str,
+                        default=r"transformer\.h\.(?:[0-9]+)\.(?:attn\.(?:c_q|c_k|c_v|c_proj)|mlp\.(?:c_fc|c_proj))\.weight$")
     parser.add_argument("--metrics-max-modules", type=int, default=0)
-    parser.add_argument("--metrics-split-momentum", action="store_true")
-    parser.add_argument("--metrics-alignment-side", type=str, default="lite", choices=("left", "right", "lite"))
-    parser.add_argument("--metrics-save-components", action="store_true")
     parser.add_argument("--metrics-hessian-every", type=int, default=0)
     parser.add_argument("--metrics-hessian-top-k", type=int, default=1)
     parser.add_argument("--metrics-hessian-iters", type=int, default=6)
-    parser.add_argument("--metrics-hessian-max-modules", type=int, default=1)
+    parser.add_argument("--metrics-hessian-max-modules", type=int, default=0)
     parser.add_argument("--ns-steps", type=int, default=5)
     parser.add_argument("--lite-chi", type=float, default=2.0)
     parser.add_argument("--lite-rs", type=float, default=0.1)

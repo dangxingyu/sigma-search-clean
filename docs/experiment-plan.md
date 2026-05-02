@@ -3,13 +3,16 @@
 ## Current clean-handoff plan as of 2026-05-02
 
 Immediate standalone-repo priorities:
-- Use the clean method set: `top_aware_muon`, `streaming_identity`, `native_muon`, and single-process `native_lite` only when exact LITE is required.
+- Use the clean method set: `top_aware_muon` and `streaming_identity`. Keep native Muon/LITE code as deprecated targeted validation controls, not as default sweep methods.
 - For handoff optimizer-quality sweeps, use `scripts/run_handoff_sweep.sh`. Keep metrics off by default, start from an LR grid such as `{0.005,0.01,0.02,0.04}`, and leave `ADAPTIVE_LR=1` so boundary LR optima are extended automatically before interpreting winners.
 - For the new dynamics/logging study, run only Top-Aware Muon `top_k=1` with `alpha={0.5,1.0}` at batches `{262144,1048576,4194304}`.
+- Treat `alpha` as the document's T-Muon coefficient `c`: `alpha=1.0` is StreamingMuon identity/Muon-like; `alpha=0.5` is the primary Top-Aware candidate. Do not spend default compute on `0.75/0.25` until the two-point test gives a reason.
+- If the `1M` batch does not show an obvious Top-Aware improvement over identity, pivot the medium/large batch probe to `{2097152,8388608}` rather than expanding alpha.
 - Treat `262144` as the d8 critical batch. Do not insert an extra 512K point into this specific no-tuning metrics grid.
 - Use the d8 Chinchilla-style token budget `402,653,184` tokens, about `0.4B`, with nanochat LR scaling and no additional LR/alpha tuning.
-- Use `scripts/run_d8_metrics_grid.sh` for the canonical grid. It records cheap metrics every step and Hessian probes every 50 logged steps with math SDPA forced.
-- Use corrected logging semantics: split alignment is on global-DDP-averaged `M'`, `train/loss` is raw optimizer-step mean CE, and Hessian probes are rank0-local post-update HVPs on a representative microbatch from the same optimizer step.
+- Use `scripts/run_d8_metrics_grid.sh` for the canonical grid. It records cheap StreamingMuon metrics every step and Hessian probes every 50 logged steps with math SDPA forced.
+- Use corrected logging semantics: raw momentum-buffer metrics are not logged, `train/loss` is raw optimizer-step mean CE, and Hessian probes are global selected-matrix-subspace Lanczos HVPs over all normal transformer matrix weights on a representative rank0 microbatch from the same optimizer step.
+- Canonical StreamingMuon metrics should use no explicit SVD: reuse cached `sigma` and basis by default. Do not enable exact per-module SVD, component saving, or legacy split-SVD alignment unless explicitly auditing those diagnostics.
 - Use `results/sweep_catalog/` as the organized source for completed sweep rows; rebuild with `python scripts/build_sweep_catalog.py` whenever curated CSV/JSON summaries change.
 
 Derived from `guidance.md` (Sadhika's two-diagnostic framework).
@@ -43,7 +46,7 @@ Build a rigorous d=8 / 1B-token study of when vanilla Muon, fixed-χ LITE, and o
 
 ### Immediate next steps
 - Mainline method set is narrowed. For new sweeps, default to `streaming_identity`, `native_muon`, `native_lite`, and `top_aware_muon` only. Do not include `streaming_lite` unless explicitly requested; it is a same-driver sanity check, not a required baseline and not a replacement for native LITE.
-- Clean infra now has opt-in metric logging in `run_eval.py`. For future Top-Aware/StreamingMuon sweeps that need diagnostics, add for example `--metrics-every 512 --metrics-top-k 4 --metrics-split-momentum`. Use Hessian flags only for small targeted probes because HVP is expensive and kernel-dependent.
+- Clean infra now has opt-in no-SVD metric logging in `run_eval.py`. For future Top-Aware/StreamingMuon sweeps that need diagnostics, add for example `--metrics-every 1 --metrics-top-k 4 --metrics-hessian-every 50`. Use Hessian flags only for targeted dynamics probes because HVP is expensive and kernel-dependent.
 0. Active smaller-batch fair-comparison run: v26 is running under `search_evals/v26_small_bsz_streaming_fair_20260430`. It compares same-driver StreamingMuon `identity`, `lite_chi2_rs01`, and `top1pm_a05` at global batches `64K` and `32K`, seed `42`, LR grid `{0.005,0.01,0.02}` with boundary extension. All StreamingMuon variants use pure Householder QR and two streaming iterations per step. This is the current source for the small-batch Muon/LITE/top1 question.
    Escalation criterion for d12/3B: only start a larger d12 / ~3B-token run if the small/medium evidence is internally consistent after LR closure: at large batch, `top1pm_a05` beats `lite_chi2_rs01`, which beats `identity`; at small batch, `identity >= lite_chi2_rs01` within tuned LR. If the best LR is on a boundary or the ordering is mixed, first extend LR or add seeds instead of scaling.
    Prepared but not launched: `run_v27_d12_3b_streaming_fair_on_node.sh`. Defaults are depth `12`, tokens `3221225472`, batches `{1M,8M}`, seed `42`, LR grid `{0.005,0.01,0.02,0.04}`, same three StreamingMuon methods, pure QR, and two iterations. Launch only after the gate is satisfied.

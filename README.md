@@ -1,10 +1,10 @@
 # Sigma-Search Clean
 
-Standalone handoff repo for Muon-family optimizer experiments on nanochat-style LLM pretraining. The main question this repo supports is:
+Standalone handoff repo for StreamingMuon-family optimizer experiments on nanochat-style LLM pretraining. The main question this repo supports is:
 
-> At fixed model/data recipe, how do native Muon, StreamingMuon identity, native LITE, and Top-Aware Muon compare across batch size, LR, and Top-Aware `alpha`?
+> At fixed model/data recipe, how does Top-Aware Muon compare to the same-driver StreamingMuon identity baseline across batch size, LR, and Top-Aware `alpha`?
 
-The code is self-contained: it includes `nanochat/`, optimizer implementations, sweep launchers, metric logging, and curated result folders.
+The code is self-contained: it includes `nanochat/`, StreamingMuon, Top-Aware Muon, optional native controls, sweep launchers, metric logging, and curated result folders.
 
 ## Quick Start
 
@@ -41,8 +41,8 @@ nanochat/                    vendored nanochat source
 candidates/                  sigma transforms: identity, LITE-like, Top-Aware
 run_eval.py                  StreamingMuon candidate train/eval runner
 run_top_aware_muon_sweep.py  main reusable sweep engine
-run_native_muon_v9.py        native Muon baseline runner
-run_lite_v9.py               native LITE baseline runner; single-process only
+run_native_muon_v9.py        deprecated native Muon validation runner
+run_lite_v9.py               deprecated native LITE validation runner; single-process only
 metric_logging.py            opt-in optimizer dynamics metrics
 scripts/run_handoff_sweep.sh user-facing sweep wrapper
 scripts/run_d8_metrics_grid.sh canonical dense-metrics dynamics run
@@ -79,8 +79,8 @@ Supported sweep method names:
 |---|---|---|
 | `streaming_identity` | `run_eval.py + candidates/identity.py` | StreamingMuon with `f(sigma)=1` |
 | `top_aware_muon` | `run_eval.py + candidates/top_aware_muon.py` | scale top-`k` singular directions by `alpha` |
-| `native_muon` | `run_native_muon_v9.py` | nanochat native Muon control |
-| `native_lite` | `run_lite_v9.py` | native LITE control; use single process only |
+| `native_muon` | `run_native_muon_v9.py` | deprecated validation control; not a main sweep target |
+| `native_lite` | `run_lite_v9.py` | deprecated validation control; single-process only |
 | `streaming_lite` | `run_eval.py + candidates/lite_chi2_rs01.py` | implementation sanity check, not a main baseline |
 
 Stable StreamingMuon DDP settings are:
@@ -107,9 +107,9 @@ Current clean recipe: keep `top_k=1`; sweep `alpha`, batch size, and LR. The swe
 For optimizer-quality comparisons, keep dense metrics off and sweep LR carefully. The handoff wrapper exposes common knobs as environment variables:
 
 ```bash
-METHODS="streaming_identity native_muon top_aware_muon" \
-BATCHES="262144 524288 1048576 2097152" \
-ALPHAS="0.5 0.75 1.0 1.25" \
+METHODS="streaming_identity top_aware_muon" \
+BATCHES="262144 1048576 4194304" \
+ALPHAS="0.5 1.0" \
 LRS="0.005 0.01 0.02 0.04" \
 SEEDS="42" \
 TOKENS=402653184 \
@@ -117,7 +117,7 @@ ADAPTIVE_LR=1 \
 srun --jobid=<JOBID> --overlap --ntasks=1 bash scripts/run_handoff_sweep.sh
 ```
 
-Defaults use d8, seq1024, 8 GPUs, max device batch size 16, and `402,653,184` tokens. That is the d8 Chinchilla-style `~0.4B` token recipe.
+Defaults use `METHODS="streaming_identity top_aware_muon"`, `alpha/c={0.5,1.0}`, batches `{262144,1048576,4194304}`, d8, seq1024, 8 GPUs, max device batch size 16, and `402,653,184` tokens. That is the d8 Chinchilla-style `~0.4B` token recipe. Native Muon/LITE code is retained for targeted validation, but it is not part of the default sweep.
 
 ### Adaptive LR Behavior
 
@@ -149,29 +149,49 @@ DRY_RUN=1 bash scripts/run_handoff_sweep.sh
 
 ## Dynamics Metrics
 
-For dynamics studies, enable logging on a small number of modules. Metrics are off by default because every-step SVD diagnostics are expensive.
+For dynamics studies, enable logging on StreamingMuon runs. Metrics are off by default. The metrics path uses no explicit SVD: it reuses StreamingMuon's cached `sigma` and basis from the optimizer step.
 
 Recommended dense-metrics smoke:
 
 ```bash
 METRICS_EVERY=1 \
-METRICS_SPLIT_MOMENTUM=1 \
 METRICS_HESSIAN_EVERY=100 \
 BATCHES="262144" ALPHAS="1.0" LRS="0.02" TOKENS=52428800 \
 srun --jobid=<JOBID> --overlap --ntasks=1 bash scripts/run_handoff_sweep.sh
 ```
 
-Logged metric families:
+Canonical logged metrics:
 
-| Family | What is logged |
+| Metric key | Meaning | SVD? |
 |---|---|
-| loss | raw train loss per optimizer step, EMA train loss, validation BPB |
-| norms | per-module weight, gradient, momentum, and `M'` RMS |
-| spectrum | momentum spectral norm, `M'` spectral norm, top singular values, StreamingMuon sigma |
-| split alignment | split-half SVD alignment of global DDP-averaged `M'` |
-| Hessian | approximate rank0-local block sharpness and Hessian-gradient/momentum/component alignments |
+| `train/loss` | raw mean cross-entropy over the optimizer step's grad-accum microbatches | no |
+| `train/loss_ema` | debiased EMA of `train/loss` | no |
+| `train/lr_multiplier` | current LR schedule multiplier | no |
+| `train/muon_momentum` | current Muon momentum schedule value | no |
+| `weight_norm/<module>` | RMS of the module weight | no |
+| `grad_norm/<module>` | RMS of the full-batch gradient | no |
+| `momentum_after_nesterov_norm/<module>` | RMS of `M' = beta M_t + (1 - beta) G_t` | no |
+| `momentum_after_nesterov_spectral_norm/<module>` | top cached StreamingMuon `sigma` for `M'` | no |
+| `muon_singular_values/<module>` | top-k cached StreamingMuon sigma values, sorted descending | no |
+| `streaming_sigma_values/<module>` | same cached StreamingMuon sigma values, kept explicit for sigma-transform analysis | no |
+| `sharpness/selected_subspace` | top Hessian eigenvalue from one global Lanczos HVP over selected matrix weights | no |
+| `gradient_hessian_projection/selected_subspace` | global signed projection `<e_H, G>` | no |
+| `momentum_after_nesterov_hessian_projection/selected_subspace` | global signed projection `<e_H, M'>` | no |
+| `gradient_hessian_alignment/selected_subspace` | global cosine alignment between Hessian eigenvector and gradient | no |
+| `momentum_after_nesterov_hessian_alignment/selected_subspace` | global cosine alignment between Hessian eigenvector and `M'` | no |
+| `gradient_projection_on_last_hessian_space_coefficients/selected_subspace` | coefficients of current gradient projected onto the most recent Hessian eigenspace | no |
+| `gradient_projection_on_last_hessian_space_norm/selected_subspace` | norm of the current gradient projection onto the most recent Hessian eigenspace | no |
+| `gradient_projection_on_last_hessian_space_consecutive_correlation/selected_subspace` | cosine between consecutive gradient projection vectors using the same last Hessian eigenspace, e.g. project steps 51 and 52 onto step-50 space | no |
+| `hessian_eigenvector_block_norm/<module>` | norm of the global Hessian eigenvector restricted to this module | no |
+| `gradient_hessian_alignment/<module>` | per-module cosine between Hessian block and gradient block | no |
+| `momentum_after_nesterov_hessian_alignment/<module>` | per-module cosine between Hessian block and `M'` block | no |
+| `gradient_hessian_projection/<module>` | per-module signed projection of gradient onto the unnormalized Hessian block | no |
+| `momentum_after_nesterov_hessian_projection/<module>` | per-module signed projection of `M'` onto the unnormalized Hessian block | no |
+| `alignment_between_covariance_hessian_at_k_th_component/<module>` | alignment between Hessian block and cached StreamingMuon component `u_k v_k^T` | no |
+| `hessian_muon_component_alignment_matrix/<module>` | Hessian-vs-cached-StreamingMuon component alignment matrix | no |
+| `hessian_muon_component_signed_projection_matrix/<module>` | signed Hessian-block projection onto cached StreamingMuon components | no |
 
-Hessian probes use post-update weights and a representative rank0 microbatch from the same optimizer step. Split alignment is global DDP-averaged; Hessian is intentionally local because global HVP would be much more expensive. Set `NANOCHAT_FORCE_MATH_SDPA=1` when Hessian probes are enabled.
+Hessian probes use post-update weights and a representative rank0 microbatch from the same optimizer step. The Hessian routine runs one global Lanczos probe over all normal transformer matrix weights selected by `METRICS_MODULE_REGEX`, including cross-module Hessian blocks. Per-module Muon-component alignment uses cached StreamingMuon basis/sigma; if that cache is unavailable, component alignment is reported as unavailable rather than falling back to SVD. Set `NANOCHAT_FORCE_MATH_SDPA=1` when Hessian probes are enabled.
 
 ## D8 Recipe Table
 
@@ -217,6 +237,7 @@ When comparing results, compare within the same recipe family first. Historical 
 
 ## Caveats
 
+- Native Muon/LITE runners are deprecated controls. Keep them for targeted validation only; new sweeps should use `streaming_identity` and `top_aware_muon`.
 - `native_lite` is not DDP-safe here. Do not include it in 8-GPU DDP sweeps until a distributed LITE optimizer is implemented.
 - `streaming_lite` is not a primary claim baseline; it is mainly an implementation sanity check.
 - Dense metrics can be much slower than no-metrics training. Report measured `eval_time_seconds` from `result.json`.

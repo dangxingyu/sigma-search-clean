@@ -72,26 +72,19 @@ parser.add_argument("--metrics-every", type=int, default=0,
                     help="If >0, log Muon-like diagnostics every N optimizer steps into result.json.")
 parser.add_argument("--metrics-top-k", type=int, default=4,
                     help="Top singular directions to summarize in diagnostic logging.")
-parser.add_argument("--metrics-module-regex", type=str, default=r"transformer\.h",
+parser.add_argument("--metrics-module-regex", type=str,
+                    default=r"transformer\.h\.(?:[0-9]+)\.(?:attn\.(?:c_q|c_k|c_v|c_proj)|mlp\.(?:c_fc|c_proj))\.weight$",
                     help="Regex selecting modules for diagnostic logging.")
 parser.add_argument("--metrics-max-modules", type=int, default=0,
                     help="Maximum modules to log per step; 0 means all selected modules.")
-parser.add_argument("--metrics-save-components", action="store_true",
-                    help="Save top Muon singular vectors to .pt files beside the result JSON.")
-parser.add_argument("--metrics-component-dir", type=str, default=None,
-                    help="Directory for --metrics-save-components; default is <output-dir>/metric_components.")
-parser.add_argument("--metrics-split-momentum", action="store_true",
-                    help="Maintain independent split-half momentum buffers and log their SVD alignment.")
-parser.add_argument("--metrics-alignment-side", type=str, default="lite", choices=("left", "right", "lite"),
-                    help="Singular-vector side for split-momentum alignment.")
 parser.add_argument("--metrics-hessian-every", type=int, default=0,
                     help="If >0, run expensive Hessian power diagnostics every N logged steps.")
 parser.add_argument("--metrics-hessian-top-k", type=int, default=1,
                     help="Number of Hessian directions for the expensive Hessian probe.")
 parser.add_argument("--metrics-hessian-iters", type=int, default=6,
                     help="Power iterations per Hessian direction.")
-parser.add_argument("--metrics-hessian-max-modules", type=int, default=1,
-                    help="Maximum modules per Hessian probe; keep this small.")
+parser.add_argument("--metrics-hessian-max-modules", type=int, default=0,
+                    help="Maximum modules in Hessian selected subspace; 0 means all normal matrix weights.")
 # Device
 parser.add_argument("--device-type", type=str, default="", help="cuda|cpu|mps (empty=auto)")
 parser.add_argument("--seed", type=int, default=42, help="Random seed for model init and data")
@@ -393,45 +386,10 @@ def main():
 
         metrics_enabled = args.metrics_every > 0
         metric_logs = []
-        do_split_momentum = metrics_enabled and args.metrics_split_momentum and grad_accum_steps >= 2
-        split_momentum_a = split_momentum_b = None
-        split_mtilde_a = split_mtilde_b = None
-        split_momentum_names = []
-        if do_split_momentum:
-            module_pattern = re.compile(args.metrics_module_regex) if args.metrics_module_regex else None
-            split_momentum_names = [
-                n for n in matrix_params_named
-                if module_pattern is None or module_pattern.search(n) is not None
-            ]
-            if args.metrics_max_modules > 0:
-                split_momentum_names = split_momentum_names[:args.metrics_max_modules]
-            if not split_momentum_names:
-                do_split_momentum = False
-                print0("Metric logging: split-half momentum alignment disabled; no modules matched.")
-            else:
-                split_momentum_a = {
-                    n: torch.zeros_like(matrix_params_named[n], dtype=torch.float32)
-                    for n in split_momentum_names
-                }
-                split_momentum_b = {
-                    n: torch.zeros_like(matrix_params_named[n], dtype=torch.float32)
-                    for n in split_momentum_names
-                }
-                split_mtilde_a = {
-                    n: torch.zeros_like(matrix_params_named[n], dtype=torch.float32)
-                    for n in split_momentum_names
-                }
-                split_mtilde_b = {
-                    n: torch.zeros_like(matrix_params_named[n], dtype=torch.float32)
-                    for n in split_momentum_names
-                }
-                scope = "global DDP-averaged" if ddp else "single-process"
-                print0(f"Metric logging: split-half momentum alignment enabled, "
-                       f"top_k={args.metrics_top_k}, side={args.metrics_alignment_side}, "
-                       f"tensor=M_tilde, scope={scope}, modules={len(split_momentum_names)}")
-        elif metrics_enabled:
-            reason = "disabled by flag" if not args.metrics_split_momentum else f"grad_accum={grad_accum_steps} < 2"
-            print0(f"Metric logging enabled every {args.metrics_every} steps; split momentum {reason}.")
+        last_hessian_space = None
+        previous_gradient_projection = None
+        if metrics_enabled:
+            print0(f"Metric logging enabled every {args.metrics_every} steps.")
 
         for step in range(num_iterations + 1):
             last_step = step == num_iterations
@@ -462,8 +420,6 @@ def main():
                 and args.metrics_hessian_every > 0
                 and step % args.metrics_hessian_every == 0
             )
-            half = grad_accum_steps // 2 if do_split_momentum else 0
-            split_grad_a = {}
             hessian_batch = None
             train_loss_sum = 0.0
             for micro_step in range(grad_accum_steps):
@@ -475,39 +431,6 @@ def main():
                 loss = loss / grad_accum_steps
                 loss.backward()
                 x, y = next(train_loader)
-                if do_split_momentum and (micro_step + 1) == half:
-                    scale = grad_accum_steps / half
-                    for n in split_momentum_names:
-                        p = matrix_params_named[n]
-                        if p.grad is not None:
-                            split_grad_a[n] = (scale * p.grad.detach().to(torch.float32)).clone()
-
-            if (
-                do_split_momentum
-                and split_momentum_a is not None
-                and split_momentum_b is not None
-                and split_mtilde_a is not None
-                and split_mtilde_b is not None
-            ):
-                rest = grad_accum_steps - half
-                for n in split_momentum_names:
-                    p = matrix_params_named[n]
-                    if n not in split_grad_a or p.grad is None:
-                        continue
-                    grad_full = p.grad.detach().to(torch.float32)
-                    grad_a = split_grad_a[n]
-                    grad_b = (grad_accum_steps * grad_full - half * grad_a) / rest
-                    if ddp:
-                        torch.distributed.all_reduce(grad_a, op=torch.distributed.ReduceOp.AVG)
-                        torch.distributed.all_reduce(grad_b, op=torch.distributed.ReduceOp.AVG)
-                    split_momentum_a[n].mul_(muon_momentum).add_(grad_a, alpha=1.0 - muon_momentum)
-                    split_momentum_b[n].mul_(muon_momentum).add_(grad_b, alpha=1.0 - muon_momentum)
-                    split_mtilde_a[n].copy_(grad_a).mul_(1.0 - muon_momentum).add_(
-                        split_momentum_a[n], alpha=muon_momentum
-                    )
-                    split_mtilde_b[n].copy_(grad_b).mul_(1.0 - muon_momentum).add_(
-                        split_momentum_b[n], alpha=muon_momentum
-                    )
 
             # Schedule
             for group in optimizer.param_groups:
@@ -530,12 +453,10 @@ def main():
                 from metric_logging import (
                     clear_metric_caches,
                     collect_muon_metrics,
+                    gradient_projection_onto_hessian_space,
                     hessian_power_probe,
-                    split_momentum_alignment,
+                    projection_vector_correlation,
                 )
-                component_dir = args.metrics_component_dir
-                if component_dir is None:
-                    component_dir = str(Path(args.output_file).parent / "metric_components")
                 metric_entry, hessian_refs = collect_muon_metrics(
                     optimizer,
                     param_name_by_id,
@@ -546,8 +467,7 @@ def main():
                     train_loss=train_loss_mean,
                     lr_multiplier=lrm,
                     muon_momentum=muon_momentum,
-                    save_components=args.metrics_save_components,
-                    component_dir=component_dir,
+                    collect_hessian_refs=hessian_due or last_hessian_space is not None,
                 )
                 clear_metric_caches(optimizer)
 
@@ -559,23 +479,8 @@ def main():
                         "hessian_weight_state": "post_optimizer_step",
                         "hessian_batch_source": "first_microbatch_same_optimizer_step" if hessian_batch is not None else None,
                         "hessian_batch_scope": "rank0_local_microbatch" if ddp and hessian_batch is not None else "single_process",
-                        "split_momentum_alignment_scope": "global_ddp_average" if ddp else "single_process",
                     })
                     metric_entry["scalars"]["train/loss_ema"] = debiased
-                    if do_split_momentum and split_mtilde_a is not None and split_mtilde_b is not None:
-                        split_stats = split_momentum_alignment(
-                            split_mtilde_a,
-                            split_mtilde_b,
-                            top_k=args.metrics_top_k,
-                            alignment_side=args.metrics_alignment_side,
-                            module_regex=args.metrics_module_regex,
-                            max_modules=args.metrics_max_modules,
-                        )
-                        split_stats["tensor"] = "momentum_after_nesterov"
-                        split_stats["definition"] = "M_tilde = (1 - beta) * G_split + beta * M_split_new"
-                        metric_entry["split_momentum_alignment"] = split_stats
-                        for key, value in split_stats.get("vectors", {}).items():
-                            metric_entry["vectors"][key] = value
 
                     run_hessian = (
                         args.metrics_hessian_every > 0
@@ -595,6 +500,12 @@ def main():
                                 module_regex=args.metrics_module_regex,
                                 max_modules=args.metrics_hessian_max_modules,
                             )
+                            transient = hessian_stats.pop("_transient", {})
+                            new_hessian_space = transient.get("hessian_space")
+                            if new_hessian_space is not None:
+                                new_hessian_space["step"] = step
+                                last_hessian_space = new_hessian_space
+                                previous_gradient_projection = None
                             metric_entry["hessian"] = hessian_stats
                             metric_entry["scalars"].update(hessian_stats.get("scalars", {}))
                             metric_entry["vectors"].update(hessian_stats.get("vectors", {}))
@@ -603,6 +514,36 @@ def main():
                                 "error": str(hessian_error),
                                 "note": "Hessian HVP is best-effort; some attention kernels do not support double backward.",
                             }
+
+                    if not run_hessian and last_hessian_space is not None and hessian_refs:
+                        current_projection = gradient_projection_onto_hessian_space(
+                            hessian_refs,
+                            last_hessian_space,
+                        )
+                        if current_projection is not None:
+                            hstep = current_projection.get("hessian_step")
+                            metric_entry["metadata"]["last_hessian_space_step"] = hstep
+                            metric_entry["vectors"][
+                                "gradient_projection_on_last_hessian_space_coefficients/selected_subspace"
+                            ] = current_projection["coefficients"]
+                            metric_entry["scalars"][
+                                "gradient_projection_on_last_hessian_space_norm/selected_subspace"
+                            ] = current_projection["norm"]
+                            if (
+                                previous_gradient_projection is not None
+                                and previous_gradient_projection.get("hessian_step") == hstep
+                            ):
+                                metric_entry["scalars"][
+                                    "gradient_projection_on_last_hessian_space_consecutive_correlation/selected_subspace"
+                                ] = projection_vector_correlation(
+                                    previous_gradient_projection,
+                                    current_projection,
+                                )
+                                metric_entry["metadata"][
+                                    "gradient_projection_correlation_previous_step"
+                                ] = previous_gradient_projection.get("step")
+                            current_projection["step"] = step
+                            previous_gradient_projection = current_projection
 
                     metric_logs.append(metric_entry)
 

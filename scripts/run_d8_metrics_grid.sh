@@ -42,11 +42,9 @@ python run_top_aware_muon_sweep.py \
   --fallback-ortho-tol "${FALLBACK_ORTHO_TOL:-0.01}" \
   --metrics-every "${METRICS_EVERY:-1}" \
   --metrics-top-k "${METRICS_TOP_K:-4}" \
-  --metrics-module-regex "${METRICS_MODULE_REGEX:-transformer\\.h}" \
-  --metrics-max-modules "${METRICS_MAX_MODULES:-8}" \
-  --metrics-split-momentum \
-  --metrics-alignment-side "${METRICS_ALIGNMENT_SIDE:-lite}" \
+  --metrics-module-regex "${METRICS_MODULE_REGEX:-transformer\\.h\\.(?:[0-9]+)\\.(?:attn\\.(?:c_q|c_k|c_v|c_proj)|mlp\\.(?:c_fc|c_proj))\\.weight$}" \
+  --metrics-max-modules "${METRICS_MAX_MODULES:-0}" \
   --metrics-hessian-every "${METRICS_HESSIAN_EVERY:-50}" \
   --metrics-hessian-top-k "${METRICS_HESSIAN_TOP_K:-1}" \
-  --metrics-hessian-iters "${METRICS_HESSIAN_ITERS:-2}" \
-  --metrics-hessian-max-modules "${METRICS_HESSIAN_MAX_MODULES:-8}"
+  --metrics-hessian-iters "${METRICS_HESSIAN_ITERS:-6}" \
+  --metrics-hessian-max-modules "${METRICS_HESSIAN_MAX_MODULES:-0}"
