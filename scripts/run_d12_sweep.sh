@@ -11,7 +11,9 @@ REPO="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$REPO"
 
 export DEPTH="${DEPTH:-12}"
-export TOKENS="${TOKENS:-3221225472}"  # ~3.2B, divisible by 262K/1M/4M.
+# 1x Chinchilla-style d12 budget. This scales the d8 0.4B recipe by
+# d12/d8 scaling-parameter ratio, then rounds to be divisible by 4M.
+export TOKENS="${TOKENS:-977272832}"
 export METHODS="${METHODS:-streaming_identity top_aware_muon}"
 export BATCHES="${BATCHES:-262144 1048576 4194304}"
 export ALPHAS="${ALPHAS:-0.5}"

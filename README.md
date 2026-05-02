@@ -14,7 +14,7 @@ If you only want one command for the main d12 optimizer-quality sweep, use:
 bash scripts/run_d12_sweep.sh
 ```
 
-This runs the current mainline comparison, `streaming_identity` vs Top-Aware Muon `alpha=0.5`, at d12 with the default batch/LR grid. Run it from a node/session that already has the intended GPUs visible; wrap it with your local scheduler outside the repo if needed.
+This runs the current mainline comparison, `streaming_identity` vs Top-Aware Muon `alpha=0.5`, at d12 with the default batch/LR grid and a 1x Chinchilla-style token budget (`977272832` tokens). Run it from a node/session that already has the intended GPUs visible; wrap it with your local scheduler outside the repo if needed.
 
 To inspect the exact expanded `torchrun` commands without launching training:
 
@@ -136,7 +136,7 @@ BATCHES="262144 1048576 4194304" \
 ALPHAS="0.5 1.0" \
 LRS="0.005 0.01 0.02 0.04" \
 SEEDS="42 43" \
-TOKENS=3221225472 \
+TOKENS=977272832 \
 bash scripts/run_d12_sweep.sh
 ```
 
