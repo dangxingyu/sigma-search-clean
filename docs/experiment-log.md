@@ -1,5 +1,13 @@
 # Experiment Log — LITE vs Muon diagnostic campaign
 
+## 2026-05-02 — README handoff rewrite
+
+Latest update:
+- Rewrote `README.md` around the intended handoff workflow: short repo overview, basic setup, `Sweep`, `Metrics`, and result catalog sections.
+- Made `scripts/run_d12_sweep.sh` the only optimizer-quality sweep entrypoint and `scripts/run_d12_statistics.sh` the only metrics/statistics entrypoint.
+- Documented d12 defaults, d8 overrides, adaptive LR boundary extension, preemption-safe `STAMP` reuse, config-signature guard, and fixed-recipe metrics usage.
+- Compressed the metrics table to the active logged metrics and clarified DDP metric scope: optimizer metrics gather owner-rank cache, train loss is rank-averaged, Hessian HVPs average one representative local microbatch per rank.
+
 ## 2026-05-02 — sweep audit and StreamingMuon cleanup
 
 Latest update:
