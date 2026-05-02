@@ -17,7 +17,7 @@ Status checkpoint:
 
 Immediate standalone-repo priorities:
 - Use the clean method set: `top_aware_muon` and `streaming_identity`. Keep native Muon/LITE code as deprecated targeted validation controls, not as default sweep methods.
-- For handoff optimizer-quality sweeps, use `scripts/run_handoff_sweep.sh`. Keep metrics off by default, start from an LR grid such as `{0.005,0.01,0.02,0.04}`, and leave `ADAPTIVE_LR=1` so boundary LR optima are extended automatically before interpreting winners.
+- For handoff optimizer-quality sweeps, use the standalone `scripts/run_d12_sweep.sh`. Keep metrics off by default, start from an LR grid such as `{0.005,0.01,0.02,0.04}`, and leave `ADAPTIVE_LR=1` so boundary LR optima are extended automatically before interpreting winners.
 - For the new dynamics/logging study, run `streaming_identity` (`c=1`) versus Top-Aware Muon `top_k=1, alpha=0.5` (`c=0.5`) at batches `{262144,1048576,4194304}`.
 - Treat `alpha` as the document's T-Muon coefficient `c`. Do not spend default compute on `0.75/0.25` or a duplicate `top_aware alpha=1` until the two-point test gives a reason.
 - If the `1M` batch does not show an obvious Top-Aware improvement over identity, pivot the medium/large batch probe to `{2097152,8388608}` rather than expanding alpha.

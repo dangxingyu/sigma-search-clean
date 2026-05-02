@@ -43,21 +43,15 @@ Run a cheap sanity check:
 bash scripts/smoke_run.sh
 ```
 
-Run the recommended handoff sweep from a node/session that already has the intended GPUs visible:
-
-```bash
-bash scripts/run_handoff_sweep.sh
-```
-
-Cluster launchers are intentionally not part of the command. If you use SLURM, Kubernetes, Ray, or another scheduler, wrap the same command with your local allocation/launcher convention.
+Cluster launchers are intentionally not part of the command. If you use SLURM, Kubernetes, Ray, or another scheduler, wrap the same standalone script with your local allocation/launcher convention.
 
 Tokenizer/data note: the tokenizer and tokenized CLIMB-mix shards come from nanochat's data prep, not from a static file committed in this repo. `scripts/download_climbmix.sh` calls `python -m nanochat.dataset`, which is the intended setup path. If you already ran nanochat's tokenizer/data preparation successfully, that is correct; make sure `NANOCHAT_BASE_DIR` points to the same data directory when launching training.
 
 Outputs go to:
 
 ```text
-search_evals/handoff_sweep_<stamp>/      result JSONs, manifest, CSV, adaptive trace
-logs/handoff_sweep_<stamp>/              stdout/stderr logs per run
+search_evals/<stamp>/                    result JSONs, manifest, CSV, adaptive trace
+logs/<stamp>/                            stdout/stderr logs per run
 ```
 
 Checkpointing is enabled by default in the sweep wrappers. Each case writes resumable checkpoints under:
@@ -128,7 +122,6 @@ candidates/                  sigma transforms: identity and Top-Aware
 run_eval.py                  StreamingMuon candidate train/eval runner
 run_top_aware_muon_sweep.py  main reusable sweep engine
 metric_logging.py            opt-in optimizer dynamics metrics
-scripts/run_handoff_sweep.sh user-facing sweep wrapper
 scripts/run_d12_sweep.sh     blessed d12 optimizer-quality sweep
 scripts/run_d12_statistics.sh dense d12 dynamics/statistics runner
 scripts/submit_d12_sweep_shards_slurm.sh optional SLURM shard submitter
@@ -188,7 +181,7 @@ Current clean recipe: keep `top_k=1`; sweep `alpha`, batch size, and LR. The swe
 
 ## Recommended Sweep
 
-For the standard d12 handoff sweep, prefer the consolidated wrapper. This is an optimizer-quality sweep: dense metrics and Hessian logging are off.
+For the standard d12 handoff sweep, use the standalone consolidated script. This is an optimizer-quality sweep: dense metrics and Hessian logging are off.
 
 ```bash
 STAMP=d12_main_001 bash scripts/run_d12_sweep.sh
@@ -230,7 +223,7 @@ METHODS="streaming_identity" BATCHES="262144" LRS="0.04" bash scripts/run_d12_st
 METHODS="top_aware_muon" BATCHES="262144" ALPHAS="0.5" LRS="0.02" bash scripts/run_d12_statistics.sh
 ```
 
-For optimizer-quality comparisons, keep dense metrics off and sweep LR carefully. The handoff wrapper exposes common knobs as environment variables:
+For d8 optimizer-quality comparisons, keep dense metrics off and sweep LR carefully. Reuse the standalone sweep script with d8 overrides:
 
 ```bash
 METHODS="streaming_identity top_aware_muon" \
@@ -239,16 +232,17 @@ ALPHAS="0.5" \
 TOP_KS="1" \
 LRS="0.005 0.01 0.02 0.04" \
 SEEDS="42" \
+DEPTH=8 \
 TOKENS=402653184 \
 ADAPTIVE_LR=1 \
-bash scripts/run_handoff_sweep.sh
+bash scripts/run_d12_sweep.sh
 ```
 
 Defaults use `METHODS="streaming_identity top_aware_muon"`, where `streaming_identity` is `c=1` and Top-Aware uses `alpha/c=0.5`. The default batches are `{262144,1048576,4194304}`, with d8, seq1024, 8 GPUs, max device batch size 16, and `402,653,184` tokens. That is the d8 Chinchilla-style `~0.4B` token recipe.
 
 ### Adaptive LR Behavior
 
-`scripts/run_handoff_sweep.sh` calls `run_top_aware_muon_sweep.py --adaptive-lr` by default.
+`scripts/run_d12_sweep.sh` calls `run_top_aware_muon_sweep.py --adaptive-lr` by default. The statistics scripts keep adaptive LR off.
 
 For each independent group `(method, batch, seed, top_k, alpha)`:
 
@@ -271,7 +265,7 @@ ADAPTIVE_MIN_EDGE_IMPROVEMENT=0.0
 Dry-run without launching training:
 
 ```bash
-DRY_RUN=1 bash scripts/run_handoff_sweep.sh
+DRY_RUN=1 bash scripts/run_d12_sweep.sh
 ```
 
 ## Dynamics Metrics
@@ -284,7 +278,7 @@ Recommended dense-metrics smoke:
 METRICS_EVERY=1 \
 METRICS_HESSIAN_EVERY=100 \
 BATCHES="262144" ALPHAS="1.0" LRS="0.02" TOKENS=52428800 \
-bash scripts/run_handoff_sweep.sh
+bash scripts/run_d8_metrics_grid.sh
 ```
 
 Canonical logged metrics:

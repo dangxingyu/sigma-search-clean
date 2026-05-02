@@ -42,6 +42,14 @@ Latest update:
 - Correction: the earlier 1M seed42 Top-Aware edge was an LR-sweep artifact. After adding identity `lr=0.08`, seed42 favors identity (`1.002451` vs Top-Aware `1.009856`).
 - v56/v57 completed 262K seed confirmation with boundary check. Mean delta `c=0.5 - identity = -0.000613 ± 0.001083` SEM over seeds `{42,43,44}`; identity wins seed42, Top-Aware wins seeds43/44 by tiny margins. Artifact: `results/sweep_catalog/v56_v57_262k_seed_confirm_summary.md`.
 
+## 2026-05-02 — standalone sweep scripts
+
+Latest update:
+- Simplified the clean repo sweep surface. `scripts/run_d12_sweep.sh`, `scripts/run_d12_statistics.sh`, and `scripts/run_d8_metrics_grid.sh` now directly invoke `run_top_aware_muon_sweep.py`; they no longer depend on a separate handoff wrapper.
+- Removed `scripts/run_handoff_sweep.sh` to avoid presenting two user-facing sweep entrypoints.
+- Updated `README.md`, `MANIFEST.md`, `docs/experiment-plan.md`, and `docs/new-thoughts.md` so the documented handoff path is `scripts/run_d12_sweep.sh` for optimizer-quality sweeps and `scripts/run_d12_statistics.sh` / `scripts/run_d8_metrics_grid.sh` for dynamics metrics.
+- Validation passed: `bash -n scripts/run_d12_sweep.sh scripts/run_d12_statistics.sh scripts/run_d8_metrics_grid.sh scripts/submit_d12_sweep_shards_slurm.sh`; `python -m py_compile run_top_aware_muon_sweep.py`; dry-runs of the three standalone sweep scripts produced direct `python run_top_aware_muon_sweep.py ...` commands.
+
 ## 2026-05-02 — logging audit fix and user-facing handoff sweep interface
 
 Latest update:

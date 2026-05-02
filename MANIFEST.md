@@ -28,9 +28,8 @@ the clean runtime surface. Historical results are still preserved under
 - `scripts/setup_env.sh`: create the vendored nanochat `uv` environment.
 - `scripts/download_climbmix.sh`: download ClimbMix shards.
 - `scripts/smoke_run.sh`: tiny sanity run.
-- `scripts/run_handoff_sweep.sh`: main configurable sweep wrapper.
-- `scripts/run_d12_sweep.sh`: blessed d12 optimizer-quality sweep.
-- `scripts/run_d12_statistics.sh`: dense d12 metrics/statistics run.
+- `scripts/run_d12_sweep.sh`: standalone blessed d12 optimizer-quality sweep.
+- `scripts/run_d12_statistics.sh`: standalone dense d12 metrics/statistics run.
 - `scripts/run_d8_metrics_grid.sh`: canonical d8 dense-metrics grid.
 - `scripts/submit_d12_sweep_shards_slurm.sh`: optional SLURM shard submitter.
 - `scripts/build_sweep_catalog.py`: rebuild historical `results/sweep_catalog/`.
