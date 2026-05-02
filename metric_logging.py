@@ -354,27 +354,30 @@ def gradient_projection_onto_hessian_space(
 
 
 @torch.no_grad()
-def projection_vector_cosine(a: dict[str, Any], b: dict[str, Any]) -> float:
-    """Cosine between two fixed-space gradient projection vectors."""
-    if a.get("names") != b.get("names"):
+def projection_coefficients_pearson(a: dict[str, Any], b: dict[str, Any]) -> float:
+    """Pearson correlation between two fixed-Hessian-space coefficient vectors.
+
+    This is the statistic we want for `c_t = E^T g_t` when Hessian top-k > 1.
+    For top_k=1, component-wise Pearson is undefined; use the rolling lag-1
+    Pearson of the signed top-1 coefficient time series instead.
+    """
+    if a.get("names") != b.get("names") or a.get("hessian_step") != b.get("hessian_step"):
         return float("nan")
-    avec = a.get("projection") or []
-    bvec = b.get("projection") or []
-    if len(avec) != len(bvec) or not avec:
+    av = [float(x) for x in (a.get("coefficients") or [])]
+    bv = [float(x) for x in (b.get("coefficients") or [])]
+    if len(av) != len(bv) or len(av) < 2:
         return float("nan")
-    dot = torch.zeros((), dtype=torch.float32)
-    an = torch.zeros((), dtype=torch.float32)
-    bn = torch.zeros((), dtype=torch.float32)
-    for x, y in zip(avec, bvec):
-        xf = x.float()
-        yf = y.float()
-        dot = dot + torch.sum(xf * yf)
-        an = an + torch.sum(xf * xf)
-        bn = bn + torch.sum(yf * yf)
-    denom = torch.sqrt(an) * torch.sqrt(bn)
-    if float(denom.cpu()) == 0.0:
+    av = [x for x in av if math.isfinite(x)]
+    bv = [y for y in bv if math.isfinite(y)]
+    if len(av) != len(bv) or len(av) < 2:
         return float("nan")
-    return float((dot / denom).cpu())
+    ma = sum(av) / len(av)
+    mb = sum(bv) / len(bv)
+    num = sum((x - ma) * (y - mb) for x, y in zip(av, bv))
+    va = sum((x - ma) * (x - ma) for x in av)
+    vb = sum((y - mb) * (y - mb) for y in bv)
+    denom = math.sqrt(va * vb)
+    return num / denom if denom > 0.0 else float("nan")
 
 
 def projection_lag1_pearson(values: list[float], window: int = 16, min_pairs: int = 4) -> float:
@@ -395,9 +398,8 @@ def projection_lag1_pearson(values: list[float], window: int = 16, min_pairs: in
     return num / denom if denom > 0.0 else float("nan")
 
 
-# Deprecated compatibility name. This has always returned a cosine, not a
-# Pearson correlation.
-projection_vector_correlation = projection_vector_cosine
+# Deprecated compatibility name for older analysis imports.
+projection_vector_correlation = projection_coefficients_pearson
 
 
 @torch.enable_grad()

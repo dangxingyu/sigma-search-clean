@@ -693,6 +693,10 @@ def main():
             # Logging
             ema_beta = 0.9
             train_loss_mean = train_loss_sum / grad_accum_steps
+            if ddp:
+                loss_tensor = torch.tensor(train_loss_mean, device=device, dtype=torch.float32)
+                torch.distributed.all_reduce(loss_tensor, op=torch.distributed.ReduceOp.AVG)
+                train_loss_mean = float(loss_tensor.detach().cpu())
             smooth_train_loss = ema_beta * smooth_train_loss + (1 - ema_beta) * train_loss_mean
             debiased = smooth_train_loss / (1 - ema_beta ** (step + 1))
             dt = time.time() - t0
@@ -703,8 +707,8 @@ def main():
                     collect_muon_metrics,
                     gradient_projection_onto_hessian_space,
                     hessian_power_probe,
+                    projection_coefficients_pearson,
                     projection_lag1_pearson,
-                    projection_vector_cosine,
                 )
                 metric_entry, hessian_refs = collect_muon_metrics(
                     optimizer,
@@ -724,10 +728,13 @@ def main():
                     metric_entry.setdefault("metadata", {})
                     metric_entry["metadata"].update({
                         "train_loss": "raw mean cross-entropy over this optimizer step's grad-accum microbatches",
+                        "train_loss_scope": "global_ddp_mean" if ddp else "single_process",
                         "train_loss_ema_scalar": "train/loss_ema",
+                        "optimizer_metric_scope": "gathered_parameter_owner_ranks" if ddp else "single_process",
                         "hessian_weight_state": "post_optimizer_step",
                         "hessian_batch_source": "first_microbatch_same_optimizer_step" if hessian_batch is not None else None,
                         "hessian_batch_scope": "rank0_local_microbatch" if ddp and hessian_batch is not None else "single_process",
+                        "hessian_probe_scope": "rank0_local_loss_hvp" if ddp and hessian_batch is not None else "single_process",
                     })
                     metric_entry["scalars"]["train/loss_ema"] = debiased
 
@@ -787,8 +794,8 @@ def main():
                                 and previous_gradient_projection.get("hessian_step") == hstep
                             ):
                                 metric_entry["scalars"][
-                                    "gradient_projection_on_last_hessian_space_consecutive_cosine/selected_subspace"
-                                ] = projection_vector_cosine(
+                                    "gradient_projection_on_last_hessian_space_consecutive_pearson/selected_subspace"
+                                ] = projection_coefficients_pearson(
                                     previous_gradient_projection,
                                     current_projection,
                                 )

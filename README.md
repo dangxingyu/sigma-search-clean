@@ -309,7 +309,7 @@ Canonical logged metrics:
 | `gradient_projection_on_last_hessian_space_coefficients/selected_subspace` | coefficients of current gradient projected onto the most recent Hessian eigenspace |
 | `gradient_projection_on_last_hessian_space_norm/selected_subspace` | norm of the current gradient projection onto the most recent Hessian eigenspace |
 | `gradient_projection_on_last_hessian_space_top1_abs_fraction/selected_subspace` | fraction of projected-gradient norm explained by the top Hessian direction |
-| `gradient_projection_on_last_hessian_space_consecutive_cosine/selected_subspace` | cosine between consecutive projected-gradient vectors using the same last Hessian eigenspace |
+| `gradient_projection_on_last_hessian_space_consecutive_pearson/selected_subspace` | Pearson correlation between consecutive coefficient vectors `E^T g_t` and `E^T g_{t-1}` in the same last Hessian eigenspace; undefined for `METRICS_HESSIAN_TOP_K=1` |
 | `gradient_projection_on_last_hessian_top1_lag1_pearson/selected_subspace` | rolling lag-1 Pearson correlation of scalar top-Hessian-direction gradient projection coefficients |
 | `hessian_eigenvector_block_norm/{module}` | norm of the global Hessian eigenvector restricted to this module |
 | `gradient_hessian_alignment/{module}` | per-module cosine between Hessian block and gradient block |
@@ -320,9 +320,9 @@ Canonical logged metrics:
 | `hessian_muon_component_alignment_matrix/{module}` | Hessian-vs-cached-StreamingMuon component alignment matrix |
 | `hessian_muon_component_signed_projection_matrix/{module}` | signed Hessian-block projection onto cached StreamingMuon components |
 
-Hessian probes use post-update weights and a representative rank0 microbatch from the same optimizer step. The Hessian routine runs one global Lanczos probe over all normal transformer matrix weights selected by `METRICS_MODULE_REGEX`, including cross-module Hessian blocks. Per-module Muon-component alignment uses cached StreamingMuon basis/sigma; if that cache is unavailable, component alignment is reported as unavailable. Set `NANOCHAT_FORCE_MATH_SDPA=1` when Hessian probes are enabled.
+In DDP, per-module optimizer metrics are gathered from the rank that owns each StreamingMuon parameter chunk, and `train/loss` is all-reduced across ranks. Hessian probes currently use post-update weights and a representative rank0 microbatch from the same optimizer step; they are rank0-local loss HVPs, not full distributed-batch Hessians. The Hessian routine runs one Lanczos probe over all normal transformer matrix weights selected by `METRICS_MODULE_REGEX`, including cross-module Hessian blocks within that selected parameter subspace. Per-module Muon-component alignment uses cached StreamingMuon basis/sigma; if that cache is unavailable, component alignment is reported as unavailable. Set `NANOCHAT_FORCE_MATH_SDPA=1` when Hessian probes are enabled.
 
-Use `METRICS_HESSIAN_TOP_K=4` for subspace projection-cosine studies. With `top_k=1`, consecutive projection cosine is necessarily `+1` or `-1`, so use `gradient_projection_on_last_hessian_top1_lag1_pearson/selected_subspace` for largest-eigen-direction temporal correlation instead. That metric treats the signed coefficient sequence `c_t = <g_t, e_1>` as a scalar time series and reports a rolling lag-1 Pearson correlation over `METRICS_PROJECTION_CORRELATION_WINDOW` steps.
+Use `METRICS_HESSIAN_TOP_K=4` for subspace projection-correlation studies. With `top_k=1`, component-wise correlation is undefined, so use `gradient_projection_on_last_hessian_top1_lag1_pearson/selected_subspace` for largest-eigen-direction temporal correlation instead. That metric treats the signed coefficient sequence `c_t = <g_t, e_1>` as a scalar time series and reports a rolling lag-1 Pearson correlation over `METRICS_PROJECTION_CORRELATION_WINDOW` steps.
 
 Analyze existing dense-metrics runs with:
 
