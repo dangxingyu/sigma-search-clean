@@ -22,6 +22,12 @@ To inspect the exact expanded `torchrun` commands without launching training:
 DRY_RUN=1 bash scripts/run_d12_sweep.sh
 ```
 
+After the sweep identifies the LR/batch points to inspect, run dense statistics separately:
+
+```bash
+BATCHES="262144 1048576 4194304" LRS="0.02" bash scripts/run_d12_statistics.sh
+```
+
 ```bash
 bash scripts/setup_env.sh
 source nanochat/.venv/bin/activate
@@ -64,6 +70,7 @@ run_lite_v9.py               deprecated native LITE validation runner; single-pr
 metric_logging.py            opt-in optimizer dynamics metrics
 scripts/run_handoff_sweep.sh user-facing sweep wrapper
 scripts/run_d12_sweep.sh     blessed d12 optimizer-quality sweep
+scripts/run_d12_statistics.sh dense d12 dynamics/statistics runner
 scripts/run_d8_metrics_grid.sh canonical dense-metrics dynamics run
 results/                     curated JSON/CSV summaries for pass-by
 docs/                        experiment plan, log, and current conclusions
@@ -123,7 +130,7 @@ Current clean recipe: keep `top_k=1`; sweep `alpha`, batch size, and LR. The swe
 
 ## Recommended Sweep
 
-For the standard d12 handoff run, prefer the consolidated wrapper:
+For the standard d12 handoff sweep, prefer the consolidated wrapper. This is an optimizer-quality sweep: dense metrics and Hessian logging are off.
 
 ```bash
 bash scripts/run_d12_sweep.sh
@@ -138,6 +145,28 @@ LRS="0.005 0.01 0.02 0.04" \
 SEEDS="42 43" \
 TOKENS=977272832 \
 bash scripts/run_d12_sweep.sh
+```
+
+## Statistics Runs
+
+Run statistics only after the sweep identifies the LR points worth inspecting. This keeps expensive Hessian/projection logging out of the main LR search.
+
+```bash
+METHODS="streaming_identity top_aware_muon" \
+BATCHES="262144 1048576 4194304" \
+ALPHAS="0.5" \
+LRS="0.02" \
+SEEDS="42" \
+bash scripts/run_d12_statistics.sh
+```
+
+The statistics wrapper uses the same d12 1x token budget as `run_d12_sweep.sh`, but enables `METRICS_EVERY=1` and `METRICS_HESSIAN_EVERY=50` by default. Override `LRS` and `BATCHES` to match the selected sweep winners. It intentionally sets `ADAPTIVE_LR=0`.
+
+If the best LR differs by method or batch, run statistics in separate groups rather than forcing one shared LR, for example:
+
+```bash
+METHODS="streaming_identity" BATCHES="262144" LRS="0.04" bash scripts/run_d12_statistics.sh
+METHODS="top_aware_muon" BATCHES="262144" ALPHAS="0.5" LRS="0.02" bash scripts/run_d12_statistics.sh
 ```
 
 For optimizer-quality comparisons, keep dense metrics off and sweep LR carefully. The handoff wrapper exposes common knobs as environment variables:
