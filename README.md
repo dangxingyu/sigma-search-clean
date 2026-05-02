@@ -21,11 +21,13 @@ Run a cheap sanity check:
 bash scripts/smoke_run.sh
 ```
 
-Run the recommended handoff sweep inside an allocation:
+Run the recommended handoff sweep from a node/session that already has the intended GPUs visible:
 
 ```bash
-srun --jobid=<JOBID> --overlap --ntasks=1 bash scripts/run_handoff_sweep.sh
+bash scripts/run_handoff_sweep.sh
 ```
+
+Cluster launchers are intentionally not part of the command. If you use SLURM, Kubernetes, Ray, or another scheduler, wrap the same command with your local allocation/launcher convention.
 
 Outputs go to:
 
@@ -114,7 +116,7 @@ LRS="0.005 0.01 0.02 0.04" \
 SEEDS="42" \
 TOKENS=402653184 \
 ADAPTIVE_LR=1 \
-srun --jobid=<JOBID> --overlap --ntasks=1 bash scripts/run_handoff_sweep.sh
+bash scripts/run_handoff_sweep.sh
 ```
 
 Defaults use `METHODS="streaming_identity top_aware_muon"`, where `streaming_identity` is `c=1` and Top-Aware uses `alpha/c=0.5`. The default batches are `{262144,1048576,4194304}`, with d8, seq1024, 8 GPUs, max device batch size 16, and `402,653,184` tokens. That is the d8 Chinchilla-style `~0.4B` token recipe. Native Muon/LITE code is retained for targeted validation, but it is not part of the default sweep.
@@ -157,7 +159,7 @@ Recommended dense-metrics smoke:
 METRICS_EVERY=1 \
 METRICS_HESSIAN_EVERY=100 \
 BATCHES="262144" ALPHAS="1.0" LRS="0.02" TOKENS=52428800 \
-srun --jobid=<JOBID> --overlap --ntasks=1 bash scripts/run_handoff_sweep.sh
+bash scripts/run_handoff_sweep.sh
 ```
 
 Canonical logged metrics:
