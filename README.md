@@ -109,7 +109,7 @@ For optimizer-quality comparisons, keep dense metrics off and sweep LR carefully
 ```bash
 METHODS="streaming_identity top_aware_muon" \
 BATCHES="262144 1048576 4194304" \
-ALPHAS="0.5 1.0" \
+ALPHAS="0.5" \
 LRS="0.005 0.01 0.02 0.04" \
 SEEDS="42" \
 TOKENS=402653184 \
@@ -117,7 +117,7 @@ ADAPTIVE_LR=1 \
 srun --jobid=<JOBID> --overlap --ntasks=1 bash scripts/run_handoff_sweep.sh
 ```
 
-Defaults use `METHODS="streaming_identity top_aware_muon"`, `alpha/c={0.5,1.0}`, batches `{262144,1048576,4194304}`, d8, seq1024, 8 GPUs, max device batch size 16, and `402,653,184` tokens. That is the d8 Chinchilla-style `~0.4B` token recipe. Native Muon/LITE code is retained for targeted validation, but it is not part of the default sweep.
+Defaults use `METHODS="streaming_identity top_aware_muon"`, where `streaming_identity` is `c=1` and Top-Aware uses `alpha/c=0.5`. The default batches are `{262144,1048576,4194304}`, with d8, seq1024, 8 GPUs, max device batch size 16, and `402,653,184` tokens. That is the d8 Chinchilla-style `~0.4B` token recipe. Native Muon/LITE code is retained for targeted validation, but it is not part of the default sweep.
 
 ### Adaptive LR Behavior
 

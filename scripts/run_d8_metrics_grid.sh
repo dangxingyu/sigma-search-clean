@@ -28,9 +28,9 @@ python run_top_aware_muon_sweep.py \
   --out-root "$OUT_ROOT" \
   --log-root "$LOG_ROOT" \
   --nanochat-dir nanochat \
-  --methods "${METHODS:-top_aware_muon}" \
+  --methods "${METHODS:-streaming_identity top_aware_muon}" \
   --batches "${BATCHES:-262144 1048576 4194304}" \
-  --alphas "${ALPHAS:-0.5 1.0}" \
+  --alphas "${ALPHAS:-0.5}" \
   --lrs "${LRS:-0.02}" \
   --seeds "${SEEDS:-42}" \
   --tokens "${TOKENS:-402653184}" \

@@ -24,7 +24,7 @@ LOG_ROOT="${LOG_ROOT:-logs/handoff_sweep_${STAMP}}"
 
 METHODS="${METHODS:-streaming_identity top_aware_muon}"
 BATCHES="${BATCHES:-262144 1048576 4194304}"
-ALPHAS="${ALPHAS:-0.5 1.0}"
+ALPHAS="${ALPHAS:-0.5}"
 LRS="${LRS:-0.005 0.01 0.02 0.04}"
 SEEDS="${SEEDS:-42}"
 
