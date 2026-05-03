@@ -358,18 +358,18 @@ def setup_plot_style() -> None:
     )
 
 
-def xy(rows: list[dict[str, object]], key: str) -> tuple[list[float], list[float]]:
+def xy(rows: list[dict[str, object]], key: str) -> tuple[list[int], list[float]]:
     xs, ys = [], []
     for row in rows:
         val = finite(row.get(key))
         if val is None:
             continue
-        xs.append(float(row["progress"]))
+        xs.append(int(row["step"]))
         ys.append(val)
     return xs, ys
 
 
-def rolling_mean(xs: list[float], ys: list[float], window: int) -> tuple[list[float], list[float]]:
+def rolling_mean(xs: list[int], ys: list[float], window: int) -> tuple[list[int], list[float]]:
     if window <= 1 or len(ys) <= window:
         return xs, ys
     out_x, out_y = [], []
@@ -444,14 +444,13 @@ def plot_grid(
                 set_dynamic_ylim(ax, plotted_ys, zero_line=True)
             elif transform != "log":
                 set_dynamic_ylim(ax, plotted_ys)
-            ax.set_xlim(0.0, 1.0)
             if row_idx == 0:
                 ax.set_title(batch)
             if col == 0:
                 ax.set_ylabel(ylabel)
             if row_idx == len(metrics) - 1:
-                ax.set_xlabel("training progress")
-            ax.xaxis.set_major_formatter(FuncFormatter(lambda x, _pos: f"{x:.1f}"))
+                ax.set_xlabel("optimizer step")
+            ax.xaxis.set_major_formatter(FuncFormatter(lambda x, _pos: f"{int(x)}"))
 
     handles, labels = axes[0][0].get_legend_handles_labels()
     if handles:
