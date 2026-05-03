@@ -276,6 +276,40 @@ for example `DEPTH=12 STAMP=d12_main_001 ...` and
 Use metrics runs after a sweep has identified the batch/LR recipes worth
 inspecting. Metrics runs should be fixed-recipe diagnostics, not LR searches.
 
+For the completed d12 2x Chinchilla sweep, use the curated best-point wrapper:
+
+```bash
+PRINT_CASES=1 bash scripts/run_d12_metrics_best.sh
+
+STAMP_PREFIX=sadhika_d12_metrics_001 \
+bash scripts/run_d12_metrics_best.sh
+```
+
+This runs the six best sweep points sequentially:
+
+| batch | alpha / c | LR |
+|---:|---:|---:|
+| `524288` | `1.0` | `0.0075` |
+| `524288` | `0.5` | `0.0075` |
+| `2097152` | `1.0` | `0.015` |
+| `2097152` | `0.5` | `0.02` |
+| `8388608` | `1.0` | `0.01` |
+| `8388608` | `0.5` | `0.015` |
+
+For one job per case, submit an array over `CASE_INDEX=0..5` with a stable
+`STAMP_PREFIX`, for example:
+
+```bash
+STAMP_PREFIX=sadhika_d12_metrics_001 \
+CASE_INDEX="${SLURM_ARRAY_TASK_ID}" \
+bash scripts/run_d12_metrics_best.sh
+```
+
+Checkpointing/resume is enabled by default. If preempted, rerun the same
+`CASE_INDEX` with the same `STAMP_PREFIX`.
+
+For custom fixed recipes, call the lower-level wrapper directly:
+
 ```bash
 METHODS="top_aware_muon" \
 BATCHES="262144 1048576 4194304" \
