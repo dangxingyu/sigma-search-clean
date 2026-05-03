@@ -243,33 +243,49 @@ bash scripts/run_d12_statistics.sh
 
 ### What Gets Logged
 
+Notation used below:
+
+```text
+W_i      selected matrix parameter
+G_i      gradient for W_i at the logged optimizer step
+M'_i     optimizer input after Nesterov momentum, cached by StreamingMuon
+sigma_i cached StreamingMuon singular-value estimates for M'_i
+S        selected matrix subspace matched by METRICS_MODULE_REGEX
+E        [e_1, ..., e_k], top Hessian directions in S from Lanczos HVP
+rms(X)   sqrt(mean(X^2))
+cos(a,b) <a,b> / (||a|| ||b||)
+```
+
 Cheap per-step metrics:
 
-| metric | meaning |
-|---|---|
-| `train/loss`, `train/loss_ema` | optimizer-step CE and debiased EMA |
-| `train/lr_multiplier`, `train/muon_momentum` | scheduler state |
-| `weight_norm/<module>` | RMS weight norm |
-| `grad_norm/<module>` | RMS gradient norm |
-| `momentum_after_nesterov_norm/<module>` | RMS of optimizer input `M'` |
-| `momentum_after_nesterov_spectral_norm/<module>` | top cached StreamingMuon sigma |
-| `muon_singular_values/<module>` | top cached sigma values |
-| `streaming_sigma_values/<module>` | same sigma values, explicit for sigma analysis |
+| metric | meaning | definition / pseudocode |
+|---|---|---|
+| `train/loss` | optimizer-step CE | `mean(CE)` over grad-accum microbatches, DDP-averaged |
+| `train/loss_ema` | smoothed train CE | debiased EMA of `train/loss` |
+| `train/lr_multiplier`, `train/muon_momentum` | scheduler state | current LR multiplier and Muon momentum coefficient |
+| `weight_norm/<module>` | RMS weight norm | `rms(W_i)` |
+| `grad_norm/<module>` | RMS gradient norm | `rms(G_i)` |
+| `momentum_after_nesterov_norm/<module>` | RMS optimizer input | `rms(M'_i)` |
+| `momentum_after_nesterov_spectral_norm/<module>` | top cached sigma | `max_j sigma_i[j]` |
+| `muon_singular_values/<module>` | top cached sigma values | `sort_desc(sigma_i)[:METRICS_TOP_K]` |
+| `streaming_sigma_values/<module>` | same sigma values, explicit for sigma analysis | alias of cached `sort_desc(sigma_i)[:METRICS_TOP_K]` |
 
 Hessian/projection metrics:
 
-| metric | meaning |
-|---|---|
-| `sharpness/selected_subspace` | top Hessian eigenvalue in selected matrix subspace |
-| `gradient_hessian_projection/selected_subspace` | signed `dot(e_H, G)` |
-| `momentum_after_nesterov_hessian_projection/selected_subspace` | signed `dot(e_H, M')` |
-| `gradient_hessian_alignment/selected_subspace` | cosine between Hessian directions and gradient |
-| `momentum_after_nesterov_hessian_alignment/selected_subspace` | cosine between Hessian directions and `M'` |
-| `gradient_projection_on_last_hessian_space_coefficients/selected_subspace` | coefficients `E^T g_t` in the last Hessian eigenspace |
-| `gradient_projection_on_last_hessian_space_consecutive_pearson/selected_subspace` | Pearson correlation between consecutive coefficient vectors |
-| `gradient_projection_on_last_hessian_top1_lag1_pearson/selected_subspace` | rolling lag-1 Pearson correlation for the top Hessian coefficient |
-| `hessian_eigenvector_block_norm/<module>` | module contribution to global Hessian eigenvector |
-| `alignment_between_covariance_hessian_at_k_th_component/<module>` | Hessian block alignment with cached StreamingMuon components |
+| metric | meaning | definition / pseudocode |
+|---|---|---|
+| `sharpness/selected_subspace` | top Hessian eigenvalue in selected matrix subspace | `lambda_1` from Lanczos on `H_S v = grad_S(<grad_S L, v>)` |
+| `gradient_hessian_projection/selected_subspace` | signed gradient projection on Hessian directions | `[<e_j, G_S> for e_j in E]` |
+| `momentum_after_nesterov_hessian_projection/selected_subspace` | signed optimizer-input projection on Hessian directions | `[<e_j, M'_S> for e_j in E]` |
+| `gradient_hessian_alignment/selected_subspace` | gradient cosine with Hessian directions | `[cos(e_j, G_S) for e_j in E]` |
+| `momentum_after_nesterov_hessian_alignment/selected_subspace` | optimizer-input cosine with Hessian directions | `[cos(e_j, M'_S) for e_j in E]` |
+| `gradient_projection_on_last_hessian_space_coefficients/selected_subspace` | current gradient coordinates in last Hessian space | `c_t = E_last^T G_t` |
+| `gradient_projection_on_last_hessian_space_norm/selected_subspace` | norm of projected gradient | `norm2(E_last E_last^T G_t) = norm2(c_t)` |
+| `gradient_projection_on_last_hessian_space_top1_abs_fraction/selected_subspace` | top-1 coordinate dominance | `abs(c_t[0]) / norm2(c_t)` |
+| `gradient_projection_on_last_hessian_space_consecutive_pearson/selected_subspace` | consecutive coefficient-vector correlation | `pearson(c_{t-1}, c_t)` for the same fixed `E_last`; undefined for `top_k=1` |
+| `gradient_projection_on_last_hessian_top1_lag1_pearson/selected_subspace` | signed top-1 projection oscillation statistic | rolling `pearson([c_{s,1}], [c_{s+1,1}])` over `METRICS_PROJECTION_CORRELATION_WINDOW` |
+| `hessian_eigenvector_block_norm/<module>` | module's share of global Hessian direction | `norm2(e_1[module])` |
+| `alignment_between_covariance_hessian_at_k_th_component/<module>` | Hessian block alignment with cached StreamingMuon component | `abs(cos(e_j[module], q_j[module]))`, where `q_j` is reconstructed from cached StreamingMuon basis/sigma |
 
 Metric scope:
 
