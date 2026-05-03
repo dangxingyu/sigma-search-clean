@@ -8,6 +8,7 @@ Latest update:
 - Best BPB deltas (`c=0.5 - c=1`, negative means Top-Aware wins): d12 512K `+0.001088`, d12 2M `-0.000745`, d12 8M `-0.003300`; d16 512K `+0.000456`, d16 2M `+0.000929`, d16 8M `+0.002670`.
 - Interpretation: d12 shows the expected transition from identity at 512K to Top-Aware at larger batch; d16 currently favors identity at all three batches.
 - Caveat: d16 is not LR-closed at 512K/2M because the best `c=1` LR is the lowest swept value `0.005` and 512K `c=0.5` also sits at the lower boundary. Recommended follow-up is a d16 lower-LR extension at batches `{524288,2097152}`, alphas `{1.0,0.5}`, LRs `{0.00125,0.0025,0.00375}`, with adaptive LR enabled.
+- Added `scripts/run_d12_d16_metrics_best.sh`, a curated metrics wrapper over the 12 current d12/d16 best-point cases. It supports `PRINT_CASES=1` and `CASE_INDEX=0..11`, uses `METRICS_HESSIAN_EVERY=50` by default, and automatically sets d12 `MAX_DEVICE_BATCH_SIZE=32` versus d16 `MAX_DEVICE_BATCH_SIZE=16`.
 
 ## 2026-05-03 — full grad-accum Hessian metrics
 

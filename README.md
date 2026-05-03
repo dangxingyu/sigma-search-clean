@@ -19,6 +19,7 @@ scripts/run_d12_sweep.sh     optimizer-quality sweep wrapper
 scripts/run_d12_d16_2x_grid.sh canonical sequential d12/d16 handoff grid
 scripts/submit_slurm_grid.sh SLURM array submitter for fixed-grid cases
 scripts/run_d12_statistics.sh metrics/statistics wrapper
+scripts/run_d12_d16_metrics_best.sh curated d12/d16 best-point metrics jobs
 ```
 
 Historical native Muon/LITE results may still exist under `docs/`, `figures/`,
@@ -296,6 +297,20 @@ This runs the six best sweep points sequentially:
 | `8388608` | `1.0` | `0.01` |
 | `8388608` | `0.5` | `0.015` |
 
+For the combined imported d12/d16 sweeps, use the curated combined wrapper:
+
+```bash
+PRINT_CASES=1 bash scripts/run_d12_d16_metrics_best.sh
+
+STAMP_PREFIX=sadhika_d12_d16_metrics_001 \
+bash scripts/run_d12_d16_metrics_best.sh
+```
+
+This exposes 12 cases with `CASE_INDEX=0..11`, automatically using
+`MAX_DEVICE_BATCH_SIZE=32` for d12 and `MAX_DEVICE_BATCH_SIZE=16` for d16.
+The d16 512K/2M cases are included for convenience but are marked in the case
+table as lower-LR-boundary cases until the d16 lower-LR extension is complete.
+
 For one job per case, submit an array over `CASE_INDEX=0..5` with a stable
 `STAMP_PREFIX`, for example:
 
@@ -304,6 +319,9 @@ STAMP_PREFIX=sadhika_d12_metrics_001 \
 CASE_INDEX="${SLURM_ARRAY_TASK_ID}" \
 bash scripts/run_d12_metrics_best.sh
 ```
+
+For the combined d12/d16 wrapper, submit an array over `CASE_INDEX=0..11` and
+replace the script name with `scripts/run_d12_d16_metrics_best.sh`.
 
 Checkpointing/resume is enabled by default. If preempted, rerun the same
 `CASE_INDEX` with the same `STAMP_PREFIX`.
