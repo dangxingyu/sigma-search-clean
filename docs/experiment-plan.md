@@ -24,7 +24,7 @@ Immediate standalone-repo priorities:
 - Treat `262144` as the d8 critical batch. Do not insert an extra 512K point into this specific no-tuning metrics grid.
 - Use the clean handoff default `CHINCHILLA_MULT=2` unless reproducing the older v42/v43 d8 1x results. The 1x d8 budget is `402,653,184` tokens; the default d8 handoff run is therefore about `0.8B` tokens.
 - For d8 dense-metrics runs, reuse `scripts/run_d12_statistics.sh` with `DEPTH=8 CHINCHILLA_MULT=2` unless intentionally reproducing old 1x diagnostics. It records cheap StreamingMuon metrics every step and Hessian probes every 50 logged steps with math SDPA forced.
-- Use corrected logging semantics: raw momentum-buffer metrics are not logged, `train/loss` is raw optimizer-step mean CE, and Hessian probes are global selected-matrix-subspace Lanczos HVPs over all normal transformer matrix weights on one representative local microbatch per rank from the same optimizer step, averaged by DDP `all_reduce`.
+- Use corrected logging semantics: raw momentum-buffer metrics are not logged, `train/loss` is raw optimizer-step mean CE, and Hessian probes are global selected-matrix-subspace Lanczos HVPs over all normal transformer matrix weights on all grad-accum microbatches from the same optimizer step, token-weighted and averaged across DDP ranks.
 - Canonical StreamingMuon metrics should use no explicit SVD: reuse cached `sigma` and basis by default. Do not enable exact per-module SVD, component saving, or legacy split-SVD alignment unless explicitly auditing those diagnostics.
 - Use `results/sweep_catalog/` as the organized source for completed sweep rows; rebuild with `python analysis/build_sweep_catalog.py` whenever curated CSV/JSON summaries change.
 

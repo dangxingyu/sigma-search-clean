@@ -655,11 +655,11 @@ def main():
                 and args.metrics_hessian_every > 0
                 and step % args.metrics_hessian_every == 0
             )
-            hessian_batch = None
+            hessian_batches = [] if hessian_due else None
             train_loss_sum = 0.0
             for micro_step in range(grad_accum_steps):
-                if hessian_due and hessian_batch is None:
-                    hessian_batch = (x.detach().clone(), y.detach().clone())
+                if hessian_due and hessian_batches is not None:
+                    hessian_batches.append((x.detach().clone(), y.detach().clone()))
                 loss = model(x, y)
                 train_loss_val = loss.detach().item()
                 train_loss_sum += train_loss_val
@@ -718,9 +718,10 @@ def main():
                 if run_hessian:
                     model.zero_grad(set_to_none=True)
                     try:
+                        hessian_probe_batches = hessian_batches if hessian_batches else [(x.detach(), y.detach())]
                         hessian_stats = hessian_power_probe(
                             eager_model,
-                            hessian_batch if hessian_batch is not None else (x, y),
+                            hessian_probe_batches,
                             hessian_refs,
                             matrix_params_named,
                             top_k=args.metrics_hessian_top_k,
@@ -744,6 +745,11 @@ def main():
                     hessian_space_active = hessian_success
 
                 if rank == 0 and metric_entry is not None:
+                    local_hessian_tokens = (
+                        sum(int(batch_y.numel()) for _, batch_y in hessian_batches)
+                        if hessian_batches
+                        else 0
+                    )
                     metric_entry.setdefault("metadata", {})
                     metric_entry["metadata"].update({
                         "train_loss": "raw mean cross-entropy over this optimizer step's grad-accum microbatches",
@@ -751,10 +757,21 @@ def main():
                         "train_loss_ema_scalar": "train/loss_ema",
                         "optimizer_metric_scope": "gathered_parameter_owner_ranks" if ddp else "single_process",
                         "hessian_weight_state": "post_optimizer_step",
-                        "hessian_batch_source": "first_microbatch_same_optimizer_step" if hessian_batch is not None else None,
-                        "hessian_batch_scope": "one_local_microbatch_per_rank_averaged" if ddp and hessian_batch is not None else "single_process",
-                        "hessian_grad_accum_scope": "first_microbatch_only",
-                        "hessian_probe_scope": "distributed_rank_average_loss_hvp" if ddp and hessian_batch is not None else "single_process_loss_hvp",
+                        "hessian_batch_source": "grad_accum_microbatches_same_optimizer_step" if hessian_batches else None,
+                        "hessian_batch_scope": (
+                            "all_local_grad_accum_microbatches_per_rank"
+                            if ddp and hessian_batches
+                            else ("all_local_grad_accum_microbatches" if hessian_batches else None)
+                        ),
+                        "hessian_grad_accum_scope": "full_optimizer_step_grad_accum" if hessian_batches else None,
+                        "hessian_local_microbatches": len(hessian_batches) if hessian_batches else 0,
+                        "hessian_local_tokens": local_hessian_tokens,
+                        "hessian_global_tokens_assuming_equal_ranks": local_hessian_tokens * world_size if ddp else local_hessian_tokens,
+                        "hessian_probe_scope": (
+                            "distributed_token_weighted_loss_hvp"
+                            if ddp and hessian_batches
+                            else ("single_process_loss_hvp" if hessian_batches else None)
+                        ),
                     })
                     metric_entry["scalars"]["train/loss_ema"] = debiased
 

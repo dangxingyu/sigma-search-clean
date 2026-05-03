@@ -311,11 +311,15 @@ Checkpointing/resume is enabled by default. If preempted, rerun the same
 This curated wrapper defaults to `MAX_DEVICE_BATCH_SIZE=32`, based on d12
 8xB200 smoke tests with full Hessian settings
 `METRICS_HESSIAN_TOP_K=4, METRICS_HESSIAN_ITERS=6`. With sequence length 1024,
-the Hessian probe sees a 262K-token microbatch:
+each grad-accum microbatch contains 262K distributed tokens:
 
 ```text
 8 GPUs * 32 sequences/GPU * 1024 tokens = 262144 tokens
 ```
+
+The Hessian probe now accumulates all grad-accum microbatches from the current
+optimizer step. For example, a 2M global batch with the default d12 metrics
+microbatch uses 8 local HVP passes per Lanczos vector.
 
 `MAX_DEVICE_BATCH_SIZE=64` and `128` fit cheap training/optimizer metrics on
 8xB200, but OOM in the full Hessian top4/iters6 smoke. For conservative
@@ -423,11 +427,13 @@ Metric scope:
 - Per-module optimizer metrics are gathered from the rank that owns each
   StreamingMuon parameter chunk.
 - `train/loss` is averaged across DDP ranks.
-- Hessian probes use post-update weights and one local microbatch per rank from
-  the same optimizer step. Each rank computes local HVP blocks and averages
-  them with `all_reduce`, so the HVP is distributed across ranks.
-- The Hessian is still a representative-microbatch Hessian, not the full
-  grad-accum optimizer-batch Hessian.
+- Hessian probes use post-update weights and all grad-accum microbatches from
+  the same optimizer step. For a fixed Lanczos vector `v`, each rank computes
+  `H_b v` on each local microbatch, accumulates by token count, then
+  `all_reduce(SUM)` averages by total distributed tokens.
+- With `MAX_DEVICE_BATCH_SIZE=16`, 8 GPUs, and sequence length 1024, each
+  microbatch contributes 128K tokens; a 512K global batch therefore uses four
+  local microbatches per rank in the Hessian estimate.
 - The selected Hessian subspace defaults to all normal transformer attention/MLP
   matrix weights matched by `METRICS_MODULE_REGEX`; embeddings, LM head, and
   scalar parameters are not included.

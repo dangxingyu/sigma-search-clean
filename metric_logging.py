@@ -424,6 +424,16 @@ def hessian_power_probe(
     """
     batches = batch if isinstance(batch, list) else [batch]
     rank, world_size, ddp = _rank_info()
+    local_hessian_tokens = sum(int(y.numel()) for _, y in batches)
+    global_hessian_tokens = local_hessian_tokens
+    if ddp and batches:
+        token_tensor = torch.tensor(
+            float(local_hessian_tokens),
+            device=batches[0][0].device,
+            dtype=torch.float64,
+        )
+        torch.distributed.all_reduce(token_tensor, op=torch.distributed.ReduceOp.SUM)
+        global_hessian_tokens = int(token_tensor.detach().cpu().item())
     source_names = selected_names if selected_names is not None else list(references)
     names = [
         n for n in source_names
@@ -440,9 +450,11 @@ def hessian_power_probe(
         "vectors": {},
         "metadata": {
             "hessian_probe_method": "selected_subspace_lanczos_top_algebraic",
-            "hessian_probe_scope": "distributed_rank_average_loss_hvp" if ddp else "single_process_loss_hvp",
+            "hessian_probe_scope": "distributed_token_weighted_loss_hvp" if ddp else "single_process_loss_hvp",
             "hessian_grad_accum_scope": "caller_supplied_batches",
             "local_hessian_batches": len(batches),
+            "local_hessian_tokens": local_hessian_tokens,
+            "global_hessian_tokens": global_hessian_tokens,
             "world_size": world_size,
             "selected_modules": names,
         },
@@ -479,6 +491,7 @@ def hessian_power_probe(
 
     def hvp_for(vecs: list[torch.Tensor]) -> list[torch.Tensor]:
         accum = _zeros_like_params()
+        total_weight = torch.zeros((), device=params[0].device, dtype=torch.float32)
         for x, y in batches:
             model.zero_grad(set_to_none=True)
             with _math_sdpa_context():
@@ -495,15 +508,17 @@ def hessian_power_probe(
                 if grad is not None:
                     dot = dot + torch.sum(grad.float() * vec.to(grad.device).float())
             hvps = torch.autograd.grad(dot, params, retain_graph=False, allow_unused=True)
+            weight = torch.tensor(float(y.numel()), device=params[0].device, dtype=torch.float32)
             for i, (p, hv) in enumerate(zip(params, hvps)):
-                accum[i] = accum[i] + (
+                accum[i] = accum[i] + weight * (
                     torch.zeros_like(p, dtype=torch.float32) if hv is None else hv.detach().float()
                 )
-        scale = 1.0 / max(1, len(batches))
-        accum = [v * scale for v in accum]
+            total_weight = total_weight + weight
         if ddp:
             for v in accum:
-                torch.distributed.all_reduce(v, op=torch.distributed.ReduceOp.AVG)
+                torch.distributed.all_reduce(v, op=torch.distributed.ReduceOp.SUM)
+            torch.distributed.all_reduce(total_weight, op=torch.distributed.ReduceOp.SUM)
+        accum = [v / total_weight.clamp_min(1.0) for v in accum]
         return accum
 
     def lanczos_top_eigenpairs(num_pairs: int, lanczos_steps: int) -> tuple[list[float], list[list[torch.Tensor]]]:

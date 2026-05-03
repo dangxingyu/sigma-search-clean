@@ -1,5 +1,13 @@
 # Experiment Log — LITE vs Muon diagnostic campaign
 
+## 2026-05-03 — full grad-accum Hessian metrics
+
+Latest update:
+- Changed Hessian metric logging from first-microbatch probes to full optimizer-step grad-accum probes. On Hessian logging steps, `run_eval.py` now caches every local microbatch from that step and passes the list into `hessian_power_probe`.
+- Updated `hessian_power_probe` to keep each Lanczos probe vector fixed across all supplied microbatches, accumulate HVPs by token count, and use DDP `all_reduce(SUM) / global_tokens` rather than rank-averaging local first-microbatch HVPs.
+- Added a CPU unit test that checks unequal microbatch sizes are token-weighted correctly on a scalar quadratic model.
+- Updated README metric-scope wording: Hessian metrics now estimate the full distributed grad-accum optimizer-batch Hessian for the selected matrix subspace, not a representative microbatch Hessian.
+
 ## 2026-05-02 — Chinchilla token-budget interface
 
 Latest update:
