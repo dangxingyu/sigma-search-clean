@@ -36,7 +36,7 @@
 - Split-batch alignment for the current study must be computed on optimizer input `M'`, not raw `M`. The clean StreamingMuon and native Muon metric paths now use `M' = (1 - beta)G + beta M_new`.
 - In 8-GPU runs, split-momentum diagnostics should average split gradients across DDP ranks before updating the diagnostic momenta. The corrected clean path now records global-DDP split alignment; previous rank-local split logs are weaker diagnostics.
 - For the requested d8 dynamics study, `262144` is the critical batch. The no-tuning grid should be `{262K,1M,4M}`, not `{262K,512K,1M,4M}`.
-- The d8 dynamics budget should be about `0.4B` tokens. The clean repo hard-codes this as `DEPTH=8 CHINCHILLA_MULT=1 -> 402,653,184` tokens.
+- The old d8 dynamics budget was 1x, about `0.4B` tokens (`DEPTH=8 CHINCHILLA_MULT=1 -> 402,653,184`). The handoff default is now `CHINCHILLA_MULT=2` because 1x gives too few optimizer steps in large-batch runs.
 
 ### 2. Multiple observations; likely true but still needs careful confirmation
 

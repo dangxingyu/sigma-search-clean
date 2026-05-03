@@ -25,7 +25,7 @@ export OMP_NUM_THREADS="${OMP_NUM_THREADS:-1}"
 export MKL_NUM_THREADS="${MKL_NUM_THREADS:-1}"
 
 DEPTH="${DEPTH:-12}"
-CHINCHILLA_MULT="${CHINCHILLA_MULT:-1}"
+CHINCHILLA_MULT="${CHINCHILLA_MULT:-2}"
 # Exact TOKENS remains available for smoke tests or custom truncated runs.
 TOKENS="${TOKENS:-}"
 METHODS="${METHODS:-top_aware_muon}"

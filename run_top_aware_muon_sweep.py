@@ -21,6 +21,7 @@ import argparse
 import csv
 import json
 import math
+import os
 import shlex
 import subprocess
 import time
@@ -228,6 +229,8 @@ def iter_case_specs(args: argparse.Namespace, methods: list[str]):
 
 
 def append_summary(args: argparse.Namespace, row: dict[str, Any]) -> None:
+    if not getattr(args, "append_summary", True):
+        return
     path = args.out_root / "top_aware_sweep_rows.csv"
     path.parent.mkdir(parents=True, exist_ok=True)
     fields = [
@@ -372,7 +375,9 @@ def write_manifest(args: argparse.Namespace, methods: list[str]) -> None:
             "top_aware_muon": "StreamingMuon with top-k sigma-direction scale alpha",
         },
     }
-    manifest_path.write_text(json.dumps(manifest, indent=2))
+    tmp_path = manifest_path.with_name(f"{manifest_path.name}.tmp.{os.getpid()}")
+    tmp_path.write_text(json.dumps(manifest, indent=2))
+    tmp_path.replace(manifest_path)
 
 
 def sweep_signature(args: argparse.Namespace, methods: list[str]) -> dict[str, Any]:
@@ -568,7 +573,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--depth", type=int, default=8)
     parser.add_argument("--tokens", type=int, default=None,
                         help="Exact token budget override. If omitted, use --chinchilla-mult and --depth.")
-    parser.add_argument("--chinchilla-mult", type=float, default=1.0,
+    parser.add_argument("--chinchilla-mult", type=float, default=2.0,
                         help="Multiplier on the hard-coded 1x Chinchilla token table for this depth.")
     parser.add_argument("--nproc-per-node", type=int, default=8)
     parser.add_argument("--max-device-batch-size", type=int, default=16)
@@ -605,6 +610,12 @@ def parse_args() -> argparse.Namespace:
 
     parser.add_argument("--rerun-existing", action="store_true")
     parser.add_argument("--dry-run", action="store_true")
+    parser.add_argument("--case-index", type=int, default=-1,
+                        help="Run only one zero-based case from the full grid. For SLURM arrays.")
+    parser.add_argument("--print-case-count", action="store_true",
+                        help="Print the number of initial grid cases and exit.")
+    parser.add_argument("--summary-only", action="store_true",
+                        help="Rebuild top_aware_sweep_rows.csv from result files and exit.")
     parser.add_argument("--allow-top-k-sweep", action="store_true")
     parser.add_argument("--adaptive-lr", action="store_true")
     parser.add_argument("--lr-extend-factor", type=float, default=2.0)
@@ -683,6 +694,8 @@ def validate_args(args: argparse.Namespace) -> None:
         raise ValueError("--eval-tokens must be > 0")
     if args.eval_every < 0:
         raise ValueError("--eval-every must be >= 0")
+    if args.case_index < -1:
+        raise ValueError("--case-index must be -1 or >= 0")
     if args.warmup_ratio < 0:
         raise ValueError("--warmup-ratio must be >= 0")
     if not (0 < args.warmdown_ratio <= 1):
@@ -734,9 +747,18 @@ def validate_args(args: argparse.Namespace) -> None:
 
 def main() -> None:
     args = parse_args()
+    case_specs = list(iter_case_specs(args, args.methods))
+    if args.print_case_count:
+        print(len(case_specs))
+        return
+
     args.out_root.mkdir(parents=True, exist_ok=True)
     args.log_root.mkdir(parents=True, exist_ok=True)
     write_manifest(args, args.methods)
+
+    if args.summary_only:
+        print(f"summary_csv={write_summary_csv(args, args.methods)}", flush=True)
+        return
 
     print(f"OUT_ROOT={args.out_root}", flush=True)
     print(f"LOG_ROOT={args.log_root}", flush=True)
@@ -748,7 +770,19 @@ def main() -> None:
     )
     print(f"batches={args.batches} lrs={args.lrs} top_ks={args.top_ks} alphas={args.alphas} seeds={args.seeds}", flush=True)
 
-    for method, batch, lr, seed, top_k, alpha in iter_case_specs(args, args.methods):
+    if args.case_index >= 0:
+        if args.case_index >= len(case_specs):
+            raise ValueError(f"--case-index {args.case_index} out of range for {len(case_specs)} cases")
+        args.append_summary = False
+        print(f"case_index={args.case_index}/{len(case_specs)}", flush=True)
+        method, batch, lr, seed, top_k, alpha = case_specs[args.case_index]
+        run_case(args, method, batch, lr, seed, top_k=top_k, alpha=alpha)
+        print("\n=== case complete ===", flush=True)
+        print("Run the same full-grid command without --case-index to collate CSV and run adaptive LR closure.", flush=True)
+        return
+
+    args.append_summary = True
+    for method, batch, lr, seed, top_k, alpha in case_specs:
         run_case(args, method, batch, lr, seed, top_k=top_k, alpha=alpha)
 
     if args.adaptive_lr:

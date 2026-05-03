@@ -29,6 +29,7 @@ the clean runtime surface. Historical results are still preserved under
 - `scripts/download_climbmix.sh`: download ClimbMix shards.
 - `scripts/smoke_run.sh`: tiny sanity run.
 - `scripts/run_d12_sweep.sh`: standalone optimizer-quality sweep wrapper; defaults to d12 but supports d8/d16 via `DEPTH` and `CHINCHILLA_MULT`.
+- `scripts/submit_slurm_grid.sh`: submit fixed-grid cases as a preemption-safe SLURM array.
 - `scripts/run_d12_statistics.sh`: standalone dense metrics/statistics wrapper; defaults to d12 but supports d8/d16 via `DEPTH` and `CHINCHILLA_MULT`.
 
 ## Analysis And Results

@@ -16,6 +16,7 @@ streaming_muon_torch.py      StreamingMuon optimizer implementation
 metric_logging.py            opt-in dynamics and Hessian metrics
 candidates/top_aware_muon.py Top-Aware Muon transform
 scripts/run_d12_sweep.sh     optimizer-quality sweep wrapper
+scripts/submit_slurm_grid.sh SLURM array submitter for fixed-grid cases
 scripts/run_d12_statistics.sh metrics/statistics wrapper
 ```
 
@@ -45,9 +46,8 @@ Run a cheap sanity check:
 bash scripts/smoke_run.sh
 ```
 
-Run training commands inside whatever GPU allocation your cluster provides.
-The repo deliberately does not ship SLURM/Ray/Kubernetes submitters; wrap the
-same scripts with your local scheduler.
+Run training commands inside whatever GPU allocation your cluster provides, or
+use the included SLURM array submitter if the cluster supports `sbatch`.
 
 ## Sweep
 
@@ -66,7 +66,7 @@ Default recipe:
 |---|---|
 | methods | `top_aware_muon` |
 | depth | `12` |
-| token budget | `CHINCHILLA_MULT=1`, auto-resolved from `DEPTH` |
+| token budget | `CHINCHILLA_MULT=2`, auto-resolved from `DEPTH` |
 | batches | `262144 1048576 4194304` |
 | LRs | `0.005 0.01 0.02 0.04` |
 | Top-Aware | `top_k=1`, `alpha=1.0 0.5` |
@@ -75,8 +75,10 @@ Default recipe:
 | checkpointing | `SAVE_EVERY=100`, `KEEP_LAST_CHECKPOINTS=2`, `RESUME=1` |
 | adaptive LR | on by default |
 
-The wrapper hard-codes the token table below, so normal runs should specify
-`DEPTH` and `CHINCHILLA_MULT` rather than a large raw token count.
+The wrapper hard-codes the 1x token table below. Normal runs should specify
+`DEPTH` and `CHINCHILLA_MULT` rather than a large raw token count. The default
+handoff recipe uses `CHINCHILLA_MULT=2` because 1x can leave large-batch runs
+with too few optimizer steps.
 
 | depth | 1x Chinchilla tokens |
 |---:|---:|
@@ -108,11 +110,11 @@ bash scripts/run_d12_sweep.sh
 `alpha=1.0` is the `c=1` identity baseline under the same
 `top_aware_muon.py` implementation. `alpha=0.5` is the main Top-Aware setting.
 
-For d8 / 0.4B-token runs, reuse the same script with overrides:
+For d8 runs, reuse the same script with overrides:
 
 ```bash
 DEPTH=8 \
-CHINCHILLA_MULT=1 \
+CHINCHILLA_MULT=2 \
 BATCHES="262144 1048576 4194304" \
 ALPHAS="1.0 0.5" \
 LRS="0.005 0.01 0.02 0.04" \
@@ -120,11 +122,11 @@ ADAPTIVE_LR=1 \
 bash scripts/run_d12_sweep.sh
 ```
 
-For d16 / 4.0B-token runs, use the same wrapper:
+For d16 runs, use the same wrapper:
 
 ```bash
 DEPTH=16 \
-CHINCHILLA_MULT=1 \
+CHINCHILLA_MULT=2 \
 BATCHES="262144 1048576 4194304" \
 ALPHAS="1.0 0.5" \
 LRS="0.005 0.01 0.02 0.04" \
@@ -133,8 +135,9 @@ STAMP=d16_main_001 \
 bash scripts/run_d12_sweep.sh
 ```
 
-For a smaller multiple, change only the multiplier, for example
-`CHINCHILLA_MULT=0.5`. For a quick command/path smoke, override exact tokens:
+For a different budget, change only the multiplier, for example
+`CHINCHILLA_MULT=1` or `CHINCHILLA_MULT=8`. For a quick command/path smoke,
+override exact tokens:
 
 ```bash
 DEPTH=16 TOKENS=16777216 STAMP=d16_smoke bash scripts/run_d12_sweep.sh
@@ -190,6 +193,41 @@ search_evals/<stamp>/top_aware_sweep_rows.csv
 search_evals/<stamp>/<case>/result.json
 search_evals/<stamp>/<case>/checkpoints/      if SAVE_EVERY > 0
 logs/<stamp>/<case>.log
+```
+
+### SLURM Array Grid
+
+For preemptible SLURM clusters, submit the fixed base grid as separate jobs:
+
+```bash
+STAMP=d12_main_001 \
+MAX_PARALLEL=8 \
+SBATCH_PARTITION=<partition> \
+SBATCH_ACCOUNT=<account> \
+SBATCH_GPU_ARG="--gres=gpu:8" \
+bash scripts/submit_slurm_grid.sh
+```
+
+Set `SBATCH_GPU_ARG="--gpus-per-node=8"` instead if that is the local GPU
+syntax. Leave `STAMP` unchanged when re-submitting after preemption. Completed
+cases with valid `result.json` are skipped; incomplete cases resume from
+`<case>/checkpoints/`.
+
+After the array finishes, run one sequential cleanup command:
+
+```bash
+STAMP=d12_main_001 bash scripts/run_d12_sweep.sh
+```
+
+This rebuilds `top_aware_sweep_rows.csv`, skips completed base-grid cases, and
+runs adaptive LR boundary closure if `ADAPTIVE_LR=1`. The array tasks
+intentionally do not run adaptive closure independently because boundary
+extension depends on the full LR grid being complete.
+
+Inspect the array size and exact `sbatch` command without submitting:
+
+```bash
+DRY_RUN=1 STAMP=d12_main_001 bash scripts/submit_slurm_grid.sh
 ```
 
 ## Metrics
