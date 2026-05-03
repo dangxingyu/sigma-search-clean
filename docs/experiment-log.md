@@ -1,5 +1,14 @@
 # Experiment Log — LITE vs Muon diagnostic campaign
 
+## 2026-05-03 — Sadhika d12/d16 2x sweep import
+
+Latest update:
+- Imported Sadhika's completed d12 and d16 2x-Chinchilla sweeps from `results/d12-sweep/` and `results/d16-sweep/`. Both sweeps have 42/42 result JSONs and 0 recorded errors.
+- Re-parsed d16 `alpha/top_k` from case names because its CSV had those columns empty, then generated combined artifacts under `results/d12-d16-sweep/`: `all_rows.csv`, `best_by_depth_batch_alpha.csv`, `delta_c05_minus_c1.csv`, `README.md`, and figures in `results/d12-d16-sweep/figures/`.
+- Best BPB deltas (`c=0.5 - c=1`, negative means Top-Aware wins): d12 512K `+0.001088`, d12 2M `-0.000745`, d12 8M `-0.003300`; d16 512K `+0.000456`, d16 2M `+0.000929`, d16 8M `+0.002670`.
+- Interpretation: d12 shows the expected transition from identity at 512K to Top-Aware at larger batch; d16 currently favors identity at all three batches.
+- Caveat: d16 is not LR-closed at 512K/2M because the best `c=1` LR is the lowest swept value `0.005` and 512K `c=0.5` also sits at the lower boundary. Recommended follow-up is a d16 lower-LR extension at batches `{524288,2097152}`, alphas `{1.0,0.5}`, LRs `{0.00125,0.0025,0.00375}`, with adaptive LR enabled.
+
 ## 2026-05-03 — full grad-accum Hessian metrics
 
 Latest update:

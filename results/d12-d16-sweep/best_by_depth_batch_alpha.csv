@@ -1,0 +1,13 @@
+depth,batch,batch_label,alpha,alpha_label,lr,seed,top_k,score,error,result_json
+d12,524288,512K,0.5,c=0.5,0.0075,42,1,0.8160663614002971,,search_evals/sweep_prefix_002_d12_2x/top_aware_k1_a0p5_bsz524288_lr0p0075_s42/result.json
+d12,524288,512K,1.0,c=1,0.0075,42,1,0.8149781054907281,,search_evals/sweep_prefix_002_d12_2x/top_aware_k1_a1_bsz524288_lr0p0075_s42/result.json
+d12,2097152,2M,0.5,c=0.5,0.02,42,1,0.8337885788173034,,search_evals/sweep_prefix_002_d12_2x/top_aware_k1_a0p5_bsz2097152_lr0p02_s42/result.json
+d12,2097152,2M,1.0,c=1,0.015,42,1,0.8345332359837353,,search_evals/sweep_prefix_002_d12_2x/top_aware_k1_a1_bsz2097152_lr0p015_s42/result.json
+d12,8388608,8M,0.5,c=0.5,0.015,42,1,0.8870322545740068,,search_evals/sweep_prefix_002_d12_2x/top_aware_k1_a0p5_bsz8388608_lr0p015_s42/result.json
+d12,8388608,8M,1.0,c=1,0.01,42,1,0.8903327443989529,,search_evals/sweep_prefix_002_d12_2x/top_aware_k1_a1_bsz8388608_lr0p01_s42/result.json
+d16,524288,512K,0.5,c=0.5,0.005,42,1,0.750463564930939,,search_evals/sweep_prefix_003_d16_2x/top_aware_k1_a0p5_bsz524288_lr0p005_s42/result.json
+d16,524288,512K,1.0,c=1,0.005,42,1,0.7500074379617175,,search_evals/sweep_prefix_003_d16_2x/top_aware_k1_a1_bsz524288_lr0p005_s42/result.json
+d16,2097152,2M,0.5,c=0.5,0.0075,42,1,0.7539155657157965,,search_evals/sweep_prefix_003_d16_2x/top_aware_k1_a0p5_bsz2097152_lr0p0075_s42/result.json
+d16,2097152,2M,1.0,c=1,0.005,42,1,0.7529862840032843,,search_evals/sweep_prefix_003_d16_2x/top_aware_k1_a1_bsz2097152_lr0p005_s42/result.json
+d16,8388608,8M,0.5,c=0.5,0.015,42,1,0.7964303670951134,,search_evals/sweep_prefix_003_d16_2x/top_aware_k1_a0p5_bsz8388608_lr0p015_s42/result.json
+d16,8388608,8M,1.0,c=1,0.0075,42,1,0.7937607744140927,,search_evals/sweep_prefix_003_d16_2x/top_aware_k1_a1_bsz8388608_lr0p0075_s42/result.json

@@ -7,16 +7,19 @@
 - The active clean-repo research path should compare Top-Aware Muon `top_k=1, alpha=1.0` (`c=1`, same-candidate identity) against `alpha=0.5` (`c=0.5`) first. Native Muon/LITE code and the separate `streaming_identity` candidate remain targeted controls, not the default handoff workflow.
 - The clean StreamingMuon metrics path should not do explicit SVD. For this phase, use cached streaming `sigma`/basis, Nesterov-corrected optimizer input metrics, and Hessian/projection diagnostics.
 - Hessian diagnostics should estimate the same optimizer-step batch used for training when feasible: keep each Lanczos vector fixed, accumulate HVPs over all grad-accum microbatches by token count, then average across DDP ranks.
+- The imported d12/d16 sweeps are complete at the result-file level: each has 42/42 completed rows and no recorded training errors.
 - The v42/v43 evidence is internally consistent at 4M: Top-Aware `c=0.5` clearly beats identity under the same driver/recipe, both without metrics and with dense metrics enabled.
 
 ### 2. Multiple observations; likely true but still needs careful confirmation
 
+- In the d12 2x-Chinchilla sweep, the batch transition appears in the expected direction: `c=1` wins at 512K by `+0.0011` BPB (`c=0.5 - c=1`), while `c=0.5` wins at 2M by `-0.0007` and at 8M by `-0.0033`.
 - The Top-Aware advantage is clearly positive at 4M and 8M under the d8 0.4B-token clean recipe. Current best deltas for `c=0.5 - identity` are `-0.0323` at 4M and `-0.0346` at 8M.
 - 262K looks like a no-benefit regime for `c=0.5`: identity is slightly better after LR tuning.
 - Dense no-SVD metrics are feasible at d8: 4M runs with metrics every step and Hessian every 24 steps produced usable JSONs around `6.8MB` per run.
 
 ### 3. Some observations suggest
 
+- In the d16 2x-Chinchilla sweep, `c=1` currently wins at 512K, 2M, and 8M, with deltas `+0.0005`, `+0.0009`, and `+0.0027`. The 8M point is the cleanest of these because neither best LR is at the lower boundary.
 - Top-Aware can improve BPB while the measured selected-subspace sharpness is higher than identity. The mechanism is therefore not simply "reduce all measured sharpness"; it may be allowing useful progress while controlling the top sigma direction's effective update.
 - The transition region should be described as noisy/tie-like rather than monotone: 262K over three seeds is near-tie (`-0.0006 ± 0.0011` SEM for `c=0.5 - identity`), 1M over three seeds is near-tie with a slight identity lean (`+0.0019 ± 0.0028` SEM), 2M over five seeds is near-tie (`+0.0005 ± 0.0042` SEM), and 4M robustly favors `c=0.5` over three seeds (`-0.0252 ± 0.0041` SEM).
 - v46 2M dynamics does not provide an obvious scalar explanation: identity wins despite similar late sharpness/projection-correlation aggregates. This suggests the mechanism is likely trajectory- or spectrum-shape-dependent, not captured by the current aggregate sharpness alone.
@@ -25,6 +28,7 @@
 
 ### 4. Hypotheses
 
+- The d16 result may indicate that the optimal sigma damping depends on model size/token budget as well as batch size. However, the 512K/2M d16 points first need lower-LR closure because best rows hit `lr=0.005`.
 - Top-Aware `c=0.5` helps in high-batch regimes because the top sigma direction imposes an edge-of-stability-style global LR bound; damping that direction lets the remaining directions use a larger effective stable LR.
 - The transition between identity and `c=0.5` may not be described by batch size alone under the current finite-token schedule. A more stable predictor may require dynamics metrics, more seeds, or a schedule-normalized statistic rather than only final BPB at one seed.
 

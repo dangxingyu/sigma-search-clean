@@ -3,6 +3,7 @@
 ## Current clean-handoff plan as of 2026-05-02
 
 Status checkpoint:
+- Sadhika's imported d12/d16 2x-Chinchilla sweeps are organized under `results/d12-d16-sweep/`. d12 is closed enough for current interpretation: `c=1` wins at 512K, `c=0.5` wins at 2M/8M. d16 currently favors `c=1` at 512K/2M/8M, but 512K/2M need lower-LR closure because best rows hit the low-LR boundary.
 - v42 completed the core `c=1` vs `c=0.5` d8 / 0.4B-token sweep at `{262K,1M,4M}`. Treat the current evidence as: `262K` identity slight win, `1M` effectively tie/tiny `c=0.5` win only after LR extension, `4M` strong `c=0.5` win.
 - v43 completed the first dense dynamics run at `4M` with metrics every step and Hessian top-4 probes every 24 steps. Use `results/metrics_v43_4m_best/` for the current dynamics sanity plots.
 - v44/v45 completed the transition sweep: `2M` favors identity after explicit `lr=0.16` boundary closure, while `8M` strongly favors `c=0.5`. Use `results/sweep_catalog/v44_v45_transition_summary.*`.
@@ -16,6 +17,7 @@ Status checkpoint:
 - Current next useful runs are optional robustness checks, not blockers: either add more seeds in the 262K/1M/2M transition band, or run dynamics metrics at 1M/262K if we need mechanism rather than winner classification.
 
 Immediate standalone-repo priorities:
+- Next optimizer-quality run: close d16 lower-LR boundary at batches `{524288,2097152}`, alphas `{1.0,0.5}`, LRs `{0.00125,0.0025,0.00375}`, with `ADAPTIVE_LR=1`. Do not launch d16 metrics best-points until this lower-LR extension is merged into the d16 interpretation.
 - Use the clean method set: `top_aware_muon` only, with `alpha=1.0` as the same-candidate identity baseline and `alpha=0.5` as the main Top-Aware setting. Keep `streaming_identity` only as a targeted sanity candidate, not as the default sweep baseline.
 - For handoff optimizer-quality sweeps, use the standalone `scripts/run_d12_sweep.sh`. Keep metrics off by default, start from an LR grid such as `{0.005,0.01,0.02,0.04}`, and leave `ADAPTIVE_LR=1` so boundary LR optima are extended automatically before interpreting winners.
 - For the new dynamics/logging study, run Top-Aware Muon `top_k=1` with `alpha=1.0` (`c=1`) versus `alpha=0.5` (`c=0.5`) at batches `{262144,1048576,4194304}`.
