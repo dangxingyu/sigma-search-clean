@@ -308,6 +308,16 @@ bash scripts/run_d12_metrics_best.sh
 Checkpointing/resume is enabled by default. If preempted, rerun the same
 `CASE_INDEX` with the same `STAMP_PREFIX`.
 
+This curated wrapper defaults to `MAX_DEVICE_BATCH_SIZE=64`, intended for
+8xB200 metrics runs. With sequence length 1024, that makes the `524288` batch
+case a true no-grad-accumulation step:
+
+```text
+8 GPUs * 64 sequences/GPU * 1024 tokens = 524288 tokens
+```
+
+For more conservative hardware, set `MAX_DEVICE_BATCH_SIZE=16`.
+
 For custom fixed recipes, call the lower-level wrapper directly:
 
 ```bash
