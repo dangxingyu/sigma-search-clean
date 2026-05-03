@@ -321,6 +321,11 @@ the Hessian probe sees a 262K-token microbatch:
 8xB200, but OOM in the full Hessian top4/iters6 smoke. For conservative
 hardware, set `MAX_DEVICE_BATCH_SIZE=16`.
 
+For d16 full-Hessian metrics on 8xB200, use `MAX_DEVICE_BATCH_SIZE=16`.
+The d16 smoke with `MAX_DEVICE_BATCH_SIZE=32` completed the training step but
+OOMed inside the Hessian top4/iters6 probe; the same smoke with
+`MAX_DEVICE_BATCH_SIZE=16` completed and logged sharpness/alignment metrics.
+
 For custom fixed recipes, call the lower-level wrapper directly:
 
 ```bash
