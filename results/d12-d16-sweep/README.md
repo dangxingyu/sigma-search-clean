@@ -44,3 +44,10 @@ Figures:
 - `figures/d12_d16_lr_sweeps.png`
 - `figures/d12_d16_best_bpb_by_batch.png`
 - `figures/d12_d16_delta_c05_minus_c1.png`
+- `figures/d12_d16_best_training_loss_curves.png`
+- `figures/d12_d16_best_training_loss_curves_late_zoom.png`
+- `figures/d12_d16_best_val_bpb_curves.png`
+
+Training-loss note: imported sweep JSONs contain sparse `train_losses`
+records, approximately every 50 optimizer steps, not every-step dense metrics.
+The CSV backing these plots is `best_training_loss_timeseries.csv`.
