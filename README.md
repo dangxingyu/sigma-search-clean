@@ -330,6 +330,25 @@ The d16 smoke with `MAX_DEVICE_BATCH_SIZE=32` completed the training step but
 OOMed inside the Hessian top4/iters6 probe; the same smoke with
 `MAX_DEVICE_BATCH_SIZE=16` completed and logged sharpness/alignment metrics.
 
+For d16 fixed-recipe metrics, use the generic statistics wrapper with explicit
+d16 overrides after the d16 sweep identifies best LRs:
+
+```bash
+DEPTH=16 \
+MAX_DEVICE_BATCH_SIZE=16 \
+METHODS="top_aware_muon" \
+BATCHES="524288" \
+ALPHAS="1.0 0.5" \
+LRS="0.0075" \
+SEEDS="42" \
+STAMP=d16_metrics_example \
+bash scripts/run_d12_statistics.sh
+```
+
+Do not use `run_d12_metrics_best.sh` for d16 unless its hard-coded cases have
+been updated from a completed d16 sweep; that wrapper currently contains d12
+best points.
+
 For custom fixed recipes, call the lower-level wrapper directly:
 
 ```bash
