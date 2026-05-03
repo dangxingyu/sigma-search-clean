@@ -566,7 +566,7 @@ def parse_args() -> argparse.Namespace:
                         default=parse_list_str("top_aware_muon"),
                         help="Space/comma separated subset of: streaming_identity top_aware_muon")
     parser.add_argument("--batches", type=parse_list_int, default=parse_list_int("131072"))
-    parser.add_argument("--lrs", type=parse_list_float, default=parse_list_float("0.005 0.01 0.02 0.04"))
+    parser.add_argument("--lrs", type=parse_list_float, default=parse_list_float("0.005 0.0075 0.01 0.015 0.02 0.03 0.04"))
     parser.add_argument("--top-ks", type=parse_list_int, default=parse_list_int("1"))
     parser.add_argument("--alphas", type=parse_list_float, default=parse_list_float("1.0 0.5"))
     parser.add_argument("--seeds", type=parse_list_int, default=parse_list_int("42"))

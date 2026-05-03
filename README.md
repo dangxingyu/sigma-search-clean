@@ -69,7 +69,7 @@ Default recipe:
 | depth | `12` |
 | token budget | `CHINCHILLA_MULT=2`, auto-resolved from `DEPTH` |
 | batches | `262144 1048576 4194304` |
-| LRs | `0.005 0.01 0.02 0.04` |
+| LRs | `0.005 0.0075 0.01 0.015 0.02 0.03 0.04` |
 | Top-Aware | `top_k=1`, `alpha=1.0 0.5` |
 | distributed | `NPROC=8`, max device batch size `16` |
 | StreamingMuon | `--pure-qr --streaming-num-iters 2 --fallback-ortho-tol 0.01` |
@@ -103,7 +103,7 @@ DRY_RUN=1 bash scripts/run_d12_sweep.sh
 STAMP=d12_c001_b262k \
 BATCHES="262144" \
 ALPHAS="1.0 0.5" \
-LRS="0.005 0.01 0.02 0.04" \
+LRS="0.005 0.0075 0.01 0.015 0.02 0.03 0.04" \
 SEEDS="42 43" \
 bash scripts/run_d12_sweep.sh
 ```
@@ -118,7 +118,7 @@ DEPTH=8 \
 CHINCHILLA_MULT=2 \
 BATCHES="262144 1048576 4194304" \
 ALPHAS="1.0 0.5" \
-LRS="0.005 0.01 0.02 0.04" \
+LRS="0.005 0.0075 0.01 0.015 0.02 0.03 0.04" \
 ADAPTIVE_LR=1 \
 bash scripts/run_d12_sweep.sh
 ```
@@ -130,7 +130,7 @@ DEPTH=16 \
 CHINCHILLA_MULT=2 \
 BATCHES="262144 1048576 4194304" \
 ALPHAS="1.0 0.5" \
-LRS="0.005 0.01 0.02 0.04" \
+LRS="0.005 0.0075 0.01 0.015 0.02 0.03 0.04" \
 ADAPTIVE_LR=1 \
 STAMP=d16_main_001 \
 bash scripts/run_d12_sweep.sh
@@ -186,7 +186,7 @@ This sequentially runs:
 | token budget | `CHINCHILLA_MULT=2` |
 | batches | `524288 2097152 8388608` |
 | alphas | `1.0 0.5` |
-| LRs | `0.005 0.01 0.02 0.04` plus adaptive boundary closure |
+| LRs | `0.005 0.0075 0.01 0.015 0.02 0.03 0.04` plus adaptive boundary closure |
 | seeds | `42` |
 
 It writes separate sweep roots, for example
