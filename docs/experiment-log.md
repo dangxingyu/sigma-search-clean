@@ -7,6 +7,7 @@ Latest update:
 - Updated `hessian_power_probe` to keep each Lanczos probe vector fixed across all supplied microbatches, accumulate HVPs by token count, and use DDP `all_reduce(SUM) / global_tokens` rather than rank-averaging local first-microbatch HVPs.
 - Added a CPU unit test that checks unequal microbatch sizes are token-weighted correctly on a scalar quadratic model.
 - Updated README metric-scope wording: Hessian metrics now estimate the full distributed grad-accum optimizer-batch Hessian for the selected matrix subspace, not a representative microbatch Hessian.
+- Ran a real 8xB200 d16 DDP validation: `d16_gradaccum_hessian_real50_20260503_171241`, 50 steps, 512K global batch, `MAX_DEVICE_BATCH_SIZE=16`, metrics every step, Hessian top4/iters6 every 25 steps. Result completed with `error=None`, `metric_logs=50`, Hessian probes at steps `0` and `25`, both with `local_hessian_batches=4`, `local_hessian_tokens=65536`, and `global_hessian_tokens=524288`. Observed peak memory was about 131-133GB/GPU.
 
 ## 2026-05-02 — Chinchilla token-budget interface
 
