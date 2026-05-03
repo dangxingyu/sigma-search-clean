@@ -16,6 +16,7 @@ streaming_muon_torch.py      StreamingMuon optimizer implementation
 metric_logging.py            opt-in dynamics and Hessian metrics
 candidates/top_aware_muon.py Top-Aware Muon transform
 scripts/run_d12_sweep.sh     optimizer-quality sweep wrapper
+scripts/run_d12_d16_2x_grid.sh canonical sequential d12/d16 handoff grid
 scripts/submit_slurm_grid.sh SLURM array submitter for fixed-grid cases
 scripts/run_d12_statistics.sh metrics/statistics wrapper
 ```
@@ -169,6 +170,30 @@ Disable it when you want an exact fixed grid:
 ADAPTIVE_LR=0 bash scripts/run_d12_sweep.sh
 ```
 
+### Canonical Handoff Grid
+
+If you want one safe bash command for the current main study, run:
+
+```bash
+STAMP_PREFIX=handoff_main_001 bash scripts/run_d12_d16_2x_grid.sh
+```
+
+This sequentially runs:
+
+| knob | value |
+|---|---|
+| depths | `12 16` |
+| token budget | `CHINCHILLA_MULT=2` |
+| batches | `524288 2097152 8388608` |
+| alphas | `1.0 0.5` |
+| LRs | `0.005 0.01 0.02 0.04` plus adaptive boundary closure |
+| seeds | `42` |
+
+It writes separate sweep roots, for example
+`search_evals/handoff_main_001_d12_2x/` and
+`search_evals/handoff_main_001_d16_2x/`, because d12 and d16 have different
+token budgets.
+
 ### Resume And Outputs
 
 Use a stable `STAMP` for preemption-safe jobs. Re-submit the exact same command
@@ -201,6 +226,9 @@ For preemptible SLURM clusters, submit the fixed base grid as separate jobs:
 
 ```bash
 STAMP=d12_main_001 \
+BATCHES="524288 2097152 8388608" \
+ALPHAS="1.0 0.5" \
+CHINCHILLA_MULT=2 \
 MAX_PARALLEL=8 \
 SBATCH_PARTITION=<partition> \
 SBATCH_ACCOUNT=<account> \
@@ -216,7 +244,11 @@ cases with valid `result.json` are skipped; incomplete cases resume from
 After the array finishes, run one sequential cleanup command:
 
 ```bash
-STAMP=d12_main_001 bash scripts/run_d12_sweep.sh
+STAMP=d12_main_001 \
+BATCHES="524288 2097152 8388608" \
+ALPHAS="1.0 0.5" \
+CHINCHILLA_MULT=2 \
+bash scripts/run_d12_sweep.sh
 ```
 
 This rebuilds `top_aware_sweep_rows.csv`, skips completed base-grid cases, and
@@ -227,8 +259,17 @@ extension depends on the full LR grid being complete.
 Inspect the array size and exact `sbatch` command without submitting:
 
 ```bash
-DRY_RUN=1 STAMP=d12_main_001 bash scripts/submit_slurm_grid.sh
+DRY_RUN=1 \
+STAMP=d12_main_001 \
+BATCHES="524288 2097152 8388608" \
+ALPHAS="1.0 0.5" \
+CHINCHILLA_MULT=2 \
+bash scripts/submit_slurm_grid.sh
 ```
+
+Submit d12 and d16 as two separate arrays by changing only `DEPTH` and `STAMP`,
+for example `DEPTH=12 STAMP=d12_main_001 ...` and
+`DEPTH=16 STAMP=d16_main_001 ...`.
 
 ## Metrics
 

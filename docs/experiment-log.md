@@ -5,6 +5,7 @@
 Latest update:
 - Restored README metric definitions with math/pseudocode columns for active clean metrics: per-step norms/sigma values, selected-subspace Hessian sharpness, Hessian projections/alignments, and fixed-Hessian-space projection correlations.
 - Changed the clean default token budget from 1x to 2x Chinchilla in the Python runner and handoff wrappers. The 1x table remains available through `CHINCHILLA_MULT=1`; exact `TOKENS` is still reserved for smoke/custom runs.
+- Added `scripts/run_d12_d16_2x_grid.sh` as the safest sequential handoff command for the current main grid: depths `{12,16}`, batches `{512K,2M,8M}`, alphas `{1.0,0.5}`, LR grid `{0.005,0.01,0.02,0.04}`, and adaptive boundary closure.
 - Added `scripts/submit_slurm_grid.sh` for preemption-safe SLURM arrays: each task runs one full-grid case via `--case-index`; re-submitting the same `STAMP` skips completed results and resumes incomplete checkpoints. Adaptive LR closure is done afterward by running `scripts/run_d12_sweep.sh` once with the same `STAMP`.
 - Added a hard-coded `DEPTH -> 1x Chinchilla tokens` table to the clean sweep engine: d8 `402653184`, d12 `1698693120`, d16 `4026531840`.
 - Updated `scripts/run_d12_sweep.sh` and `scripts/run_d12_statistics.sh` so normal runs use `DEPTH` plus `CHINCHILLA_MULT`; exact `TOKENS` remains available only for smoke tests or custom truncated runs.
