@@ -14,9 +14,9 @@ CHINCHILLA_MULT="${CHINCHILLA_MULT:-2}"
 SEEDS="${SEEDS:-42}"
 
 NPROC="${NPROC:-8}"
-# B200 metrics default: 512K batch has grad_accum=1 at 8 GPUs, seq_len=1024.
-# Override to 16 for conservative cross-cluster runs.
-MAX_DEVICE_BATCH_SIZE="${MAX_DEVICE_BATCH_SIZE:-64}"
+# Full Hessian top4/iters6 smoke passes at 32 on 8xB200. Larger microbatches
+# can run cheap metrics, but Hessian probes OOM at 64/128 in d12 smoke tests.
+MAX_DEVICE_BATCH_SIZE="${MAX_DEVICE_BATCH_SIZE:-32}"
 SAVE_EVERY="${SAVE_EVERY:-100}"
 KEEP_LAST_CHECKPOINTS="${KEEP_LAST_CHECKPOINTS:-2}"
 RESUME="${RESUME:-1}"

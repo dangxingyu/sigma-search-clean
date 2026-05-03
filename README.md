@@ -308,15 +308,18 @@ bash scripts/run_d12_metrics_best.sh
 Checkpointing/resume is enabled by default. If preempted, rerun the same
 `CASE_INDEX` with the same `STAMP_PREFIX`.
 
-This curated wrapper defaults to `MAX_DEVICE_BATCH_SIZE=64`, intended for
-8xB200 metrics runs. With sequence length 1024, that makes the `524288` batch
-case a true no-grad-accumulation step:
+This curated wrapper defaults to `MAX_DEVICE_BATCH_SIZE=32`, based on d12
+8xB200 smoke tests with full Hessian settings
+`METRICS_HESSIAN_TOP_K=4, METRICS_HESSIAN_ITERS=6`. With sequence length 1024,
+the Hessian probe sees a 262K-token microbatch:
 
 ```text
-8 GPUs * 64 sequences/GPU * 1024 tokens = 524288 tokens
+8 GPUs * 32 sequences/GPU * 1024 tokens = 262144 tokens
 ```
 
-For more conservative hardware, set `MAX_DEVICE_BATCH_SIZE=16`.
+`MAX_DEVICE_BATCH_SIZE=64` and `128` fit cheap training/optimizer metrics on
+8xB200, but OOM in the full Hessian top4/iters6 smoke. For conservative
+hardware, set `MAX_DEVICE_BATCH_SIZE=16`.
 
 For custom fixed recipes, call the lower-level wrapper directly:
 
