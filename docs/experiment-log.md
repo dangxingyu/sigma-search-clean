@@ -8,6 +8,7 @@ Latest update:
 - Added a CPU unit test that checks unequal microbatch sizes are token-weighted correctly on a scalar quadratic model.
 - Updated README metric-scope wording: Hessian metrics now estimate the full distributed grad-accum optimizer-batch Hessian for the selected matrix subspace, not a representative microbatch Hessian.
 - Ran a real 8xB200 d16 DDP validation: `d16_gradaccum_hessian_real50_20260503_171241`, 50 steps, 512K global batch, `MAX_DEVICE_BATCH_SIZE=16`, metrics every step, Hessian top4/iters6 every 25 steps. Result completed with `error=None`, `metric_logs=50`, Hessian probes at steps `0` and `25`, both with `local_hessian_batches=4`, `local_hessian_tokens=65536`, and `global_hessian_tokens=524288`. Observed peak memory was about 131-133GB/GPU.
+- Measured 50-step speed on the same 8xB200 allocation, 512K global batch, metrics every step. d12 with `MAX_DEVICE_BATCH_SIZE=32`: no Hessian `204s`, full grad-accum Hessian top4/iters6 every 25 steps `283s` (`1.39x`). d16 with `MAX_DEVICE_BATCH_SIZE=16`: no Hessian `322s`; full Hessian timestamp estimate `445s` to result JSON and `463s` to wrapper completion (`1.38-1.44x`). The two Hessian probes in these tests cover the full 512K distributed batch.
 
 ## 2026-05-02 — Chinchilla token-budget interface
 
