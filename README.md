@@ -17,6 +17,7 @@ metric_logging.py            opt-in dynamics and Hessian metrics
 candidates/top_aware_muon.py Top-Aware Muon transform
 scripts/run_d12_sweep.sh     optimizer-quality sweep wrapper
 scripts/run_d12_d16_2x_grid.sh canonical sequential d12/d16 handoff grid
+scripts/run_d12_d16_alpha_sweep.sh multi-alpha d12/d16 handoff grid
 scripts/submit_slurm_grid.sh SLURM array submitter for fixed-grid cases
 scripts/run_d12_statistics.sh metrics/statistics wrapper
 scripts/run_d12_d16_metrics_best.sh curated d12/d16 best-point metrics jobs
@@ -194,6 +195,28 @@ It writes separate sweep roots, for example
 `search_evals/handoff_main_001_d12_2x/` and
 `search_evals/handoff_main_001_d16_2x/`, because d12 and d16 have different
 token budgets.
+
+### d12/d16 Alpha Sweep
+
+For Sadhika's broader alpha sweep, use:
+
+```bash
+STAMP_PREFIX=sadhika_alpha_2x_001 bash scripts/run_d12_d16_alpha_sweep.sh
+```
+
+Default grid:
+
+| knob | value |
+|---|---|
+| depths | `12 16` |
+| token budget | `CHINCHILLA_MULT=2` |
+| batches | `524288 2097152 8388608` |
+| alphas | `0.25 0.5 0.75 0.85 1.0 1.15` |
+| LRs | `0.005 0.0075 0.01 0.015 0.02 0.03 0.04` plus adaptive boundary closure |
+| seeds | `42` |
+
+Detailed copy-paste instructions, including the SLURM-array version and files
+to send back, are in `docs/alpha_sweep_handoff.md`.
 
 ### Resume And Outputs
 

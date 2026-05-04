@@ -30,6 +30,7 @@ the clean runtime surface. Historical results are still preserved under
 - `scripts/smoke_run.sh`: tiny sanity run.
 - `scripts/run_d12_sweep.sh`: standalone optimizer-quality sweep wrapper; defaults to d12 but supports d8/d16 via `DEPTH` and `CHINCHILLA_MULT`.
 - `scripts/run_d12_d16_2x_grid.sh`: canonical sequential handoff grid for d12/d16, 2x Chinchilla, batches `{512K,2M,8M}`, alphas `{1.0,0.5}`.
+- `scripts/run_d12_d16_alpha_sweep.sh`: sequential d12/d16 alpha sweep for Top-Aware Muon, default alphas `{0.25,0.5,0.75,0.85,1.0,1.15}`.
 - `scripts/submit_slurm_grid.sh`: submit fixed-grid cases as a preemption-safe SLURM array.
 - `scripts/run_d12_statistics.sh`: standalone dense metrics/statistics wrapper; defaults to d12 but supports d8/d16 via `DEPTH` and `CHINCHILLA_MULT`.
 - `scripts/run_d12_metrics_best.sh`: curated d12 2x Chinchilla metrics wrapper for the six best `(batch, alpha, LR)` points from the completed sweep.
@@ -50,6 +51,7 @@ the clean runtime surface. Historical results are still preserved under
 - `docs/experiment-plan.md`: active research plan.
 - `docs/experiment-log.md`: latest-first research log.
 - `docs/new-thoughts.md`: conclusion ledger.
+- `docs/alpha_sweep_handoff.md`: copy-paste d12/d16 alpha-sweep instructions for external runs or agents.
 
 ## Tests
 
