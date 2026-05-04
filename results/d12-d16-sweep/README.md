@@ -48,6 +48,13 @@ Figures:
 - `figures/d12_d16_best_training_loss_curves_late_zoom.png`
 - `figures/d12_d16_best_val_bpb_curves.png`
 
+Regenerate them with:
+
+```bash
+python analysis/plot_d12_d16_sweep.py
+```
+
 Training-loss note: imported sweep JSONs contain sparse `train_losses`
 records, approximately every 50 optimizer steps, not every-step dense metrics.
-The CSV backing these plots is `best_training_loss_timeseries.csv`.
+The CSV backing these plots is `best_training_loss_timeseries.csv`. Timeseries
+figures use raw optimizer step on the x-axis, not normalized progress.
