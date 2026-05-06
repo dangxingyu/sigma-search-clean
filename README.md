@@ -1,7 +1,7 @@
 # Sigma-Search Clean
 
-Standalone handoff repo for StreamingMuon-family optimizer experiments on top
-of an in-tree `nanochat/` checkout. The current research question is:
+Standalone handoff repo for optimizer baseline experiments on top of an
+in-tree `nanochat/` checkout. The current research question is:
 
 > Under the same nanochat training recipe, when does Top-Aware Muon with
 > `alpha=0.5` beat its same-candidate identity setting `alpha=1.0` across
@@ -10,12 +10,17 @@ of an in-tree `nanochat/` checkout. The current research question is:
 The active runtime surface is intentionally small:
 
 ```text
-run_eval.py                  single train/eval entrypoint
-run_top_aware_muon_sweep.py  reusable sweep engine
+run_eval.py                  single train/eval entrypoint for all optimizer baselines
+run_optimizer_sweep.py       reusable optimizer/alpha/LR sweep engine
+run_top_aware_muon_sweep.py  compatibility wrapper target for historical scripts
+baseline_optim.py            AdamW, SOAP, Shampoo, KL-Shampoo, KL-SOAP baselines
 streaming_muon_torch.py      StreamingMuon optimizer implementation
 metric_logging.py            opt-in dynamics and Hessian metrics
 candidates/top_aware_muon.py Top-Aware Muon transform
 scripts/run_d12_sweep.sh     optimizer-quality sweep wrapper
+scripts/run_optimizer_baselines.sh multi-optimizer baseline sweep wrapper
+scripts/run_d12_optimizer_baselines.sh d12 apple-to-apple baseline grid
+scripts/run_d16_optimizer_baselines.sh d16 apple-to-apple baseline grid
 scripts/run_d12_d16_2x_grid.sh canonical sequential d12/d16 handoff grid
 scripts/run_d12_d16_alpha_sweep.sh multi-alpha d12/d16 handoff grid
 scripts/submit_slurm_grid.sh SLURM array submitter for fixed-grid cases
@@ -24,8 +29,9 @@ scripts/run_d12_d16_metrics_best.sh curated d12/d16 best-point metrics jobs
 ```
 
 Historical native Muon/LITE results may still exist under `docs/`, `figures/`,
-and `results/`, but the clean handoff scripts run the current alpha sweep via
-`top_aware_muon`.
+and `results/`. The active runtime now supports StreamingMuon/Top-Aware Muon,
+plain Muon, nanochat Muon/NormMuon, AdamW, SOAP, Shampoo, KL-Shampoo, and KL-SOAP under the same
+training driver.
 
 ## Basic Setup
 
@@ -68,15 +74,21 @@ Default recipe:
 | knob | default |
 |---|---|
 | methods | `top_aware_muon` |
+| architecture | `gpt2` |
 | depth | `12` |
 | token budget | `CHINCHILLA_MULT=2`, auto-resolved from `DEPTH` |
 | batches | `262144 1048576 4194304` |
 | LRs | `0.005 0.0075 0.01 0.015 0.02 0.03 0.04` |
-| Top-Aware | `top_k=1`, `alpha=1.0 0.5` |
+| Top-Aware | `top_k=1`, `alpha=1.0 0.5`; alpha applies only to `top_aware_muon` |
 | distributed | `NPROC=8`, max device batch size `16` |
 | StreamingMuon | `--pure-qr --streaming-num-iters 2 --fallback-ortho-tol 0.01` |
 | checkpointing | `SAVE_EVERY=100`, `KEEP_LAST_CHECKPOINTS=2`, `RESUME=1` |
 | adaptive LR | on by default |
+
+`ARCHITECTURE=gpt2` is a simplified GPT-2-like control architecture: learned
+position embeddings, full causal attention, GELU MLP, and no nanochat-specific
+VE/smear/x0/backout/QK-norm/relu² features. Set `ARCHITECTURE=nanochat` only
+when you intentionally want the original modded nanochat architecture.
 
 The wrapper hard-codes the 1x token table below. Normal runs should specify
 `DEPTH` and `CHINCHILLA_MULT` rather than a large raw token count. The default
@@ -103,6 +115,7 @@ DRY_RUN=1 bash scripts/run_d12_sweep.sh
 
 ```bash
 STAMP=d12_c001_b262k \
+METHODS="top_aware_muon" \
 BATCHES="262144" \
 ALPHAS="1.0 0.5" \
 LRS="0.005 0.0075 0.01 0.015 0.02 0.03 0.04" \
@@ -112,6 +125,44 @@ bash scripts/run_d12_sweep.sh
 
 `alpha=1.0` is the `c=1` identity baseline under the same
 `top_aware_muon.py` implementation. `alpha=0.5` is the main Top-Aware setting.
+Non-streaming baselines ignore `ALPHAS` and `TOP_KS`.
+
+Supported `METHODS`:
+
+```text
+top_aware_muon streaming_identity plain_muon muon native_muon adamw soap shampoo kl_shampoo kl_soap
+```
+
+`plain_muon` is the ordinary Muon baseline: Nesterov momentum followed by NS5
+matrix-sign orthogonalization, with no nanochat Polar Express/NormMuon path and
+no dimension-dependent LR normalization. `muon` and `native_muon` remain aliases
+for nanochat's original Muon/NormMuon implementation in
+`nanochat.optim.MuonAdamW` / `DistMuonAdamW`.
+
+Structured optimizer knobs:
+
+```bash
+PRECONDITION_FREQUENCY=10
+SHAMPOO_BETA=0.95
+OPTIMIZER_BETA1=0.9
+OPTIMIZER_BETA2=0.95
+STRUCTURED_INIT_FACTOR=1.0
+STRUCTURED_USE_QR=1
+```
+
+For a consolidated multi-optimizer baseline run:
+
+```bash
+STAMP=d12_baselines_001 bash scripts/run_d12_optimizer_baselines.sh
+STAMP=d16_baselines_001 bash scripts/run_d16_optimizer_baselines.sh
+```
+
+These baseline wrappers are apple-to-apple with the Top-Aware handoff recipe:
+`CHINCHILLA_MULT=2`, batches `{512K,2M,8M}`, the same LR grid, seed `42`,
+architecture `gpt2`, checkpoint/resume enabled, and adaptive LR boundary
+closure enabled. They change only `METHODS` to
+`plain_muon adamw soap shampoo kl_shampoo kl_soap`; `ALPHAS` is set to `1.0`
+and ignored by these non-streaming optimizers.
 
 For d8 runs, reuse the same script with overrides:
 
@@ -238,7 +289,7 @@ Outputs:
 
 ```text
 search_evals/<stamp>/manifest.json
-search_evals/<stamp>/top_aware_sweep_rows.csv
+search_evals/<stamp>/sweep_rows.csv
 search_evals/<stamp>/<case>/result.json
 search_evals/<stamp>/<case>/checkpoints/      if SAVE_EVERY > 0
 logs/<stamp>/<case>.log
@@ -275,7 +326,7 @@ CHINCHILLA_MULT=2 \
 bash scripts/run_d12_sweep.sh
 ```
 
-This rebuilds `top_aware_sweep_rows.csv`, skips completed base-grid cases, and
+This rebuilds `sweep_rows.csv`, skips completed base-grid cases, and
 runs adaptive LR boundary closure if `ADAPTIVE_LR=1`. The array tasks
 intentionally do not run adaptive closure independently because boundary
 extension depends on the full LR grid being complete.

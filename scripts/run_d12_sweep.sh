@@ -4,7 +4,7 @@ set -euo pipefail
 # Blessed d12 optimizer-quality sweep for handoff use.
 #
 # Run this from a node/session that already has the intended GPUs visible.
-# This script is standalone: it directly invokes run_top_aware_muon_sweep.py
+# This script is standalone: it directly invokes run_optimizer_sweep.py
 # and does not depend on any other sweep wrapper.
 
 REPO="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
@@ -35,6 +35,7 @@ ALPHAS="${ALPHAS:-1.0 0.5}"
 TOP_KS="${TOP_KS:-1}"
 LRS="${LRS:-0.005 0.0075 0.01 0.015 0.02 0.03 0.04}"
 SEEDS="${SEEDS:-42}"
+ARCHITECTURE="${ARCHITECTURE:-gpt2}"
 
 NPROC="${NPROC:-8}"
 MAX_DEVICE_BATCH_SIZE="${MAX_DEVICE_BATCH_SIZE:-16}"
@@ -61,7 +62,7 @@ OUT_ROOT="${OUT_ROOT:-search_evals/${STAMP}}"
 LOG_ROOT="${LOG_ROOT:-logs/${STAMP}}"
 
 cmd=(
-  python run_top_aware_muon_sweep.py
+  python run_optimizer_sweep.py
   --out-root "$OUT_ROOT"
   --log-root "$LOG_ROOT"
   --nanochat-dir nanochat
@@ -72,6 +73,7 @@ cmd=(
   --lrs "$LRS"
   --seeds "$SEEDS"
   --depth "$DEPTH"
+  --architecture "$ARCHITECTURE"
   --chinchilla-mult "$CHINCHILLA_MULT"
   --nproc-per-node "$NPROC"
   --max-device-batch-size "$MAX_DEVICE_BATCH_SIZE"
@@ -80,6 +82,11 @@ cmd=(
   --pure-qr
   --streaming-num-iters "${STREAMING_NUM_ITERS:-2}"
   --fallback-ortho-tol "${FALLBACK_ORTHO_TOL:-0.01}"
+  --precondition-frequency "${PRECONDITION_FREQUENCY:-10}"
+  --shampoo-beta "${SHAMPOO_BETA:-0.95}"
+  --optimizer-beta1 "${OPTIMIZER_BETA1:-0.9}"
+  --optimizer-beta2 "${OPTIMIZER_BETA2:-0.95}"
+  --structured-init-factor "${STRUCTURED_INIT_FACTOR:-1.0}"
   --metrics-every "$METRICS_EVERY"
   --metrics-top-k "${METRICS_TOP_K:-4}"
   --metrics-module-regex "${METRICS_MODULE_REGEX:-transformer\\.h\\.(?:[0-9]+)\\.(?:attn\\.(?:c_q|c_k|c_v|c_proj)|mlp\\.(?:c_fc|c_proj))\\.weight$}"
@@ -105,6 +112,11 @@ fi
 if [[ "${ALLOW_TOP_K_SWEEP:-0}" == "1" ]]; then
   cmd+=(--allow-top-k-sweep)
 fi
+if [[ "${STRUCTURED_USE_QR:-1}" == "1" ]]; then
+  cmd+=(--structured-use-qr)
+else
+  cmd+=(--no-structured-use-qr)
+fi
 if [[ "$RESUME" == "1" ]]; then
   cmd+=(--resume)
 else
@@ -116,14 +128,20 @@ fi
 if [[ "${RERUN_EXISTING:-0}" == "1" ]]; then
   cmd+=(--rerun-existing)
 fi
+if [[ "${SUMMARY_ONLY:-0}" == "1" ]]; then
+  cmd+=(--summary-only)
+fi
+if [[ "${ALLOW_CONFIG_MISMATCH:-0}" == "1" ]]; then
+  cmd+=(--allow-config-mismatch)
+fi
 cmd+=("$@")
 
 printf 'Running optimizer-quality sweep (d12 defaults; DEPTH/CHINCHILLA_MULT may override)\n'
 printf 'OUT_ROOT=%s\nLOG_ROOT=%s\n' "$OUT_ROOT" "$LOG_ROOT"
 if [[ -n "$TOKENS" ]]; then
-  printf 'DEPTH=%s TOKENS=%s NPROC=%s\n' "$DEPTH" "$TOKENS" "$NPROC"
+  printf 'DEPTH=%s TOKENS=%s NPROC=%s ARCHITECTURE=%s\n' "$DEPTH" "$TOKENS" "$NPROC" "$ARCHITECTURE"
 else
-  printf 'DEPTH=%s CHINCHILLA_MULT=%s TOKENS=auto NPROC=%s\n' "$DEPTH" "$CHINCHILLA_MULT" "$NPROC"
+  printf 'DEPTH=%s CHINCHILLA_MULT=%s TOKENS=auto NPROC=%s ARCHITECTURE=%s\n' "$DEPTH" "$CHINCHILLA_MULT" "$NPROC" "$ARCHITECTURE"
 fi
 printf 'METHODS=%s\nBATCHES=%s\nALPHAS=%s\nTOP_KS=%s\nLRS=%s\nSEEDS=%s\n' \
   "$METHODS" "$BATCHES" "$ALPHAS" "$TOP_KS" "$LRS" "$SEEDS"

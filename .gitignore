@@ -26,3 +26,5 @@ nanochat/wandb/
 *.npz
 *.tmp
 results/raw/
+results/**/extracted/
+results/**/*.tar.gz

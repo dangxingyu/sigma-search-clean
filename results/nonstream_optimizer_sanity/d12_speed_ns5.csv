@@ -1,0 +1,7 @@
+method,total_wall_seconds,steps,step50_dt_seconds,approx_step50_tokens_per_second,train_loss_final,error,path
+adamw,37.11181092262268,60,0.090,5825422,7.734710096379201,,search_evals/d12_speed_baselines_ns5_20260505_181555/adamw.json
+plain_muon,33.30299139022827,60,0.105,4993219,5.823846156508477,,search_evals/d12_speed_baselines_ns5_20260505_181555/plain_muon.json
+soap,44.90032434463501,60,0.128,4096000,7.7388540508669985,,search_evals/d12_speed_baselines_ns5_20260505_181555/soap.json
+shampoo,45.88513660430908,60,0.135,3883615,5.898113759768358,,search_evals/d12_speed_baselines_ns5_20260505_181555/shampoo.json
+kl_shampoo,41.86177635192871,60,0.160,3276800,5.894932670123274,,search_evals/d12_speed_baselines_ns5_20260505_181555/kl_shampoo.json
+kl_soap,43.373140811920166,60,0.157,3339414,7.7387798294956776,,search_evals/d12_speed_baselines_ns5_20260505_181555/kl_soap.json

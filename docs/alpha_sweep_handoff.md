@@ -95,8 +95,9 @@ SBATCH_TIME=24:00:00 \
 bash scripts/submit_slurm_grid.sh
 ```
 
-After each array finishes, run the same fixed recipe once without the array
-submitter to collate CSVs and run adaptive LR boundary closure:
+After each array finishes, first run a pure collation command. This only reads
+completed `result.json` files and writes `sweep_rows.csv`; it does not need
+checkpoints and does not launch training:
 
 ```bash
 DEPTH=12 CHINCHILLA_MULT=2 \
@@ -105,6 +106,7 @@ ALPHAS="0.25 0.5 0.75 0.85 1.0 1.15" \
 LRS="0.005 0.0075 0.01 0.015 0.02 0.03 0.04" \
 SEEDS="42" \
 STAMP=sadhika_alpha_d12_2x_001 \
+SUMMARY_ONLY=1 \
 bash scripts/run_d12_sweep.sh
 
 DEPTH=16 CHINCHILLA_MULT=2 \
@@ -113,8 +115,13 @@ ALPHAS="0.25 0.5 0.75 0.85 1.0 1.15" \
 LRS="0.005 0.0075 0.01 0.015 0.02 0.03 0.04" \
 SEEDS="42" \
 STAMP=sadhika_alpha_d16_2x_001 \
+SUMMARY_ONLY=1 \
 bash scripts/run_d12_sweep.sh
 ```
+
+If you also want adaptive LR boundary closure, run the same command without
+`SUMMARY_ONLY=1` and with `ADAPTIVE_LR=1`. That step may launch new training
+cases at boundary LRs; skip it if you want full control over job submission.
 
 Re-running the exact same command is preemption-safe: completed `result.json`
 files are skipped, and incomplete cases resume from checkpoints.
@@ -142,7 +149,7 @@ For each `STAMP`, send:
 
 ```text
 search_evals/<STAMP>/manifest.json
-search_evals/<STAMP>/top_aware_sweep_rows.csv
+search_evals/<STAMP>/sweep_rows.csv
 search_evals/<STAMP>/adaptive_lr_trace.json       if present
 search_evals/<STAMP>/*/result.json
 logs/<STAMP>/*.log                                optional, useful for failures

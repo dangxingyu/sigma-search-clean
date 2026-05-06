@@ -1,5 +1,51 @@
 # Experiment Log — LITE vs Muon diagnostic campaign
 
+## 2026-05-05 — non-streaming optimizer baseline sanity sweep
+
+Latest update:
+- Cleaned the current sweep surface after adding non-streaming baselines. Added `run_optimizer_sweep.py` as the clear handoff entrypoint, while keeping `run_top_aware_muon_sweep.py` as the compatibility implementation module.
+- Updated wrappers so `scripts/run_d12_sweep.sh`, `scripts/run_d12_statistics.sh`, and `scripts/submit_slurm_grid.sh` invoke `run_optimizer_sweep.py`.
+- Renamed new sweep summaries from `top_aware_sweep_rows.csv` to `sweep_rows.csv`. Historical result catalogs may still contain the old filename.
+- Changed `scripts/run_optimizer_baselines.sh` defaults to the non-streaming baseline set only: `plain_muon adamw soap shampoo kl_shampoo kl_soap`; Top-Aware is now opt-in for that wrapper. Added separate apple-to-apple baseline entrypoints `scripts/run_d12_optimizer_baselines.sh` and `scripts/run_d16_optimizer_baselines.sh`, plus a convenience sequential wrapper `scripts/run_d12_d16_optimizer_baselines.sh`.
+- Audited baseline optimizer implementation. Fixed matrix AdamW so its matrix-weight decay follows the same cosine schedule as Muon/Top-Aware/structured baselines. Fixed structured/plain-Muon decoupled weight decay ordering to match nanochat's `param -= lr * update + lr * wd * param`. For SOAP/KL-SOAP, basis refresh now clears projected second-moment statistics instead of silently reusing old-basis RMS values.
+- Validation passed after cleanup: `py_compile` for `run_eval.py`, `run_optimizer_sweep.py`, `run_top_aware_muon_sweep.py`, `baseline_optim.py`, and `metric_logging.py`; `bash -n` for the active wrappers; `pytest tests` with `8 passed`; dry-runs for both Top-Aware and non-streaming baseline wrappers.
+- Implemented and sanity-checked a separate non-StreamingMuon optimizer path for baseline comparisons: `plain_muon`, `adamw`, `soap`, `shampoo`, `kl_shampoo`, and `kl_soap`. This sweep intentionally excludes Top-Aware Muon and StreamingMuon variants.
+- Recipe: GPT-2-style nanochat model, `depth=1`, `dim=64`, `seq_len=64`, single B200, eager smoke mode with `NANOCHAT_DISABLE_COMPILE=1`, `100` optimizer steps, batches `{512,2048}` tokens/step, seed `42`.
+- Initial LR grid was `{0.00025,0.0005,0.001,0.002}`. Boundary closure added `{0.004,0.008}` for bsz512 AdamW/SOAP/KL-SOAP and `0.000125` for their bsz2048 low-LR edge.
+- All rows completed without errors or NaNs. Organized artifacts are in `results/nonstream_optimizer_sanity/`: `all_rows.csv`, `best_by_batch_method.csv`, `README.md`, and `lr_sweep_val_bpb.png`.
+- Best bsz512 rows: AdamW `2.522123 @ lr=0.004`, SOAP `2.522288 @ lr=0.004`, KL-SOAP `2.522290 @ lr=0.004`, plain Muon `2.525050 @ lr=0.002`, Shampoo `2.525075 @ lr=0.002`, KL-Shampoo `2.525024 @ lr=0.002`.
+- Best bsz2048 rows: Shampoo `2.370667 @ lr=0.0005`, KL-Shampoo `2.370675 @ lr=0.0005`, plain Muon `2.370737 @ lr=0.00025`, AdamW `2.370991 @ lr=0.000125`, SOAP `2.371003 @ lr=0.000125`, KL-SOAP `2.371001 @ lr=0.000125`.
+- Because `plain_muon` was later corrected from exact SVD to NS5, the listed d1 `plain_muon` BPB rows are stale and should not be used for optimizer ranking. The non-Muon baseline rows remain valid.
+- Interpretation: this is a path/infrastructure sanity check, not a final optimizer-quality claim. The LR curves are reasonable: bsz512 AdamW/SOAP/KL-SOAP improve until `0.004` then worsen at `0.008`; bsz2048 AdamW/SOAP/KL-SOAP worsen as LR increases, while plain Muon/Shampoo/KL-Shampoo are flat in this tiny model.
+- Correction: the first d12 `plain_muon` speed probe accidentally used exact SVD, which is not the intended ordinary Muon baseline. `plain_muon` has been changed to NS5 matrix-sign orthogonalization without nanochat dimension LR normalization. The exact-SVD speed row should be ignored except as a bug note.
+- Corrected d12 speed probe on 8xB200 DDP used `depth=12`, `dim=768`, `seq=1024`, global batch `524288`, device batch `32`, no eval, 60 steps. Step-50 times: AdamW `0.090s`, plain Muon NS5 `0.105s`, SOAP `0.128s`, Shampoo `0.135s`, KL-Shampoo `0.160s`, KL-SOAP `0.157s`. Artifacts are in `results/nonstream_optimizer_sanity/d12_speed_ns5.csv` and `search_evals/d12_speed_baselines_ns5_20260505_181555/`.
+
+## 2026-05-03 — d8 8M 8x-Chinchilla token-budget check
+
+Latest update:
+- Paused the running d12 4M `c=0.5, lr=0.01` tail check at about step `1000/3240` after the user redirected away from d12. Existing completed d12 results and checkpoints were left intact; no allocation was cancelled.
+- Launched `d8_chinchilla8_8m_c1_c05_lrsweep_20260503_235256` on allocation `29702470`.
+- Recipe: `depth=8`, batch `8388608`, `CHINCHILLA_MULT=8`, total tokens `3,221,225,472`, `384` optimizer steps, seed `42`, same `top_aware_muon` implementation for both `c=1` (`alpha=1.0`) and `c=0.5` (`alpha=0.5`).
+- Initial LR grid is `{0.005,0.0075,0.01,0.015,0.02}` with adaptive boundary closure enabled and restricted to `[0.00125,0.04]`.
+- Motivation: older d8 8M at 1x Chinchilla strongly favored `c=0.5`, while the long-token d12 4M probe favored `c=1`. This run directly tests whether the reversal is a longer-token/schedule effect already visible at d8, or a model-scale/d12-specific effect.
+- Final initial-grid result: `c=1` best is `0.949773 @ lr=0.015`; `c=0.5` best is `0.947325 @ lr=0.015`; delta `c=0.5 - c=1 = -0.002448` BPB. The high-LR `c=0.5, lr=0.02` row scored `0.947646`, so no wider high-LR extension was needed.
+- Interpretation: d8 8M still favors `c=0.5` at 8x Chinchilla, unlike the d12 4M 8x-Chinchilla identity-favoring probe. The d12 reversal is therefore not explained by token budget alone at d8.
+- Queued follow-up controller `logs/d8_followups_after_8m_20260504_011654.queue.log` has advanced to 8M alpha refinement `c={0.75,0.85,1.15}` over LR `{0.0075,0.01,0.015,0.02}`. Afterward it runs a d8 128K 8x-Chinchilla `c=1` vs `c=1.15` check over LR `{0.00375,0.005,0.0075,0.01,0.015}`.
+- First refinement row: `c=0.75, lr=0.0075 -> 0.954582`, worse than both `c=0.5, lr=0.015` and `c=1, lr=0.015`. This low-LR row alone does not rule out `c=0.75`; remaining LRs are still running.
+- Final 8M alpha refinement: `c=0.75` best `0.948968 @ lr=0.02`, `c=0.85` best `0.949104 @ lr=0.015`, and `c=1.15` best `0.950472 @ lr=0.02`. None beat the original `c=0.5` best `0.947325 @ lr=0.015`.
+- Final 128K near-identity check: `c=1` best `0.883384 @ lr=0.0075`; `c=1.15` best `0.883340 @ lr=0.005`. The `c=1.15` edge is only `-0.000044` BPB, effectively a tie.
+- Current implication: at d8 8x Chinchilla, `c=0.5` is still useful at 8M, while 128K remains a near-identity/tie regime. Next run should fill the middle batch sizes before returning to d12.
+
+## 2026-05-03 — d12 4M 8x-Chinchilla c=0.5 LR closure
+
+Latest update:
+- Checked the long-token d12 probe: it is `depth=12`, batch `4194304`, `CHINCHILLA_MULT=8`, total tokens `13,589,544,960` (`3240` optimizer steps), not an 8M-batch run.
+- Existing long-token rows: `c=1, lr=0.02 -> 0.812736`; `c=0.5, lr=0.02 -> 0.821461`. A lower-LR identity sweep found `c=1, lr=0.005 -> 0.799642`, `lr=0.0075 -> 0.807600`, `lr=0.01 -> 0.815345`.
+- Launched `d12_chinchilla8_4m_c05_lrclosure_fast_20260503_212713` to close `c=0.5` at lower LR values `{0.005,0.0075,0.01}`.
+- Completed closure rows: `c=0.5, lr=0.005 -> 0.810712`; `c=0.5, lr=0.0075 -> 0.810489`. Both have `error=None`, `steps_completed=3240`.
+- The current best `c=0.5` row is still `+0.010847` BPB worse than the matched-token best identity row `c=1, lr=0.005 -> 0.799642`.
+- `c=0.5, lr=0.01` has started as the final tail check, but the long-token readout already strongly favors `c=1`.
+
 ## 2026-05-03 — Sadhika d12/d16 2x sweep import
 
 Latest update:

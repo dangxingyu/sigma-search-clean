@@ -30,7 +30,11 @@ NANOCHAT_DIR = SCRIPT_DIR / "nanochat" if (SCRIPT_DIR / "nanochat").exists() els
 
 parser = argparse.ArgumentParser(description="Eval runner for f(Σ) search")
 parser.add_argument("--nanochat-dir", type=str, default=str(NANOCHAT_DIR), help="Path to nanochat repo")
-parser.add_argument("--candidate-file", type=str, required=True, help="Python file defining f(sigma, state)")
+parser.add_argument("--optimizer", type=str, default="streaming_muon",
+                    choices=["streaming_muon", "plain_muon", "muon", "native_muon", "adamw", "soap", "shampoo", "kl_shampoo", "kl_soap"],
+                    help="Matrix-weight optimizer baseline.")
+parser.add_argument("--candidate-file", type=str, default="candidates/identity.py",
+                    help="Python file defining f(sigma, state); only used by --optimizer streaming_muon.")
 parser.add_argument("--candidate-code", type=str, default=None, help="Inline Python code for f(sigma, state)")
 parser.add_argument("--candidate-param", action="append", default=[],
                     help="Candidate hyperparameter as key=value. Values are JSON-parsed when possible; repeatable.")
@@ -40,6 +44,8 @@ parser.add_argument("--depth", type=int, default=4, help="Model depth (small for
 parser.add_argument("--aspect-ratio", type=int, default=64, help="model_dim = depth * aspect_ratio")
 parser.add_argument("--head-dim", type=int, default=64, help="Head dimension")
 parser.add_argument("--max-seq-len", type=int, default=512, help="Max sequence length")
+parser.add_argument("--architecture", type=str, default="gpt2", choices=["gpt2", "nanochat"],
+                    help="Model architecture. gpt2 is the simplified control; nanochat keeps the original modded block.")
 # Training
 parser.add_argument("--max-steps", type=int, default=500, help="Training steps")
 parser.add_argument("--device-batch-size", type=int, default=8, help="Per-device batch size")
@@ -56,6 +62,18 @@ parser.add_argument("--k", type=int, default=-1, help="Number of singular vector
 parser.add_argument("--num-iters", type=int, default=1, help="Number of streaming power iterations (1 or 2)")
 parser.add_argument("--pure-qr", action="store_true", default=False, help="Use Householder QR instead of SCQR in StreamingMuon orthogonalization.")
 parser.add_argument("--fallback-ortho-tol", type=float, default=0.02, help="SCQR fallback orthogonality tolerance: when max ||Q^T Q - I|| > tol, fall back to Householder QR. Pass a negative value to disable the orthogonality check.")
+parser.add_argument("--precondition-frequency", type=int, default=10,
+                    help="SOAP/Shampoo/KL baseline eigenbasis refresh frequency.")
+parser.add_argument("--shampoo-beta", type=float, default=0.95,
+                    help="EMA beta for SOAP/Shampoo/KL preconditioner factors.")
+parser.add_argument("--optimizer-beta1", type=float, default=0.9,
+                    help="First-moment beta for non-Muon matrix optimizer baselines.")
+parser.add_argument("--optimizer-beta2", type=float, default=0.95,
+                    help="Second-moment/RMS beta for SOAP/KL-SOAP.")
+parser.add_argument("--structured-init-factor", type=float, default=1.0,
+                    help="Initial diagonal factor for Shampoo/SOAP/KL baselines.")
+parser.add_argument("--structured-use-qr", action=argparse.BooleanOptionalAction, default=True,
+                    help="Use QR power refreshes for structured optimizer eigenbases after initialization.")
 # Eval
 parser.add_argument("--eval-every", type=int, default=100, help="Evaluate val BPB every N steps")
 parser.add_argument("--eval-tokens", type=int, default=524288, help="Tokens for val eval")
@@ -357,6 +375,154 @@ def _distributed_stop_requested(ddp: bool, device: torch.device) -> bool:
     return bool(flag.item())
 
 
+def _named_trainable_params(model: torch.nn.Module) -> dict[str, torch.nn.Parameter]:
+    return {name: p for name, p in model.named_parameters() if p.requires_grad}
+
+
+def _select_params(named: dict[str, torch.nn.Parameter], predicate) -> list[torch.nn.Parameter]:
+    return [p for name, p in named.items() if predicate(name, p)]
+
+
+def _make_adamw_group(kind: str, params: list[torch.nn.Parameter], lr: float,
+                      betas: tuple[float, float], eps: float, weight_decay: float) -> dict:
+    return dict(kind=kind, params=params, lr=lr, betas=betas, eps=eps, weight_decay=weight_decay)
+
+
+def build_optimizer_for_run(
+    model: torch.nn.Module,
+    *,
+    optimizer_name: str,
+    sigma_transform,
+    matrix_lr: float,
+    weight_decay: float,
+    batch_lr_scale: float,
+    dmodel_lr_scale: float,
+    ddp: bool,
+) -> tuple[torch.optim.Optimizer, dict[int, str]]:
+    """Build the mixed optimizer and return ``param_id -> name`` for matrix params."""
+    named = _named_trainable_params(model)
+    matrix_params_named = {
+        name: p for name, p in named.items()
+        if p.ndim == 2 and name.startswith("transformer.h.")
+    }
+    matrix_params = list(matrix_params_named.values())
+    param_name_by_id = {id(p): n for n, p in matrix_params_named.items()}
+    matrix_param_ids = {id(p) for p in matrix_params}
+
+    lm_head_params = _select_params(named, lambda n, p: n.startswith("lm_head."))
+    embedding_params = _select_params(
+        named,
+        lambda n, p: n.startswith("transformer.wte.") or n.startswith("transformer.wpe."),
+    )
+    value_embed_params = _select_params(named, lambda n, p: n.startswith("value_embeds."))
+    used_ids = matrix_param_ids | {id(p) for p in lm_head_params + embedding_params + value_embed_params}
+    extra_adamw_params = [p for p in named.values() if id(p) not in used_ids]
+
+    scalar_lr = 0.5 * batch_lr_scale
+    param_groups: list[dict] = []
+    if lm_head_params:
+        param_groups.append(_make_adamw_group(
+            "adamw", lm_head_params, 0.008 * dmodel_lr_scale * batch_lr_scale,
+            (0.8, 0.96), 1e-10, 0.01,
+        ))
+    if embedding_params:
+        param_groups.append(_make_adamw_group(
+            "adamw", embedding_params, 0.3 * dmodel_lr_scale * batch_lr_scale,
+            (0.8, 0.995), 1e-10, 0.001,
+        ))
+    if value_embed_params:
+        param_groups.append(_make_adamw_group(
+            "adamw", value_embed_params, 0.3 * dmodel_lr_scale * batch_lr_scale * 0.5,
+            (0.8, 0.995), 1e-10, 0.01,
+        ))
+    if extra_adamw_params:
+        param_groups.append(_make_adamw_group(
+            "adamw", extra_adamw_params, scalar_lr * 0.01,
+            (0.8, 0.95), 1e-10, 0.0,
+        ))
+
+    if optimizer_name == "adamw":
+        if matrix_params:
+            matrix_group = _make_adamw_group(
+                "adamw", matrix_params, matrix_lr * batch_lr_scale,
+                (args.optimizer_beta1, args.optimizer_beta2), 1e-8, weight_decay,
+            )
+            matrix_group["schedule_weight_decay"] = True
+            param_groups.append(matrix_group)
+        from baseline_optim import StructuredAdamW
+        optimizer = StructuredAdamW(param_groups, average_gradients=ddp)
+    elif optimizer_name == "plain_muon":
+        for shape in sorted({p.shape for p in matrix_params}):
+            group_params = [p for p in matrix_params if p.shape == shape]
+            param_groups.append(dict(
+                kind="plain_muon",
+                params=group_params,
+                lr=matrix_lr * batch_lr_scale,
+                momentum=0.95,
+                ns_steps=5,
+                weight_decay=weight_decay,
+            ))
+        from baseline_optim import StructuredAdamW
+        optimizer = StructuredAdamW(param_groups, average_gradients=ddp)
+    elif optimizer_name in {"muon", "native_muon"}:
+        for shape in sorted({p.shape for p in matrix_params}):
+            group_params = [p for p in matrix_params if p.shape == shape]
+            param_groups.append(dict(
+                kind="muon",
+                params=group_params,
+                lr=matrix_lr * batch_lr_scale,
+                momentum=0.95,
+                ns_steps=5,
+                weight_decay=weight_decay,
+            ))
+        from nanochat.optim import DistMuonAdamW, MuonAdamW
+        optimizer = (DistMuonAdamW if ddp else MuonAdamW)(param_groups)
+    elif optimizer_name == "streaming_muon":
+        from streaming_muon_torch import DistStreamingMuonAdamW, StreamingMuonAdamW
+
+        k_val = args.k if args.k > 0 else None
+        for shape in sorted({p.shape for p in matrix_params}):
+            group_params = [p for p in matrix_params if p.shape == shape]
+            param_groups.append(dict(
+                kind="streaming_muon",
+                params=group_params,
+                lr=matrix_lr * batch_lr_scale,
+                momentum=0.95,
+                weight_decay=weight_decay,
+                sigma_transform=sigma_transform,
+                k=k_val,
+                num_iters=args.num_iters,
+                pure_qr=args.pure_qr,
+                fallback_orthogonality_tol=(
+                    None if args.fallback_ortho_tol is not None and args.fallback_ortho_tol < 0
+                    else args.fallback_ortho_tol
+                ),
+            ))
+        optimizer = (DistStreamingMuonAdamW if ddp else StreamingMuonAdamW)(param_groups)
+    else:
+        from baseline_optim import StructuredAdamW
+
+        for shape in sorted({p.shape for p in matrix_params}):
+            group_params = [p for p in matrix_params if p.shape == shape]
+            param_groups.append(dict(
+                kind=optimizer_name,
+                params=group_params,
+                lr=matrix_lr * batch_lr_scale,
+                betas=(args.optimizer_beta1, args.optimizer_beta2),
+                shampoo_beta=args.shampoo_beta,
+                eps=1e-8,
+                weight_decay=weight_decay,
+                precondition_frequency=args.precondition_frequency,
+                init_factor=args.structured_init_factor,
+                use_qr=args.structured_use_qr,
+            ))
+        optimizer = StructuredAdamW(param_groups, average_gradients=ddp)
+
+    for group in optimizer.param_groups:
+        group["initial_lr"] = group["lr"]
+    return optimizer, param_name_by_id
+
+
 # =============================================================================
 # Main
 # =============================================================================
@@ -413,21 +579,27 @@ def main():
         token_bytes = get_token_bytes(device=device)
         vocab_size = tokenizer.get_vocab_size()
 
-        # --- Load candidate ---
-        sigma_fn = configure_candidate_fn(
-            load_candidate_fn(args.candidate_file, args.candidate_code),
-            candidate_params,
-        )
-        print0(f"Loaded candidate f(Σ), params={candidate_params}")
+        # --- Load optional StreamingMuon candidate ---
+        sigma_transform = None
+        if args.optimizer == "streaming_muon":
+            sigma_fn = configure_candidate_fn(
+                load_candidate_fn(args.candidate_file, args.candidate_code),
+                candidate_params,
+            )
+            from streaming_muon_torch import CustomTransform
+            sigma_transform = CustomTransform(sigma_fn)
+            print0(f"Loaded candidate f(Σ), params={candidate_params}")
 
-        # Quick smoke test
-        sigma_test = torch.rand(4, 32, device=device) * 5
-        state_test = {}
-        scaling_test = sigma_fn(sigma_test, state_test)
-        assert scaling_test.shape == sigma_test.shape, f"Shape mismatch: {scaling_test.shape}"
-        assert torch.all(torch.isfinite(scaling_test)), "Non-finite scaling"
-        print0(f"Smoke test passed: scaling range [{scaling_test.min().item():.4f}, {scaling_test.max().item():.4f}]")
-        results["smoke_test"] = "passed"
+            # Quick smoke test
+            sigma_test = torch.rand(4, 32, device=device) * 5
+            state_test = {}
+            scaling_test = sigma_fn(sigma_test, state_test)
+            assert scaling_test.shape == sigma_test.shape, f"Shape mismatch: {scaling_test.shape}"
+            assert torch.all(torch.isfinite(scaling_test)), "Non-finite scaling"
+            print0(f"Smoke test passed: scaling range [{scaling_test.min().item():.4f}, {scaling_test.max().item():.4f}]")
+            results["smoke_test"] = "passed"
+        else:
+            results["smoke_test"] = "not_applicable_non_streaming_optimizer"
 
         # --- Build model ---
         base_dim = args.depth * args.aspect_ratio
@@ -441,6 +613,7 @@ def main():
             n_kv_head=num_heads,
             n_embd=model_dim,
             window_pattern="L",
+            architecture=args.architecture,
         )
         with torch.device("meta"):
             model = GPT(config)
@@ -448,24 +621,10 @@ def main():
         torch.manual_seed(args.seed)
         torch.cuda.manual_seed_all(args.seed)
         model.init_weights()
-        print0(f"Model: depth={args.depth}, dim={model_dim}, heads={num_heads}, "
+        print0(f"Model: architecture={args.architecture}, depth={args.depth}, dim={model_dim}, heads={num_heads}, "
                f"params={sum(p.numel() for p in model.parameters()):,}")
 
         # --- Optimizer ---
-        # Replicate setup_optimizer logic but use StreamingMuonAdamW
-        matrix_params = list(model.transformer.h.parameters())
-        matrix_params_named = {
-            n: p for n, p in model.named_parameters()
-            if p.requires_grad and p.ndim == 2 and "transformer.h." in n
-        }
-        param_name_by_id = {id(p): n for n, p in matrix_params_named.items()}
-        value_embeds_params = list(model.value_embeds.parameters())
-        embedding_params = list(model.transformer.wte.parameters())
-        lm_head_params = list(model.lm_head.parameters())
-        resid_params = [model.resid_lambdas]
-        x0_params = [model.x0_lambdas]
-        smear_params = [model.smear_gate.weight, model.smear_lambda, model.backout_lambda]
-
         dmodel_lr_scale = (model_dim / 768) ** -0.5
 
         # Batch size (scales with world_size for distributed)
@@ -473,43 +632,21 @@ def main():
         total_batch_size = args.total_batch_size if args.total_batch_size > 0 else tokens_per_batch * world_size
         batch_lr_scale = (total_batch_size / (2**19)) ** 0.5 if total_batch_size != 2**19 else 1.0
 
-        # Match nanochat's setup_optimizer with base_train.py CLI defaults:
-        # unembedding_lr=0.008, embedding_lr=0.3, scalar_lr=0.5 (all scaled by batch_lr_scale)
-        scalar_lr = 0.5 * batch_lr_scale
-        param_groups = [
-            dict(kind='adamw', params=lm_head_params, lr=0.008 * dmodel_lr_scale * batch_lr_scale,
-                 betas=(0.8, 0.96), eps=1e-10, weight_decay=0.01),
-            dict(kind='adamw', params=embedding_params, lr=0.3 * dmodel_lr_scale * batch_lr_scale,
-                 betas=(0.8, 0.995), eps=1e-10, weight_decay=0.001),
-            dict(kind='adamw', params=value_embeds_params, lr=0.3 * dmodel_lr_scale * batch_lr_scale * 0.5,
-                 betas=(0.8, 0.995), eps=1e-10, weight_decay=0.01),
-            dict(kind='adamw', params=resid_params, lr=scalar_lr * 0.01, betas=(0.8, 0.95), eps=1e-10, weight_decay=0.05),
-            dict(kind='adamw', params=x0_params, lr=scalar_lr, betas=(0.96, 0.95), eps=1e-10, weight_decay=0.0),
-            dict(kind='adamw', params=smear_params, lr=0.2, betas=(0.8, 0.95), eps=1e-10, weight_decay=0.0),
-        ]
-
-        # Muon groups → streaming_muon groups
-        k_val = args.k if args.k > 0 else None
-        sigma_transform = CustomTransform(sigma_fn)
-        for shape in sorted({p.shape for p in matrix_params}):
-            group_params = [p for p in matrix_params if p.shape == shape]
-            param_groups.append(dict(
-                kind='streaming_muon',
-                params=group_params,
-                lr=args.matrix_lr * batch_lr_scale,
-                momentum=0.95,
-                weight_decay=args.weight_decay,
-                sigma_transform=sigma_transform,
-                k=k_val,
-                num_iters=args.num_iters,
-                pure_qr=args.pure_qr,
-                fallback_orthogonality_tol=(None if args.fallback_ortho_tol is not None and args.fallback_ortho_tol < 0 else args.fallback_ortho_tol),
-            ))
-
-        OptimizerClass = DistStreamingMuonAdamW if ddp else StreamingMuonAdamW
-        optimizer = OptimizerClass(param_groups)
-        for group in optimizer.param_groups:
-            group["initial_lr"] = group["lr"]
+        optimizer, param_name_by_id = build_optimizer_for_run(
+            model,
+            optimizer_name=args.optimizer,
+            sigma_transform=sigma_transform,
+            matrix_lr=args.matrix_lr,
+            weight_decay=args.weight_decay,
+            batch_lr_scale=batch_lr_scale,
+            dmodel_lr_scale=dmodel_lr_scale,
+            ddp=ddp,
+        )
+        matrix_params_named = {
+            n: p for n, p in model.named_parameters()
+            if p.requires_grad and p.ndim == 2 and n.startswith("transformer.h.")
+        }
+        print0(f"Optimizer: {args.optimizer}")
 
         resume_meta = None
         resume_step = _resolve_resume_step(
@@ -543,7 +680,10 @@ def main():
         # Keep the eager module for optional Hessian diagnostics. Higher-order
         # autograd through the compiled wrapper can fail with donated buffers.
         eager_model = model
-        model = torch.compile(model, dynamic=False)
+        if os.environ.get("NANOCHAT_DISABLE_COMPILE", "0") == "1":
+            print0("NANOCHAT_DISABLE_COMPILE=1: using eager model for smoke/debug run.")
+        else:
+            model = torch.compile(model, dynamic=False)
 
         # --- Data loader ---
         dataloader_resume_state_dict = (
@@ -670,9 +810,11 @@ def main():
             # Schedule
             for group in optimizer.param_groups:
                 group["lr"] = group["initial_lr"] * lrm
-                if group['kind'] == 'streaming_muon':
+                if group['kind'] in {'streaming_muon', 'muon', 'plain_muon'}:
                     group["momentum"] = muon_momentum
+                if group.get("schedule_weight_decay", False) or group['kind'] in {'streaming_muon', 'muon', 'plain_muon', 'soap', 'shampoo', 'kl_shampoo', 'kl_soap'}:
                     group["weight_decay"] = muon_wd
+                if group['kind'] == 'streaming_muon':
                     group["_capture_metrics"] = metrics_due
 
             optimizer.step()

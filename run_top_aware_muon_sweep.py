@@ -1,18 +1,16 @@
 #!/usr/bin/env python3
-"""Sweep Top-Aware Muon alpha variants on StreamingMuon.
+"""Sweep optimizer baselines and Top-Aware Muon alpha variants.
 
-This is the clean handoff sweep engine. It intentionally supports only the
-StreamingMuon path used for current experiments:
+This module keeps the historical filename for compatibility. Prefer invoking
+``run_optimizer_sweep.py`` in new scripts/docs. The engine intentionally
+supports only the main optimizer baselines used for current experiments:
 
-    top_aware_muon: run_eval.py + candidates/top_aware_muon.py
+    streaming_identity: StreamingMuon + candidates/identity.py
+    top_aware_muon: StreamingMuon + candidates/top_aware_muon.py
+    plain_muon, muon/native_muon, adamw, soap, shampoo, kl_shampoo, kl_soap
 
-The default baseline is Top-Aware Muon with alpha=1.0, which is exactly
-f(sigma)=1 under the same candidate implementation. The separate
-streaming_identity candidate remains supported for targeted sanity checks but
-is not part of the default handoff sweep.
-
-Native Muon/LITE launchers and same-driver LITE sanity checks were removed
-from this runner so batch/LR/alpha sweeps cannot accidentally mix recipes.
+The default baseline remains Top-Aware Muon with alpha=1.0/0.5. Non-streaming
+baselines ignore --alphas and --top-ks.
 """
 
 from __future__ import annotations
@@ -24,6 +22,7 @@ import math
 import os
 import shlex
 import subprocess
+import sys
 import time
 from json import JSONDecodeError
 from pathlib import Path
@@ -31,7 +30,30 @@ from typing import Any
 
 
 SEQ = 1024
-METHOD_CHOICES = {"streaming_identity", "top_aware_muon"}
+METHOD_CHOICES = {
+    "streaming_identity",
+    "top_aware_muon",
+    "plain_muon",
+    "muon",
+    "native_muon",
+    "adamw",
+    "soap",
+    "shampoo",
+    "kl_shampoo",
+    "kl_soap",
+}
+RUN_EVAL_OPTIMIZER = {
+    "streaming_identity": "streaming_muon",
+    "top_aware_muon": "streaming_muon",
+    "plain_muon": "plain_muon",
+    "muon": "muon",
+    "native_muon": "native_muon",
+    "adamw": "adamw",
+    "soap": "soap",
+    "shampoo": "shampoo",
+    "kl_shampoo": "kl_shampoo",
+    "kl_soap": "kl_soap",
+}
 CHINCHILLA_1X_TOKENS_BY_DEPTH = {
     # 20x non-embedding/token-budget convention used by this handoff repo.
     # Values are rounded down where needed to stay compatible with the main
@@ -107,7 +129,7 @@ def case_name(method: str, batch: int, lr: float, seed: int,
     if method == "top_aware_muon":
         assert top_k is not None and alpha is not None
         return f"top_aware_k{top_k}_a{slug_float(alpha)}_bsz{batch}_lr{slug_float(lr)}_s{seed}"
-    return f"streaming_identity_bsz{batch}_lr{slug_float(lr)}_s{seed}"
+    return f"{method}_bsz{batch}_lr{slug_float(lr)}_s{seed}"
 
 
 def result_path(args: argparse.Namespace, method: str, batch: int, lr: float,
@@ -156,6 +178,7 @@ def common_training_args(args: argparse.Namespace, batch: int, lr: float, seed: 
         "--eval-every", str(eval_every),
         "--eval-tokens", str(args.eval_tokens),
         "--seed", str(seed),
+        "--architecture", args.architecture,
     ]
 
 
@@ -196,9 +219,11 @@ def build_command(args: argparse.Namespace, method: str, batch: int, lr: float, 
     candidate = {
         "streaming_identity": "candidates/identity.py",
         "top_aware_muon": "candidates/top_aware_muon.py",
-    }[method]
-    cmd = ["torchrun", "--standalone", f"--nproc_per_node={args.nproc_per_node}", "run_eval.py"]
-    cmd += ["--candidate-file", candidate]
+    }.get(method)
+    cmd = [sys.executable, "-m", "torch.distributed.run", "--standalone", f"--nproc_per_node={args.nproc_per_node}", "run_eval.py"]
+    cmd += ["--optimizer", RUN_EVAL_OPTIMIZER[method]]
+    if candidate is not None:
+        cmd += ["--candidate-file", candidate]
     if method == "top_aware_muon":
         assert top_k is not None and alpha is not None
         cmd += ["--candidate-param", f"top_k={top_k}", "--candidate-param", f"alpha={alpha:g}"]
@@ -207,9 +232,18 @@ def build_command(args: argparse.Namespace, method: str, batch: int, lr: float, 
         "--k", str(args.streaming_rank_k),
         "--num-iters", str(args.streaming_num_iters),
         "--fallback-ortho-tol", f"{args.fallback_ortho_tol:g}",
+        "--precondition-frequency", str(args.precondition_frequency),
+        "--shampoo-beta", f"{args.shampoo_beta:g}",
+        "--optimizer-beta1", f"{args.optimizer_beta1:g}",
+        "--optimizer-beta2", f"{args.optimizer_beta2:g}",
+        "--structured-init-factor", f"{args.structured_init_factor:g}",
     ]
     if args.pure_qr:
         cmd.append("--pure-qr")
+    if args.structured_use_qr:
+        cmd.append("--structured-use-qr")
+    else:
+        cmd.append("--no-structured-use-qr")
     cmd += checkpoint_args(args, out)
     cmd += metrics_args(args)
     return cmd
@@ -221,6 +255,11 @@ def iter_case_specs(args: argparse.Namespace, methods: list[str]):
             if "streaming_identity" in methods:
                 for lr in args.lrs:
                     yield "streaming_identity", batch, lr, seed, None, None
+            for method in methods:
+                if method in {"streaming_identity", "top_aware_muon"}:
+                    continue
+                for lr in args.lrs:
+                    yield method, batch, lr, seed, None, None
             if "top_aware_muon" in methods:
                 for top_k in args.top_ks:
                     for alpha in args.alphas:
@@ -231,7 +270,7 @@ def iter_case_specs(args: argparse.Namespace, methods: list[str]):
 def append_summary(args: argparse.Namespace, row: dict[str, Any]) -> None:
     if not getattr(args, "append_summary", True):
         return
-    path = args.out_root / "top_aware_sweep_rows.csv"
+    path = args.out_root / "sweep_rows.csv"
     path.parent.mkdir(parents=True, exist_ok=True)
     fields = [
         "time", "method", "batch", "lr", "seed", "top_k", "alpha",
@@ -308,7 +347,11 @@ def write_manifest(args: argparse.Namespace, methods: list[str]) -> None:
         except JSONDecodeError:
             previous = {}
         previous_signature = previous.get("config_signature")
-        if previous_signature is not None and previous_signature != signature:
+        if (
+            previous_signature is not None
+            and comparable_sweep_signature(previous_signature)
+            != comparable_sweep_signature(signature)
+        ):
             raise ValueError(
                 f"{manifest_path} already exists with a different sweep configuration. "
                 "Use a new STAMP/OUT_ROOT for a changed recipe, or pass "
@@ -330,6 +373,7 @@ def write_manifest(args: argparse.Namespace, methods: list[str]) -> None:
         "chinchilla_mult": args.chinchilla_mult,
         "chinchilla_1x_tokens": args.chinchilla_1x_tokens,
         "depth": args.depth,
+        "architecture": args.architecture,
         "seq": SEQ,
         "nproc_per_node": args.nproc_per_node,
         "max_device_batch_size": args.max_device_batch_size,
@@ -338,6 +382,14 @@ def write_manifest(args: argparse.Namespace, methods: list[str]) -> None:
             "num_iters": args.streaming_num_iters,
             "fallback_ortho_tol": args.fallback_ortho_tol,
             "rank_k": args.streaming_rank_k,
+        },
+        "structured_optimizers": {
+            "precondition_frequency": args.precondition_frequency,
+            "shampoo_beta": args.shampoo_beta,
+            "optimizer_beta1": args.optimizer_beta1,
+            "optimizer_beta2": args.optimizer_beta2,
+            "init_factor": args.structured_init_factor,
+            "use_qr": args.structured_use_qr,
         },
         "checkpointing": {
             "enabled": args.save_every > 0,
@@ -373,6 +425,14 @@ def write_manifest(args: argparse.Namespace, methods: list[str]) -> None:
         "method_definitions": {
             "streaming_identity": "StreamingMuon with f(sigma)=1",
             "top_aware_muon": "StreamingMuon with top-k sigma-direction scale alpha",
+            "plain_muon": "ordinary Muon: NS5 matrix-sign orthogonalization of Nesterov momentum, no dimension LR normalization",
+            "muon": "nanochat native Muon/NormMuon baseline",
+            "native_muon": "nanochat native Muon baseline",
+            "adamw": "AdamW on matrix weights plus AdamW on embeddings/scalars",
+            "soap": "SOAP/RMSProp in Shampoo eigenbasis",
+            "shampoo": "Two-sided Shampoo with -1/4 factor powers",
+            "kl_shampoo": "KL-Shampoo-style two-sided factor update and eigenvalue EMA correction",
+            "kl_soap": "KL-Shampoo basis update with SOAP/RMSProp augmented diagonal",
         },
     }
     tmp_path = manifest_path.with_name(f"{manifest_path.name}.tmp.{os.getpid()}")
@@ -391,6 +451,7 @@ def sweep_signature(args: argparse.Namespace, methods: list[str]) -> dict[str, A
         "seeds": args.seeds,
         "tokens": args.tokens,
         "depth": args.depth,
+        "architecture": args.architecture,
         "seq": SEQ,
         "nproc_per_node": args.nproc_per_node,
         "max_device_batch_size": args.max_device_batch_size,
@@ -403,6 +464,12 @@ def sweep_signature(args: argparse.Namespace, methods: list[str]) -> dict[str, A
         "streaming_rank_k": args.streaming_rank_k,
         "fallback_ortho_tol": args.fallback_ortho_tol,
         "pure_qr": args.pure_qr,
+        "precondition_frequency": args.precondition_frequency,
+        "shampoo_beta": args.shampoo_beta,
+        "optimizer_beta1": args.optimizer_beta1,
+        "optimizer_beta2": args.optimizer_beta2,
+        "structured_init_factor": args.structured_init_factor,
+        "structured_use_qr": args.structured_use_qr,
         "metrics_every": args.metrics_every,
         "metrics_top_k": args.metrics_top_k,
         "metrics_module_regex": args.metrics_module_regex,
@@ -421,8 +488,26 @@ def sweep_signature(args: argparse.Namespace, methods: list[str]) -> dict[str, A
     }
 
 
+def comparable_sweep_signature(signature: dict[str, Any]) -> dict[str, Any]:
+    """Fields that define the base grid and training recipe.
+
+    Adaptive-LR closure knobs intentionally do not participate in compatibility:
+    a fixed-grid SLURM array can write the base manifest, then a later local
+    command can collate summaries or run boundary closures under the same STAMP.
+    """
+    ignored = {
+        "adaptive_lr",
+        "lr_extend_factor",
+        "lr_min",
+        "lr_max",
+        "max_lr_extension_rounds",
+        "adaptive_min_edge_improvement",
+    }
+    return {k: v for k, v in signature.items() if k not in ignored}
+
+
 def write_summary_csv(args: argparse.Namespace, methods: list[str]) -> Path:
-    path = args.out_root / "top_aware_sweep_rows.csv"
+    path = args.out_root / "sweep_rows.csv"
     fields = [
         "time", "method", "batch", "lr", "seed", "top_k", "alpha",
         "score", "error", "result_json", "log_file",
@@ -559,18 +644,19 @@ def run_adaptive_lr_rounds(args: argparse.Namespace, methods: list[str]) -> None
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser()
     stamp = time.strftime("%Y%m%d_%H%M%S")
-    parser.add_argument("--out-root", type=Path, default=Path(f"search_evals/top_aware_muon_sweep_{stamp}"))
-    parser.add_argument("--log-root", type=Path, default=Path(f"logs/top_aware_muon_sweep_{stamp}"))
+    parser.add_argument("--out-root", type=Path, default=Path(f"search_evals/optimizer_sweep_{stamp}"))
+    parser.add_argument("--log-root", type=Path, default=Path(f"logs/optimizer_sweep_{stamp}"))
     parser.add_argument("--nanochat-dir", type=str, default="nanochat")
     parser.add_argument("--methods", type=parse_list_str,
                         default=parse_list_str("top_aware_muon"),
-                        help="Space/comma separated subset of: streaming_identity top_aware_muon")
+                        help=f"Space/comma separated subset of: {' '.join(sorted(METHOD_CHOICES))}")
     parser.add_argument("--batches", type=parse_list_int, default=parse_list_int("131072"))
     parser.add_argument("--lrs", type=parse_list_float, default=parse_list_float("0.005 0.0075 0.01 0.015 0.02 0.03 0.04"))
     parser.add_argument("--top-ks", type=parse_list_int, default=parse_list_int("1"))
     parser.add_argument("--alphas", type=parse_list_float, default=parse_list_float("1.0 0.5"))
     parser.add_argument("--seeds", type=parse_list_int, default=parse_list_int("42"))
     parser.add_argument("--depth", type=int, default=8)
+    parser.add_argument("--architecture", type=str, default="gpt2", choices=["gpt2", "nanochat"])
     parser.add_argument("--tokens", type=int, default=None,
                         help="Exact token budget override. If omitted, use --chinchilla-mult and --depth.")
     parser.add_argument("--chinchilla-mult", type=float, default=2.0,
@@ -593,6 +679,12 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--streaming-rank-k", type=int, default=-1)
     parser.add_argument("--fallback-ortho-tol", type=float, default=0.01)
     parser.add_argument("--pure-qr", action=argparse.BooleanOptionalAction, default=True)
+    parser.add_argument("--precondition-frequency", type=int, default=10)
+    parser.add_argument("--shampoo-beta", type=float, default=0.95)
+    parser.add_argument("--optimizer-beta1", type=float, default=0.9)
+    parser.add_argument("--optimizer-beta2", type=float, default=0.95)
+    parser.add_argument("--structured-init-factor", type=float, default=1.0)
+    parser.add_argument("--structured-use-qr", action=argparse.BooleanOptionalAction, default=True)
 
     parser.add_argument("--metrics-every", type=int, default=0)
     parser.add_argument("--metrics-top-k", type=int, default=4)
@@ -615,7 +707,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--print-case-count", action="store_true",
                         help="Print the number of initial grid cases and exit.")
     parser.add_argument("--summary-only", action="store_true",
-                        help="Rebuild top_aware_sweep_rows.csv from result files and exit.")
+                        help="Rebuild sweep_rows.csv from result files and exit.")
     parser.add_argument("--allow-top-k-sweep", action="store_true")
     parser.add_argument("--adaptive-lr", action="store_true")
     parser.add_argument("--lr-extend-factor", type=float, default=2.0)
@@ -713,6 +805,16 @@ def validate_args(args: argparse.Namespace) -> None:
         raise ValueError("--streaming-rank-k must be -1 or > 0")
     if args.fallback_ortho_tol is not None and not math.isfinite(args.fallback_ortho_tol):
         raise ValueError("--fallback-ortho-tol must be finite")
+    if args.precondition_frequency < 0:
+        raise ValueError("--precondition-frequency must be >= 0")
+    if not (0 <= args.shampoo_beta < 1):
+        raise ValueError("--shampoo-beta must be in [0, 1)")
+    if not (0 <= args.optimizer_beta1 < 1):
+        raise ValueError("--optimizer-beta1 must be in [0, 1)")
+    if not (0 <= args.optimizer_beta2 < 1):
+        raise ValueError("--optimizer-beta2 must be in [0, 1)")
+    if args.structured_init_factor <= 0:
+        raise ValueError("--structured-init-factor must be > 0")
 
     if args.metrics_every < 0:
         raise ValueError("--metrics-every must be >= 0")
@@ -754,11 +856,14 @@ def main() -> None:
 
     args.out_root.mkdir(parents=True, exist_ok=True)
     args.log_root.mkdir(parents=True, exist_ok=True)
-    write_manifest(args, args.methods)
 
     if args.summary_only:
+        # Pure collation: do not check or rewrite manifest, and never launch
+        # training/adaptive closure. This only needs completed result.json files.
         print(f"summary_csv={write_summary_csv(args, args.methods)}", flush=True)
         return
+
+    write_manifest(args, args.methods)
 
     print(f"OUT_ROOT={args.out_root}", flush=True)
     print(f"LOG_ROOT={args.log_root}", flush=True)

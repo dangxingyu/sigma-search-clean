@@ -1,5 +1,25 @@
 # New Thoughts — Reading Sadhika's guidance
 
+## Current conclusion ledger addendum (2026-05-05, non-streaming optimizer baselines)
+
+### 1. Confident enough to treat as correct
+
+- The new non-StreamingMuon baseline code path can run end-to-end for `plain_muon`, AdamW, SOAP, Shampoo, KL-Shampoo, and KL-SOAP on GPU. The 100-step two-batch sanity sweep completed every row without errors.
+- `plain_muon` should be the ordinary Muon baseline for this baseline-comparison phase: NS5 matrix-sign orthogonalization on Nesterov momentum, without nanochat dimension LR normalization. The old nanochat `muon/native_muon` path is still available but corresponds to the historical nanochat Muon/NormMuon implementation and should not be silently substituted.
+- With the corrected NS5 implementation, `plain_muon` is not the speed bottleneck in the d12 8xB200 smoke. Step-50 times were AdamW `0.090s`, plain Muon `0.105s`, SOAP `0.128s`, Shampoo `0.135s`, KL-Shampoo `0.160s`, and KL-SOAP `0.157s`.
+
+### 2. Multiple observations; likely true but still needs careful confirmation
+
+- The non-streaming optimizer LR behavior is qualitatively reasonable on the tiny d1 smoke: for bsz512, AdamW/SOAP/KL-SOAP improve up to `lr=0.004` and degrade at `0.008`; for bsz2048, those same methods prefer the low-LR edge and degrade as LR increases.
+
+### 3. Some observations suggest
+
+- In this very small 100-step setup, Shampoo/KL-Shampoo/plain Muon are nearly flat across the tested LR range at bsz2048. This may reflect the tiny model/short horizon more than optimizer quality.
+
+### 4. Hypotheses
+
+- SOAP/KL-SOAP in the current simple implementation behave close to AdamW at this scale because the preconditioner statistics have little time and little model dimension to separate from diagonal AdamW behavior. A larger d8/d12 smoke is needed before making any baseline-quality claim.
+
 ## Current conclusion ledger addendum (2026-05-02, v42/v43 clean StreamingMuon study)
 
 ### 1. Confident enough to treat as correct
@@ -9,6 +29,7 @@
 - Hessian diagnostics should estimate the same optimizer-step batch used for training when feasible: keep each Lanczos vector fixed, accumulate HVPs over all grad-accum microbatches by token count, then average across DDP ranks.
 - The imported d12/d16 sweeps are complete at the result-file level: each has 42/42 completed rows and no recorded training errors.
 - The v42/v43 evidence is internally consistent at 4M: Top-Aware `c=0.5` clearly beats identity under the same driver/recipe, both without metrics and with dense metrics enabled.
+- At d12, batch `4M`, and `8x` Chinchilla (`13.59B` tokens), the winner reverses relative to the shorter d8/d12 large-batch runs: `c=1` is strongly better than `c=0.5`. The current best identity row is `c=1, lr=0.005 -> 0.799642`; lower-LR closure for `c=0.5` gives `lr=0.005 -> 0.810712` and `lr=0.0075 -> 0.810489`.
 
 ### 2. Multiple observations; likely true but still needs careful confirmation
 
@@ -19,6 +40,7 @@
 
 ### 3. Some observations suggest
 
+- The long-token reversal is not explained by token budget alone at d8. In d8 8M 8x-Chinchilla, `c=0.5` still beats `c=1` after LR sweep (`0.947325` vs `0.949773`, delta `-0.002448` BPB). This points toward a depth/model-scale interaction, or a batch/token/depth interaction, rather than a pure longer-training effect.
 - In the d16 2x-Chinchilla sweep, `c=1` currently wins at 512K, 2M, and 8M, with deltas `+0.0005`, `+0.0009`, and `+0.0027`. The 8M point is the cleanest of these because neither best LR is at the lower boundary.
 - Top-Aware can improve BPB while the measured selected-subspace sharpness is higher than identity. The mechanism is therefore not simply "reduce all measured sharpness"; it may be allowing useful progress while controlling the top sigma direction's effective update.
 - The transition region should be described as noisy/tie-like rather than monotone: 262K over three seeds is near-tie (`-0.0006 ± 0.0011` SEM for `c=0.5 - identity`), 1M over three seeds is near-tie with a slight identity lean (`+0.0019 ± 0.0028` SEM), 2M over five seeds is near-tie (`+0.0005 ± 0.0042` SEM), and 4M robustly favors `c=0.5` over three seeds (`-0.0252 ± 0.0041` SEM).
@@ -31,13 +53,14 @@
 - The d16 result may indicate that the optimal sigma damping depends on model size/token budget as well as batch size. However, the 512K/2M d16 points first need lower-LR closure because best rows hit `lr=0.005`.
 - Top-Aware `c=0.5` helps in high-batch regimes because the top sigma direction imposes an edge-of-stability-style global LR bound; damping that direction lets the remaining directions use a larger effective stable LR.
 - The transition between identity and `c=0.5` may not be described by batch size alone under the current finite-token schedule. A more stable predictor may require dynamics metrics, more seeds, or a schedule-normalized statistic rather than only final BPB at one seed.
+- The useful `c` may decrease with batch size only at fixed short token budgets; with longer token budgets, schedule/token count can shift the optimum back toward identity because the run enters a lower-noise, lower-LR regime where damping the top direction reduces useful progress more than it stabilizes training.
 
 ## Current conclusion ledger addendum (2026-05-02)
 
 ### 1. Confident enough to treat as correct
 
-- The standalone repo should not expose historical one-off launchers as primary interfaces. The stable pass-by surface is `run_eval.py`, `run_top_aware_muon_sweep.py`, `scripts/run_d12_sweep.sh`, `scripts/run_d12_statistics.sh`, and `analysis/build_sweep_catalog.py`. d8/d12/d16 runs should use `DEPTH` plus `CHINCHILLA_MULT`; exact `TOKENS` is only for smoke or custom truncated runs.
-- The handoff sweep surface should be standalone scripts, not wrapper chains. New users should start from `scripts/run_d12_sweep.sh`; it directly invokes `run_top_aware_muon_sweep.py`. Adaptive LR boundary extension is implemented and should be left on for optimizer-quality sweeps.
+- The standalone repo should not expose historical one-off launchers as primary interfaces. The stable pass-by surface is `run_eval.py`, `run_optimizer_sweep.py`, `scripts/run_d12_sweep.sh`, `scripts/run_d12_statistics.sh`, and `analysis/build_sweep_catalog.py`. d8/d12/d16 runs should use `DEPTH` plus `CHINCHILLA_MULT`; exact `TOKENS` is only for smoke or custom truncated runs.
+- The handoff sweep surface should be standalone scripts, not wrapper chains. New users should start from `scripts/run_d12_sweep.sh`; it directly invokes `run_optimizer_sweep.py`. Adaptive LR boundary extension is implemented and should be left on for optimizer-quality sweeps.
 - Split-batch alignment for the current study must be computed on optimizer input `M'`, not raw `M`. The clean StreamingMuon and native Muon metric paths now use `M' = (1 - beta)G + beta M_new`.
 - In 8-GPU runs, split-momentum diagnostics should average split gradients across DDP ranks before updating the diagnostic momenta. The corrected clean path now records global-DDP split alignment; previous rank-local split logs are weaker diagnostics.
 - For the requested d8 dynamics study, `262144` is the critical batch. The no-tuning grid should be `{262K,1M,4M}`, not `{262K,512K,1M,4M}`.

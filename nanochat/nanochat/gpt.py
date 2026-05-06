@@ -1,15 +1,11 @@
-"""
-GPT model (rewrite, a lot simpler)
-Notable features:
-- rotary embeddings (and no positional embeddings)
-- QK norm
-- untied weights for token embedding and lm_head
-- relu^2 activation in MLP
-- norm after token embedding
-- no learnable params in rmsnorm
-- no bias in linear layers
-- Group-Query Attention (GQA) support for more efficient inference
-- Flash Attention 3 integration
+"""GPT model used by the clean optimizer-sweep repo.
+
+Two architectures are supported:
+- ``nanochat``: the original modded nanochat block with RoPE, QK norm, VE,
+  smear, x0 residuals, backout, and relu^2 MLP.
+- ``gpt2``: a deliberately simpler GPT-2-like control architecture with
+  learned position embeddings, full causal attention, GELU MLP, and none of the
+  nanochat-specific architectural tricks.
 """
 
 from functools import partial
@@ -37,6 +33,7 @@ class GPTConfig:
     # Characters: L=long (full context), S=short (quarter context)
     # Examples: "L"=all full context, "SL"=alternating, "SSL"=two short then one long
     window_pattern: str = "SSSL"
+    architecture: str = "nanochat"
 
 
 def norm(x):
@@ -66,6 +63,9 @@ class CausalSelfAttention(nn.Module):
     def __init__(self, config, layer_idx):
         super().__init__()
         self.layer_idx = layer_idx
+        self.architecture = config.architecture
+        self.use_qk_norm = config.architecture == "nanochat"
+        self.use_rotary = config.architecture == "nanochat"
         self.n_head = config.n_head
         self.n_kv_head = config.n_kv_head
         self.n_embd = config.n_embd
@@ -77,7 +77,11 @@ class CausalSelfAttention(nn.Module):
         self.c_v = Linear(self.n_embd, self.n_kv_head * self.head_dim, bias=False)
         self.c_proj = Linear(self.n_embd, self.n_embd, bias=False)
         self.ve_gate_channels = 12
-        self.ve_gate = Linear(self.ve_gate_channels, self.n_kv_head, bias=False) if has_ve(layer_idx, config.n_layer) else None
+        self.ve_gate = (
+            Linear(self.ve_gate_channels, self.n_kv_head, bias=False)
+            if config.architecture == "nanochat" and has_ve(layer_idx, config.n_layer)
+            else None
+        )
 
     def forward(self, x, ve, cos_sin, window_size, kv_cache):
         B, T, C = x.size()
@@ -89,17 +93,19 @@ class CausalSelfAttention(nn.Module):
         v = self.c_v(x).view(B, T, self.n_kv_head, self.head_dim)
 
         # Value residual (ResFormer): mix in value embedding with input-dependent gate per head
-        if ve is not None:
+        if ve is not None and self.ve_gate is not None:
             ve = ve.view(B, T, self.n_kv_head, self.head_dim)
             gate = 3 * torch.sigmoid(self.ve_gate(x[..., :self.ve_gate_channels]))  # (B, T, n_kv_head), range (0, 3)
             v = v + gate.unsqueeze(-1) * ve
 
         # Apply Rotary Embeddings to queries and keys to get relative positional encoding
-        cos, sin = cos_sin
-        q, k = apply_rotary_emb(q, cos, sin), apply_rotary_emb(k, cos, sin)
-        q, k = norm(q), norm(k) # QK norm
-        q = q * 1.2  # sharper attention (split scale between Q and K), TODO think through better
-        k = k * 1.2
+        if self.use_rotary:
+            cos, sin = cos_sin
+            q, k = apply_rotary_emb(q, cos, sin), apply_rotary_emb(k, cos, sin)
+        if self.use_qk_norm:
+            q, k = norm(q), norm(k) # QK norm
+            q = q * 1.2  # sharper attention (split scale between Q and K), TODO think through better
+            k = k * 1.2
 
         # Flash Attention (FA3 on Hopper+, PyTorch SDPA fallback elsewhere)
         # window_size is (left, right) tuple: (N, 0) for causal, (-1, 0) for full context
@@ -129,12 +135,16 @@ class CausalSelfAttention(nn.Module):
 class MLP(nn.Module):
     def __init__(self, config):
         super().__init__()
+        self.architecture = config.architecture
         self.c_fc = Linear(config.n_embd, 4 * config.n_embd, bias=False)
         self.c_proj = Linear(4 * config.n_embd, config.n_embd, bias=False)
 
     def forward(self, x):
         x = self.c_fc(x)
-        x = F.relu(x).square()
+        if self.architecture == "gpt2":
+            x = F.gelu(x, approximate="tanh")
+        else:
+            x = F.relu(x).square()
         x = self.c_proj(x)
         return x
 
@@ -142,12 +152,20 @@ class MLP(nn.Module):
 class Block(nn.Module):
     def __init__(self, config, layer_idx):
         super().__init__()
+        self.architecture = config.architecture
         self.attn = CausalSelfAttention(config, layer_idx)
         self.mlp = MLP(config)
+        if self.architecture == "gpt2":
+            self.ln_1 = nn.LayerNorm(config.n_embd, elementwise_affine=False)
+            self.ln_2 = nn.LayerNorm(config.n_embd, elementwise_affine=False)
 
     def forward(self, x, ve, cos_sin, window_size, kv_cache):
-        x = x + self.attn(norm(x), ve, cos_sin, window_size, kv_cache)
-        x = x + self.mlp(norm(x))
+        if self.architecture == "gpt2":
+            x = x + self.attn(self.ln_1(x), None, None, window_size, kv_cache)
+            x = x + self.mlp(self.ln_2(x))
+        else:
+            x = x + self.attn(norm(x), ve, cos_sin, window_size, kv_cache)
+            x = x + self.mlp(norm(x))
         return x
 
 
@@ -160,6 +178,9 @@ class GPT(nn.Module):
         """
         super().__init__()
         self.config = config
+        if config.architecture not in {"nanochat", "gpt2"}:
+            raise ValueError(f"unknown GPT architecture: {config.architecture}")
+        self.is_gpt2 = config.architecture == "gpt2"
         # Compute per-layer window sizes for sliding window attention
         # window_size is (left, right) tuple: (-1, 0) for full context, (N, 0) for sliding window
         self.window_sizes = self._compute_window_sizes(config)
@@ -172,29 +193,41 @@ class GPT(nn.Module):
             "wte": nn.Embedding(padded_vocab_size, config.n_embd),
             "h": nn.ModuleList([Block(config, layer_idx) for layer_idx in range(config.n_layer)]),
         })
+        if self.is_gpt2:
+            self.transformer["wpe"] = nn.Embedding(config.sequence_len, config.n_embd)
         self.lm_head = Linear(config.n_embd, padded_vocab_size, bias=False)
-        # Per-layer learnable scalars (inspired by modded-nanogpt)
-        # resid_lambdas: scales the residual stream at each layer (init 1.0 = neutral)
-        # x0_lambdas: blends initial embedding back in at each layer (init 0.0 = disabled)
-        # Separate parameters so they can have different optimizer treatment
-        self.resid_lambdas = nn.Parameter(torch.ones(config.n_layer))   # fake init, real init in init_weights()
-        self.x0_lambdas = nn.Parameter(torch.zeros(config.n_layer))     # fake init, real init in init_weights()
-        # Smear: mix previous token's embedding into current token (cheap bigram-like info)
-        self.smear_gate = Linear(24, 1, bias=False)
-        self.smear_lambda = nn.Parameter(torch.zeros(1))
-        # Backout: subtract cached mid-layer residual before final norm to remove low-level features
-        self.backout_lambda = nn.Parameter(0.2 * torch.ones(1))
+        if self.is_gpt2:
+            self.ln_f = nn.LayerNorm(config.n_embd, elementwise_affine=False)
+        else:
+            # Per-layer learnable scalars (inspired by modded-nanogpt)
+            # resid_lambdas: scales the residual stream at each layer (init 1.0 = neutral)
+            # x0_lambdas: blends initial embedding back in at each layer (init 0.0 = disabled)
+            # Separate parameters so they can have different optimizer treatment
+            self.resid_lambdas = nn.Parameter(torch.ones(config.n_layer))   # fake init, real init in init_weights()
+            self.x0_lambdas = nn.Parameter(torch.zeros(config.n_layer))     # fake init, real init in init_weights()
+            # Smear: mix previous token's embedding into current token (cheap bigram-like info)
+            self.smear_gate = Linear(24, 1, bias=False)
+            self.smear_lambda = nn.Parameter(torch.zeros(1))
+            # Backout: subtract cached mid-layer residual before final norm to remove low-level features
+            self.backout_lambda = nn.Parameter(0.2 * torch.ones(1))
         # Value embeddings (ResFormer-style): alternating layers, last layer always included
         head_dim = config.n_embd // config.n_head
         kv_dim = config.n_kv_head * head_dim
-        self.value_embeds = nn.ModuleDict({str(i): nn.Embedding(padded_vocab_size, kv_dim) for i in range(config.n_layer) if has_ve(i, config.n_layer)})
+        self.value_embeds = nn.ModuleDict(
+            {} if self.is_gpt2 else
+            {str(i): nn.Embedding(padded_vocab_size, kv_dim) for i in range(config.n_layer) if has_ve(i, config.n_layer)}
+        )
         # To support meta device initialization, we init the rotary embeddings here, but it's just "fake" meta tensors only.
         # As for rotary_seq_len, these rotary embeddings are pretty small/cheap in memory,
         # so let's just over-compute them by 10X, but assert fail if we ever reach that amount.
         # In the future we can dynamically grow the cache, for now it's fine.
         self.rotary_seq_len = config.sequence_len * 10 # 10X over-compute should be enough, TODO make nicer?
         head_dim = config.n_embd // config.n_head
-        cos, sin = self._precompute_rotary_embeddings(self.rotary_seq_len, head_dim)
+        if self.is_gpt2:
+            cos = torch.empty(0)
+            sin = torch.empty(0)
+        else:
+            cos, sin = self._precompute_rotary_embeddings(self.rotary_seq_len, head_dim)
         self.register_buffer("cos", cos, persistent=False) # persistent=False means it's not saved to the checkpoint
         self.register_buffer("sin", sin, persistent=False)
 
@@ -213,6 +246,25 @@ class GPT(nn.Module):
             mlp.c_fc:        uniform, std=1/sqrt(n_embd)
             mlp.c_proj:      zeros
         """
+
+        if self.is_gpt2:
+            # GPT-2-like initialization: small normal weights and learned positions.
+            torch.nn.init.normal_(self.transformer.wte.weight, mean=0.0, std=0.02)
+            torch.nn.init.normal_(self.transformer.wpe.weight, mean=0.0, std=0.02)
+            torch.nn.init.normal_(self.lm_head.weight, mean=0.0, std=0.02)
+
+            for block in self.transformer.h:
+                torch.nn.init.normal_(block.attn.c_q.weight, mean=0.0, std=0.02)
+                torch.nn.init.normal_(block.attn.c_k.weight, mean=0.0, std=0.02)
+                torch.nn.init.normal_(block.attn.c_v.weight, mean=0.0, std=0.02)
+                torch.nn.init.normal_(block.attn.c_proj.weight, mean=0.0, std=0.02 / (2 * self.config.n_layer) ** 0.5)
+                torch.nn.init.normal_(block.mlp.c_fc.weight, mean=0.0, std=0.02)
+                torch.nn.init.normal_(block.mlp.c_proj.weight, mean=0.0, std=0.02 / (2 * self.config.n_layer) ** 0.5)
+
+            if COMPUTE_DTYPE != torch.float16:
+                self.transformer.wte.to(dtype=COMPUTE_DTYPE)
+                self.transformer.wpe.to(dtype=COMPUTE_DTYPE)
+            return
 
         # Embedding and unembedding
         torch.nn.init.normal_(self.transformer.wte.weight, mean=0.0, std=0.8)
@@ -288,6 +340,8 @@ class GPT(nn.Module):
         Pattern string is tiled across layers. Final layer always gets L (full context).
         Characters: L=long (full context), S=short (quarter context)
         """
+        if config.architecture == "gpt2":
+            return [(config.sequence_len, 0) for _ in range(config.n_layer)]
         pattern = config.window_pattern.upper()
         assert all(c in "SL" for c in pattern), f"Invalid window_pattern: {pattern}. Use only S and L."
         # Map characters to window sizes
@@ -324,9 +378,12 @@ class GPT(nn.Module):
         nparams = sum(p.numel() for p in self.parameters())
         # Exclude non-matmul params: embeddings and per-layer scalars
         value_embeds_numel = sum(ve.weight.numel() for ve in self.value_embeds.values())
-        nparams_exclude = (self.transformer.wte.weight.numel() + value_embeds_numel +
-                          self.resid_lambdas.numel() + self.x0_lambdas.numel() +
-                          self.smear_gate.weight.numel() + self.smear_lambda.numel() + self.backout_lambda.numel())
+        position_numel = self.transformer.wpe.weight.numel() if self.is_gpt2 else 0
+        scalar_numel = 0 if self.is_gpt2 else (
+            self.resid_lambdas.numel() + self.x0_lambdas.numel() +
+            self.smear_gate.weight.numel() + self.smear_lambda.numel() + self.backout_lambda.numel()
+        )
+        nparams_exclude = self.transformer.wte.weight.numel() + position_numel + value_embeds_numel + scalar_numel
         h, q, t = self.config.n_head, self.config.n_embd // self.config.n_head, self.config.sequence_len
         # Sum attention FLOPs per layer, accounting for sliding window
         attn_flops = 0
@@ -351,14 +408,19 @@ class GPT(nn.Module):
         """
         # Count each group separately (mirrors the grouping in setup_optimizers)
         wte = sum(p.numel() for p in self.transformer.wte.parameters())
+        wpe = sum(p.numel() for p in self.transformer.wpe.parameters()) if self.is_gpt2 else 0
         value_embeds = sum(p.numel() for p in self.value_embeds.parameters())
         lm_head = sum(p.numel() for p in self.lm_head.parameters())
         transformer_matrices = sum(p.numel() for p in self.transformer.h.parameters())
-        scalars = self.resid_lambdas.numel() + self.x0_lambdas.numel() + self.smear_gate.weight.numel() + self.smear_lambda.numel() + self.backout_lambda.numel()
-        total = wte + value_embeds + lm_head + transformer_matrices + scalars
+        scalars = 0 if self.is_gpt2 else (
+            self.resid_lambdas.numel() + self.x0_lambdas.numel() +
+            self.smear_gate.weight.numel() + self.smear_lambda.numel() + self.backout_lambda.numel()
+        )
+        total = wte + wpe + value_embeds + lm_head + transformer_matrices + scalars
         assert total == sum(p.numel() for p in self.parameters()), "Parameter count mismatch"
         return {
             'wte': wte,
+            'wpe': wpe,
             'value_embeds': value_embeds,
             'lm_head': lm_head,
             'transformer_matrices': transformer_matrices,
@@ -371,13 +433,15 @@ class GPT(nn.Module):
         ddp, rank, local_rank, world_size = get_dist_info()
 
         # Separate out all parameters into groups
-        matrix_params = list(self.transformer.h.parameters())
+        matrix_params = [p for p in self.transformer.h.parameters() if p.ndim == 2]
         value_embeds_params = list(self.value_embeds.parameters())
         embedding_params = list(self.transformer.wte.parameters())
+        if self.is_gpt2:
+            embedding_params += list(self.transformer.wpe.parameters())
         lm_head_params = list(self.lm_head.parameters())
-        resid_params = [self.resid_lambdas]
-        x0_params = [self.x0_lambdas]
-        smear_params = [self.smear_gate.weight, self.smear_lambda, self.backout_lambda]
+        resid_params = [] if self.is_gpt2 else [self.resid_lambdas]
+        x0_params = [] if self.is_gpt2 else [self.x0_lambdas]
+        smear_params = [] if self.is_gpt2 else [self.smear_gate.weight, self.smear_lambda, self.backout_lambda]
         assert len(list(self.parameters())) == len(matrix_params) + len(embedding_params) + len(lm_head_params) + len(value_embeds_params) + len(resid_params) + len(x0_params) + len(smear_params)
 
         # Scale the LR for the AdamW parameters by ∝1/√dmodel (tuned for 768 dim model)
@@ -411,21 +475,34 @@ class GPT(nn.Module):
     def forward(self, idx, targets=None, kv_cache=None, loss_reduction='mean'):
         B, T = idx.size()
 
-        # Grab the rotary embeddings for the current sequence length (they are of shape (1, seq_len, 1, head_dim/2))
-        assert T <= self.cos.size(1), f"Sequence length grew beyond the rotary embeddings cache: {T} > {self.cos.size(1)}"
-        assert idx.device == self.cos.device, f"Rotary embeddings and idx are on different devices: {idx.device} != {self.cos.device}"
-        assert self.cos.dtype == COMPUTE_DTYPE, f"Rotary embeddings must be in {COMPUTE_DTYPE}, got {self.cos.dtype}"
-        # if kv cache exists, we need to offset the rotary embeddings to the current position in the cache
         T0 = 0 if kv_cache is None else kv_cache.get_pos()
-        cos_sin = self.cos[:, T0:T0+T], self.sin[:, T0:T0+T] # truncate cache to current sequence length
+        if self.is_gpt2:
+            assert T0 + T <= self.transformer.wpe.num_embeddings, (
+                f"Sequence length grew beyond learned position embeddings: {T0 + T} > "
+                f"{self.transformer.wpe.num_embeddings}"
+            )
+            cos_sin = None
+        else:
+            # Grab the rotary embeddings for the current sequence length (they are of shape (1, seq_len, 1, head_dim/2))
+            assert T <= self.cos.size(1), f"Sequence length grew beyond the rotary embeddings cache: {T} > {self.cos.size(1)}"
+            assert idx.device == self.cos.device, f"Rotary embeddings and idx are on different devices: {idx.device} != {self.cos.device}"
+            assert self.cos.dtype == COMPUTE_DTYPE, f"Rotary embeddings must be in {COMPUTE_DTYPE}, got {self.cos.dtype}"
+            # if kv cache exists, we need to offset the rotary embeddings to the current position in the cache
+            cos_sin = self.cos[:, T0:T0+T], self.sin[:, T0:T0+T] # truncate cache to current sequence length
 
         # Embed the tokens
         x = self.transformer.wte(idx) # embed current token
+        if self.is_gpt2:
+            pos = torch.arange(T0, T0 + T, dtype=torch.long, device=idx.device)
+            x = x + self.transformer.wpe(pos)[None, :, :]
         x = x.to(COMPUTE_DTYPE) # ensure activations are in compute dtype (no-op usually, but active for fp16 code path)
-        x = norm(x)
+        if not self.is_gpt2:
+            x = norm(x)
 
         # Smear: mix previous token's embedding into current position (cheap bigram info)
-        if kv_cache is None:
+        if self.is_gpt2:
+            pass
+        elif kv_cache is None:
             # Training / naive generate: full sequence available, use fast slice
             assert T > 1, "Training forward pass should have T > 1"
             gate = self.smear_lambda.to(x.dtype) * torch.sigmoid(self.smear_gate(x[:, 1:, :24]))
@@ -449,15 +526,18 @@ class GPT(nn.Module):
         backout_layer = n_layer // 2  # cache at halfway point
         x_backout = None
         for i, block in enumerate(self.transformer.h):
-            x = self.resid_lambdas[i] * x + self.x0_lambdas[i] * x0
-            ve = self.value_embeds[str(i)](idx).to(x.dtype) if str(i) in self.value_embeds else None
+            if self.is_gpt2:
+                ve = None
+            else:
+                x = self.resid_lambdas[i] * x + self.x0_lambdas[i] * x0
+                ve = self.value_embeds[str(i)](idx).to(x.dtype) if str(i) in self.value_embeds else None
             x = block(x, ve, cos_sin, self.window_sizes[i], kv_cache)
-            if i == backout_layer:
+            if not self.is_gpt2 and i == backout_layer:
                 x_backout = x
         # Subtract mid-layer residual to remove low-level features before logit projection
-        if x_backout is not None:
+        if not self.is_gpt2 and x_backout is not None:
             x = x - self.backout_lambda.to(x.dtype) * x_backout
-        x = norm(x)
+        x = self.ln_f(x) if self.is_gpt2 else norm(x)
 
         # Forward the lm_head (compute logits)
         softcap = 15 # smoothly cap the logits to the range [-softcap, softcap]

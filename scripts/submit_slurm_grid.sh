@@ -28,7 +28,9 @@ MAX_DEVICE_BATCH_SIZE="${MAX_DEVICE_BATCH_SIZE:-16}"
 SAVE_EVERY="${SAVE_EVERY:-100}"
 KEEP_LAST_CHECKPOINTS="${KEEP_LAST_CHECKPOINTS:-2}"
 RESUME="${RESUME:-1}"
-ADAPTIVE_LR="${ADAPTIVE_LR:-1}"
+# Array tasks run only fixed-grid cases. Run adaptive LR boundary closure later
+# with the same STAMP via scripts/run_d12_sweep.sh if desired.
+ADAPTIVE_LR="${ADAPTIVE_LR:-0}"
 
 STAMP="${STAMP:-d12_grid_${SLURM_ARRAY_JOB_ID:-$(date +%Y%m%d_%H%M%S)}}"
 OUT_ROOT="${OUT_ROOT:-search_evals/${STAMP}}"
@@ -58,7 +60,7 @@ if [[ "${GRID_TASK_MODE:-0}" == "1" || -n "${SLURM_ARRAY_TASK_ID:-}" ]]; then
 fi
 
 count_cmd=(
-  python run_top_aware_muon_sweep.py
+  python run_optimizer_sweep.py
   --out-root "$OUT_ROOT"
   --log-root "$LOG_ROOT"
   --nanochat-dir nanochat
@@ -143,8 +145,11 @@ echo "STAMP=${STAMP}"
 echo "OUT_ROOT=${OUT_ROOT}"
 echo "LOG_ROOT=${LOG_ROOT}"
 echo "After the array finishes, run:"
-echo "  STAMP=${STAMP} bash scripts/run_d12_sweep.sh"
-echo "This collates the CSV, skips completed base-grid cases, and runs adaptive LR boundary closure if enabled."
+echo "  SUMMARY_ONLY=1 STAMP=${STAMP} bash scripts/run_d12_sweep.sh"
+echo "This only collates sweep_rows.csv from result.json files and launches no training."
+echo "If you want adaptive LR boundary closure afterward, run:"
+echo "  ADAPTIVE_LR=1 STAMP=${STAMP} bash scripts/run_d12_sweep.sh"
+echo "That skips completed base-grid cases and may launch new boundary-LR training cases."
 printf 'sbatch command:'
 printf ' %q' sbatch "${sbatch_args[@]}" "$0"
 printf '\n'

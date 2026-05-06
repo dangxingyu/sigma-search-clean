@@ -1,8 +1,23 @@
 # Experiment Plan — LITE vs Muon Switching Diagnostics
 
+## Current non-streaming optimizer-baseline plan as of 2026-05-05
+
+Status checkpoint:
+- The current baseline-comparison phase is separate from StreamingMuon/Top-Aware Muon. Do not include Top-Aware or StreamingMuon variants in the immediate optimizer-baseline sanity sweeps unless explicitly requested.
+- Implemented baseline methods are `plain_muon`, `adamw`, `soap`, `shampoo`, `kl_shampoo`, and `kl_soap`.
+- Completed a 100-step GPU sanity LR sweep at batches `{512,2048}` with artifacts in `results/nonstream_optimizer_sanity/`.
+
+Immediate next steps:
+- If the user wants stronger evidence, scale the same method set to a modest d8 run before interpreting optimizer quality. Keep LR sweeps adaptive: extend outward when the best row is at a boundary, and stop extending after clear degradation.
+- Use `plain_muon` for ordinary Muon comparisons. Treat nanochat `muon/native_muon` as a deprecated compatibility control unless a specific comparison to nanochat's original implementation is desired.
+- For apple-to-apple comparisons against the existing Top-Aware sweeps, use `scripts/run_d12_optimizer_baselines.sh` and `scripts/run_d16_optimizer_baselines.sh`. They keep the same 2x-Chinchilla `{512K,2M,8M}` LR-sweep recipe and only change the method set to `plain_muon`, AdamW, SOAP, Shampoo, KL-Shampoo, and KL-SOAP.
+
 ## Current clean-handoff plan as of 2026-05-02
 
 Status checkpoint:
+- Long-token d12 probe: at batch `4194304` and `CHINCHILLA_MULT=8` (`13.59B` tokens), identity currently wins strongly. Best known identity is `c=1, lr=0.005 -> 0.799642`; completed `c=0.5` lower-LR closure rows are `lr=0.005 -> 0.810712` and `lr=0.0075 -> 0.810489`. The `c=0.5, lr=0.01` tail check was paused around step `1000/3240` after redirecting away from d12.
+- Completed d8 8M 8x-Chinchilla token-budget check `d8_chinchilla8_8m_c1_c05_lrsweep_20260503_235256`: `c=0.5` wins over `c=1` (`0.947325 @ lr=0.015` vs `0.949773 @ lr=0.015`). This argues against a pure token-budget explanation for the d12 identity-favoring result.
+- Active queued run: refine 8M with milder/near-identity coefficients `c={0.75,0.85,1.15}` and LR `{0.0075,0.01,0.015,0.02}` under `d8_chinchilla8_8m_alpha_refine_20260504_queued`. After that, test the small-batch near-identity idea at d8 128K with `c={1.0,1.15}` and LR `{0.00375,0.005,0.0075,0.01,0.015}`.
 - Sadhika's imported d12/d16 2x-Chinchilla sweeps are organized under `results/d12-d16-sweep/`. d12 is closed enough for current interpretation: `c=1` wins at 512K, `c=0.5` wins at 2M/8M. d16 currently favors `c=1` at 512K/2M/8M, but 512K/2M need lower-LR closure because best rows hit the low-LR boundary.
 - v42 completed the core `c=1` vs `c=0.5` d8 / 0.4B-token sweep at `{262K,1M,4M}`. Treat the current evidence as: `262K` identity slight win, `1M` effectively tie/tiny `c=0.5` win only after LR extension, `4M` strong `c=0.5` win.
 - v43 completed the first dense dynamics run at `4M` with metrics every step and Hessian top-4 probes every 24 steps. Use `results/metrics_v43_4m_best/` for the current dynamics sanity plots.
@@ -25,6 +40,7 @@ Immediate standalone-repo priorities:
 - If the `1M` batch does not show an obvious Top-Aware improvement over identity, pivot the medium/large batch probe to `{2097152,8388608}` rather than expanding alpha.
 - Treat `262144` as the d8 critical batch. Do not insert an extra 512K point into this specific no-tuning metrics grid.
 - Use the clean handoff default `CHINCHILLA_MULT=2` unless reproducing the older v42/v43 d8 1x results. The 1x d8 budget is `402,653,184` tokens; the default d8 handoff run is therefore about `0.8B` tokens.
+- Use `run_optimizer_sweep.py` as the current sweep engine name. `run_top_aware_muon_sweep.py` is retained for historical compatibility only.
 - For d8 dense-metrics runs, reuse `scripts/run_d12_statistics.sh` with `DEPTH=8 CHINCHILLA_MULT=2` unless intentionally reproducing old 1x diagnostics. It records cheap StreamingMuon metrics every step and Hessian probes every 50 logged steps with math SDPA forced.
 - Use corrected logging semantics: raw momentum-buffer metrics are not logged, `train/loss` is raw optimizer-step mean CE, and Hessian probes are global selected-matrix-subspace Lanczos HVPs over all normal transformer matrix weights on all grad-accum microbatches from the same optimizer step, token-weighted and averaged across DDP ranks.
 - Canonical StreamingMuon metrics should use no explicit SVD: reuse cached `sigma` and basis by default. Do not enable exact per-module SVD, component saving, or legacy split-SVD alignment unless explicitly auditing those diagnostics.
@@ -71,7 +87,7 @@ Build a rigorous d=8 / 1B-token study of when vanilla Muon, fixed-χ LITE, and o
 3. For StreamingMuon sigma-search, use 8-GPU DDP through `run_eval.py` with strict fallback (`--fallback-ortho-tol 0.01` or `0.02`). The d8/32-step smoke validates launch, grad accumulation, and candidate state, not long-horizon optimizer quality.
 4. Before expensive sigma-search candidate claims, include identity StreamingMuon under the same tolerance as every candidate. The native-vs-streaming identity test says 1024-step d8 `tol=0.01` matches native Muon within `0.00145` BPB; the active d12/1B run will check whether that survives a larger model/horizon.
 5. Active sigma-transform experiment: test the top-1 sharp-direction damping hypothesis. Candidate `candidates/top1_damp_alpha05.py` sets `f(sigma_argmax)=0.5` and leaves all other directions at `1.0`. Official recipe is d8 / ~1.07B tokens / batch sizes `{128K, 1M, 8M}` with schedule `warmup_steps=round(0.05 * max_steps)`, `warmdown_ratio=0.65`, `final_lr_frac=0.05`, strict `fallback_ortho_tol=0.01`, and adaptive matrix-LR expansion from `{0.01, 0.02, 0.04}`. Compare top1 first against same-driver StreamingMuon identity. Do not compare raw DDP `run_eval.py` BPB against single-GPU v9/v18 native BPB until exact DDP native controls validate the identity baseline.
-   Handoff update: the top-1 idea is now named **Top-Aware Muon** in `candidates/top_aware_muon.py`. Current clean recipe fixes `top_k=1` and sweeps `alpha`; `top_k` remains in code only for explicit ablations. The reusable sweep runner is `run_top_aware_muon_sweep.py`; it sweeps `batch x alpha x lr` and includes baselines `streaming_identity`, `streaming_lite`, `native_muon`, and `native_lite`.
+   Handoff update: the top-1 idea is now named **Top-Aware Muon** in `candidates/top_aware_muon.py`. Current clean recipe fixes `top_k=1` and sweeps `alpha`; `top_k` remains in code only for explicit ablations. The reusable sweep runner is `run_optimizer_sweep.py`; it sweeps `batch x method x alpha x lr` and supports the current StreamingMuon and non-streaming optimizer baselines.
    New immediate Top-Aware alpha experiment: run v28/v29 after active v26 finishes. v28 fills the missing `128K, alpha=0.75` LR sweep. v29 tests `256K` with alpha `{0.5,0.75,0.875}` plus baselines. Working hypothesis: optimal alpha is monotone non-increasing with batch size; identity is alpha=`1`, so 128K should prefer alpha near `1`, while 256K should begin moving lower.
 6. Autonomous 8h controller: `run_autonomous_8h_controller.py` waits for v18b, closes the 128K LR boundary, runs exact native DDP controls at top1 identity best-LR points, then either runs identity diagnostics (`pure_qr`, `pure_qr_2iter`, `scqr_2iter`, `input_normalize`) if StreamingMuon identity is not close, or runs the v24 top1 alpha sweep at `{1M,8M}` for `alpha={0.25,0.5,0.75}` reusing existing alpha=0.5 data.
 

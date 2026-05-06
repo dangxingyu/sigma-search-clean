@@ -2,7 +2,7 @@
 
 ## Project Structure & Module Organization
 
-This clean repo studies StreamingMuon spectral transforms on top of an in-tree `nanochat/` checkout. Current runtime code is `run_eval.py`, `streaming_muon_torch.py`, `streaming_muon.py`, `metric_logging.py`, and `run_top_aware_muon_sweep.py`. Candidate transforms live in `candidates/` and must define `def f(sigma, state)`. The supported candidates are `identity.py` and `top_aware_muon.py`. User-facing launchers are in `scripts/`; generated outputs belong under `search_evals/`, `logs/`, `wandb/`, and checkpoint directories, which should stay untracked. Curated summaries and plots live under `results/` and `figures/`.
+This clean repo studies optimizer baselines and StreamingMuon spectral transforms on top of an in-tree `nanochat/` checkout. Current runtime code is `run_eval.py`, `run_optimizer_sweep.py`, `baseline_optim.py`, `streaming_muon_torch.py`, `streaming_muon.py`, and `metric_logging.py`. Candidate transforms live in `candidates/` and must define `def f(sigma, state)`. The supported candidates are `identity.py` and `top_aware_muon.py`. User-facing launchers are in `scripts/`; generated outputs belong under `search_evals/`, `logs/`, `wandb/`, and checkpoint directories, which should stay untracked. Curated summaries and plots live under `results/` and `figures/`.
 
 ## Build, Test, And Development Commands
 
@@ -18,7 +18,7 @@ bash scripts/download_climbmix.sh 170 8
 Common checks:
 
 ```bash
-python -m py_compile run_eval.py run_top_aware_muon_sweep.py metric_logging.py
+python -m py_compile run_eval.py run_optimizer_sweep.py run_top_aware_muon_sweep.py baseline_optim.py metric_logging.py
 PYTHONPATH=.:nanochat pytest tests
 DRY_RUN=1 bash scripts/run_d12_sweep.sh
 bash scripts/smoke_run.sh

@@ -1,0 +1,7 @@
+time,method,batch,lr,seed,top_k,alpha,score,error,result_json,log_file,batch_label
+2026-05-02 19:52:00 PDT,top_aware_muon,524288,0.0075,42,1,0.5,0.8160663614002971,,search_evals/sweep_prefix_002_d12_2x/top_aware_k1_a0p5_bsz524288_lr0p0075_s42/result.json,logs/sweep_prefix_002_d12_2x/top_aware_k1_a0p5_bsz524288_lr0p0075_s42.log,512K
+2026-05-02 19:25:59 PDT,top_aware_muon,524288,0.0075,42,1,1.0,0.8149781054907281,,search_evals/sweep_prefix_002_d12_2x/top_aware_k1_a1_bsz524288_lr0p0075_s42/result.json,logs/sweep_prefix_002_d12_2x/top_aware_k1_a1_bsz524288_lr0p0075_s42.log,512K
+2026-05-02 20:48:12 PDT,top_aware_muon,2097152,0.02,42,1,0.5,0.8337885788173034,,search_evals/sweep_prefix_002_d12_2x/top_aware_k1_a0p5_bsz2097152_lr0p02_s42/result.json,logs/sweep_prefix_002_d12_2x/top_aware_k1_a0p5_bsz2097152_lr0p02_s42.log,2M
+2026-05-02 20:47:18 PDT,top_aware_muon,2097152,0.015,42,1,1.0,0.8345332359837353,,search_evals/sweep_prefix_002_d12_2x/top_aware_k1_a1_bsz2097152_lr0p015_s42/result.json,logs/sweep_prefix_002_d12_2x/top_aware_k1_a1_bsz2097152_lr0p015_s42.log,2M
+2026-05-02 21:10:15 PDT,top_aware_muon,8388608,0.015,42,1,0.5,0.8870322545740068,,search_evals/sweep_prefix_002_d12_2x/top_aware_k1_a0p5_bsz8388608_lr0p015_s42/result.json,logs/sweep_prefix_002_d12_2x/top_aware_k1_a0p5_bsz8388608_lr0p015_s42.log,8M
+2026-05-02 20:51:30 PDT,top_aware_muon,8388608,0.01,42,1,1.0,0.8903327443989529,,search_evals/sweep_prefix_002_d12_2x/top_aware_k1_a1_bsz8388608_lr0p01_s42/result.json,logs/sweep_prefix_002_d12_2x/top_aware_k1_a1_bsz8388608_lr0p01_s42.log,8M

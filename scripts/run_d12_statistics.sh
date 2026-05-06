@@ -5,7 +5,7 @@ set -euo pipefail
 #
 # Use this after an optimizer-quality sweep has identified the LR/batch points
 # worth inspecting. This script is standalone and directly invokes
-# run_top_aware_muon_sweep.py with metrics enabled.
+# run_optimizer_sweep.py with metrics enabled.
 
 REPO="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$REPO"
@@ -57,7 +57,7 @@ OUT_ROOT="${OUT_ROOT:-search_evals/${STAMP}}"
 LOG_ROOT="${LOG_ROOT:-logs/${STAMP}}"
 
 cmd=(
-  python run_top_aware_muon_sweep.py
+  python run_optimizer_sweep.py
   --out-root "$OUT_ROOT"
   --log-root "$LOG_ROOT"
   --nanochat-dir nanochat
