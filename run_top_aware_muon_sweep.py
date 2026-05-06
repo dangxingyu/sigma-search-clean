@@ -679,7 +679,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--streaming-rank-k", type=int, default=-1)
     parser.add_argument("--fallback-ortho-tol", type=float, default=0.01)
     parser.add_argument("--pure-qr", action=argparse.BooleanOptionalAction, default=True)
-    parser.add_argument("--precondition-frequency", type=int, default=10)
+    parser.add_argument("--precondition-frequency", type=int, default=5)
     parser.add_argument("--shampoo-beta", type=float, default=0.95)
     parser.add_argument("--optimizer-beta1", type=float, default=0.9)
     parser.add_argument("--optimizer-beta2", type=float, default=0.95)

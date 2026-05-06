@@ -142,7 +142,7 @@ for nanochat's original Muon/NormMuon implementation in
 Structured optimizer knobs:
 
 ```bash
-PRECONDITION_FREQUENCY=10
+PRECONDITION_FREQUENCY=5
 SHAMPOO_BETA=0.95
 OPTIMIZER_BETA1=0.9
 OPTIMIZER_BETA2=0.95

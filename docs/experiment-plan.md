@@ -6,9 +6,10 @@ Status checkpoint:
 - The current baseline-comparison phase is separate from StreamingMuon/Top-Aware Muon. Do not include Top-Aware or StreamingMuon variants in the immediate optimizer-baseline sanity sweeps unless explicitly requested.
 - Implemented baseline methods are `plain_muon`, `adamw`, `soap`, `shampoo`, `kl_shampoo`, and `kl_soap`.
 - Completed a 100-step GPU sanity LR sweep at batches `{512,2048}` with artifacts in `results/nonstream_optimizer_sanity/`.
+- The first attempted d8 scale-up array `31950377` was cancelled after a submit-script task-mode path bug; it produced no usable training rows. Fix `scripts/submit_slurm_grid.sh` before re-submitting preemption-safe arrays.
 
 Immediate next steps:
-- If the user wants stronger evidence, scale the same method set to a modest d8 run before interpreting optimizer quality. Keep LR sweeps adaptive: extend outward when the best row is at a boundary, and stop extending after clear degradation.
+- Fix and smoke-test `scripts/submit_slurm_grid.sh` task mode, then re-submit the d8 baseline grid or run it inside the existing allocation. After completion, collate `sweep_rows.csv` and inspect boundary optima before deciding whether adaptive LR closure is necessary.
 - Use `plain_muon` for ordinary Muon comparisons. Treat nanochat `muon/native_muon` as a deprecated compatibility control unless a specific comparison to nanochat's original implementation is desired.
 - For apple-to-apple comparisons against the existing Top-Aware sweeps, use `scripts/run_d12_optimizer_baselines.sh` and `scripts/run_d16_optimizer_baselines.sh`. They keep the same 2x-Chinchilla `{512K,2M,8M}` LR-sweep recipe and only change the method set to `plain_muon`, AdamW, SOAP, Shampoo, KL-Shampoo, and KL-SOAP.
 
@@ -19,6 +20,7 @@ Status checkpoint:
 - Completed d8 8M 8x-Chinchilla token-budget check `d8_chinchilla8_8m_c1_c05_lrsweep_20260503_235256`: `c=0.5` wins over `c=1` (`0.947325 @ lr=0.015` vs `0.949773 @ lr=0.015`). This argues against a pure token-budget explanation for the d12 identity-favoring result.
 - Active queued run: refine 8M with milder/near-identity coefficients `c={0.75,0.85,1.15}` and LR `{0.0075,0.01,0.015,0.02}` under `d8_chinchilla8_8m_alpha_refine_20260504_queued`. After that, test the small-batch near-identity idea at d8 128K with `c={1.0,1.15}` and LR `{0.00375,0.005,0.0075,0.01,0.015}`.
 - Sadhika's imported d12/d16 2x-Chinchilla sweeps are organized under `results/d12-d16-sweep/`. d12 is closed enough for current interpretation: `c=1` wins at 512K, `c=0.5` wins at 2M/8M. d16 currently favors `c=1` at 512K/2M/8M, but 512K/2M need lower-LR closure because best rows hit the low-LR boundary.
+- Sadhika's imported d12/d16 alpha sweeps are organized under `results/alpha-sweep/`. Current tuned bests are d12: `c=0.85` at 512K/2M and `c=0.5` at 8M; d16: `c=0.85` at 512K, `c=1` at 2M/8M. Treat d16 512K/2M as LR-boundary-sensitive because several best rows sit at `lr=0.005`.
 - v42 completed the core `c=1` vs `c=0.5` d8 / 0.4B-token sweep at `{262K,1M,4M}`. Treat the current evidence as: `262K` identity slight win, `1M` effectively tie/tiny `c=0.5` win only after LR extension, `4M` strong `c=0.5` win.
 - v43 completed the first dense dynamics run at `4M` with metrics every step and Hessian top-4 probes every 24 steps. Use `results/metrics_v43_4m_best/` for the current dynamics sanity plots.
 - v44/v45 completed the transition sweep: `2M` favors identity after explicit `lr=0.16` boundary closure, while `8M` strongly favors `c=0.5`. Use `results/sweep_catalog/v44_v45_transition_summary.*`.

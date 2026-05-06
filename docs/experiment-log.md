@@ -1,8 +1,20 @@
 # Experiment Log — LITE vs Muon diagnostic campaign
 
+## 2026-05-06 — Sadhika d12/d16 alpha sweep import
+
+Latest update:
+- Imported Sadhika's d12/d16 Top-Aware alpha sweep archives from `results/alpha-sweep/d12_alpha_sweep.tar.gz` and `results/alpha-sweep/d16_alpha_sweep.tar.gz`; extracted copies are under `results/alpha-sweep/extracted/`.
+- Parsed `252` completed result JSONs with `0` recorded errors: depths `{12,16}`, batches `{524288,2097152,8388608}`, alphas `{0.25,0.5,0.75,0.85,1.0,1.15}`, LRs `{0.005,0.0075,0.01,0.015,0.02,0.03,0.04}`, seed `42`, `CHINCHILLA_MULT=2`.
+- Generated organized artifacts in `results/alpha-sweep/`: `all_rows.csv`, `best_by_depth_batch_alpha.csv`, `best_by_depth_batch.csv`, `README.md`, and figures in `results/alpha-sweep/figures/`.
+- Tuned best rows: d12 512K `c=0.85, lr=0.0075 -> 0.815030` (`-0.000074` vs c=1); d12 2M `c=0.85, lr=0.015 -> 0.832122` (`-0.002146`); d12 8M `c=0.5, lr=0.015 -> 0.887543` (`-0.002767`).
+- Tuned best rows: d16 512K `c=0.85, lr=0.005 -> 0.749286` (`-0.002316` vs c=1); d16 2M `c=1, lr=0.005 -> 0.752306`; d16 8M `c=1, lr=0.015 -> 0.788506`.
+- Boundary caveat: several d16 512K and d16 2M best rows sit at the lower LR boundary `0.005`, including the d16 512K `c=0.85` winner and d16 2M `c=1` winner. The imported archive did not include completed lower-LR extension rows despite adaptive LR being enabled in the manifest.
+
 ## 2026-05-05 — non-streaming optimizer baseline sanity sweep
 
 Latest update:
+- Attempted to launch the first full d8 non-streaming optimizer-baseline grid as SLURM array job `31950377`, stamp `d8_optimizer_baselines_20260505_223656`, but cancelled it after the first array tasks exposed a task-mode path bug in `scripts/submit_slurm_grid.sh`: sbatch executed the copied spool script outside the repo, so `scripts/run_d12_sweep.sh` was not found. No usable training rows were produced from this array.
+- Intended d8 recipe was `depth=8`, `CHINCHILLA_MULT=2` (`805,306,368` tokens), batches `{524288,2097152,8388608}`, LRs `{0.005,0.0075,0.01,0.015,0.02,0.03,0.04}`, seed `42`, methods `{plain_muon,adamw,soap,shampoo,kl_shampoo,kl_soap}`, GPT-2-style architecture, fixed grid only (`ADAPTIVE_LR=0`). This is `126` cases, each intended to use `8xB200`.
 - Cleaned the current sweep surface after adding non-streaming baselines. Added `run_optimizer_sweep.py` as the clear handoff entrypoint, while keeping `run_top_aware_muon_sweep.py` as the compatibility implementation module.
 - Updated wrappers so `scripts/run_d12_sweep.sh`, `scripts/run_d12_statistics.sh`, and `scripts/submit_slurm_grid.sh` invoke `run_optimizer_sweep.py`.
 - Renamed new sweep summaries from `top_aware_sweep_rows.csv` to `sweep_rows.csv`. Historical result catalogs may still contain the old filename.

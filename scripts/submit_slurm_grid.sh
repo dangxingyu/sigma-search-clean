@@ -10,7 +10,11 @@ set -euo pipefail
 # allocation:
 #   GRID_TASK_MODE=1 SLURM_ARRAY_TASK_ID=0 STAMP=d12_main_001 bash scripts/submit_slurm_grid.sh
 
-REPO="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+if [[ -n "${SIGMA_SEARCH_REPO:-}" ]]; then
+  REPO="$SIGMA_SEARCH_REPO"
+else
+  REPO="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+fi
 cd "$REPO"
 
 DEPTH="${DEPTH:-12}"
@@ -104,6 +108,7 @@ mkdir -p "$LOG_ROOT"
 export DEPTH CHINCHILLA_MULT TOKENS METHODS BATCHES ALPHAS TOP_KS LRS SEEDS
 export NPROC MAX_DEVICE_BATCH_SIZE SAVE_EVERY KEEP_LAST_CHECKPOINTS RESUME ADAPTIVE_LR
 export STAMP OUT_ROOT LOG_ROOT GRID_TASK_MODE=1
+export SIGMA_SEARCH_REPO="$REPO"
 export STREAMING_NUM_ITERS="${STREAMING_NUM_ITERS:-2}"
 export FALLBACK_ORTHO_TOL="${FALLBACK_ORTHO_TOL:-0.01}"
 export METRICS_EVERY="${METRICS_EVERY:-0}"

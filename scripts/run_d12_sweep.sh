@@ -82,7 +82,7 @@ cmd=(
   --pure-qr
   --streaming-num-iters "${STREAMING_NUM_ITERS:-2}"
   --fallback-ortho-tol "${FALLBACK_ORTHO_TOL:-0.01}"
-  --precondition-frequency "${PRECONDITION_FREQUENCY:-10}"
+  --precondition-frequency "${PRECONDITION_FREQUENCY:-5}"
   --shampoo-beta "${SHAMPOO_BETA:-0.95}"
   --optimizer-beta1 "${OPTIMIZER_BETA1:-0.9}"
   --optimizer-beta2 "${OPTIMIZER_BETA2:-0.95}"

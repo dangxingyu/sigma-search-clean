@@ -1,5 +1,24 @@
 # New Thoughts — Reading Sadhika's guidance
 
+## Current conclusion ledger addendum (2026-05-06, d12/d16 alpha sweeps)
+
+### 1. Confident enough to treat as correct
+
+- The imported d12/d16 alpha sweep archives are complete at the base-grid level: `252` result JSONs, `0` recorded errors, depths `{12,16}`, batches `{512K,2M,8M}`, alphas `{0.25,0.5,0.75,0.85,1.0,1.15}`, LRs `{0.005,0.0075,0.01,0.015,0.02,0.03,0.04}`, seed `42`, and 2x-Chinchilla token budgets.
+
+### 2. Multiple observations; likely true but still needs careful confirmation
+
+- d12 still supports the broad Top-Aware story at larger batch, but the best alpha is not uniformly `0.5`: tuned bests are `c=0.85` at 512K/2M and `c=0.5` at 8M. The d12 512K win for `c=0.85` is tiny (`-0.000074` BPB vs `c=1`) and should be treated as a tie.
+- d16 does not support aggressive damping at large batch under this recipe. Tuned bests are `c=1` at 2M and 8M; `c=0.5` is worse by `+0.000640` at 2M and `+0.007220` at 8M.
+
+### 3. Some observations suggest
+
+- d16 512K may prefer a mild near-identity transform: `c=0.85` beats `c=1` by `-0.002316` BPB in the imported sweep. This is not yet fully closed because the best row is at the lower LR boundary `0.005`.
+
+### 4. Hypotheses
+
+- The optimal coefficient may move toward identity with increasing depth/model scale, especially at large batch. Current d12 favors `c<1` at 2M/8M, while d16 favors `c=1` at 2M/8M.
+
 ## Current conclusion ledger addendum (2026-05-05, non-streaming optimizer baselines)
 
 ### 1. Confident enough to treat as correct

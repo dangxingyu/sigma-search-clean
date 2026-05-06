@@ -62,7 +62,7 @@ parser.add_argument("--k", type=int, default=-1, help="Number of singular vector
 parser.add_argument("--num-iters", type=int, default=1, help="Number of streaming power iterations (1 or 2)")
 parser.add_argument("--pure-qr", action="store_true", default=False, help="Use Householder QR instead of SCQR in StreamingMuon orthogonalization.")
 parser.add_argument("--fallback-ortho-tol", type=float, default=0.02, help="SCQR fallback orthogonality tolerance: when max ||Q^T Q - I|| > tol, fall back to Householder QR. Pass a negative value to disable the orthogonality check.")
-parser.add_argument("--precondition-frequency", type=int, default=10,
+parser.add_argument("--precondition-frequency", type=int, default=5,
                     help="SOAP/Shampoo/KL baseline eigenbasis refresh frequency.")
 parser.add_argument("--shampoo-beta", type=float, default=0.95,
                     help="EMA beta for SOAP/Shampoo/KL preconditioner factors.")
