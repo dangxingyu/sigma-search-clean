@@ -1,5 +1,24 @@
 # New Thoughts — Reading Sadhika's guidance
 
+## Current conclusion ledger addendum (2026-05-12, baseline optimizer audit)
+
+### 1. Confident enough to treat as correct
+
+- The imported d12/d16 base optimizer sweep rows are not valid evidence about SOAP/Shampoo/KL-SOAP optimizer quality. The implementation/config audit found enough issues that those rows should only be treated as an artifact import/plotting exercise.
+- The previous statement "plain_muon wins all base optimizer sweeps" is descriptively true for the stale imported rows, but it should not be used as a scientific conclusion against SOAP/Shampoo/KL variants.
+
+### 2. Multiple observations; likely true but still needs careful confirmation
+
+- Reference SOAP-style configs should use `betas=(0.95,0.95)`, `shampoo_beta=0.95`, and `precondition_frequency=10`; PR-290 KL-SOAP-H uses `beta1=0.95`, `beta2=0.9`, `shampoo_beta=0.9`, `precondition_frequency=1`, and `init_factor=0.1`.
+
+### 3. Some observations suggest
+
+- The very poor old SOAP/KL-SOAP rows were likely dominated by implementation/config mismatch rather than optimizer fundamentals. A fixed small sanity grid is required before deciding whether these baselines are competitive.
+
+### 4. Hypotheses
+
+- After reference-aligned implementation and configs, SOAP/KL-SOAP may remain slower than StreamingMuon but should no longer sit at 2+ BPB in normal d12/d16 runs. If it still does, the remaining issue is likely LR/weight-decay scaling or architecture mismatch rather than first-order optimizer state mechanics.
+
 ## Current conclusion ledger addendum (2026-05-06, d12/d16 alpha sweeps)
 
 ### 1. Confident enough to treat as correct

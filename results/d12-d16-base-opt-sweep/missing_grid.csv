@@ -1,0 +1,2 @@
+depth,optimizer,batch_size,lr
+16,kl_shampoo,2097152,0.03

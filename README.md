@@ -58,6 +58,28 @@ bash scripts/smoke_run.sh
 Run training commands inside whatever GPU allocation your cluster provides, or
 use the included SLURM array submitter if the cluster supports `sbatch`.
 
+## Migration Checklist
+
+Use `git clone git@github.com:dangxingyu/sigma-search-clean.git` on the new
+cluster rather than copying this whole working directory. Local runtime outputs
+such as `search_evals/`, `logs/`, `wandb/`, checkpoints, and `smoke_results/`
+are intentionally ignored and should not be migrated unless you explicitly need
+old raw logs.
+
+After cloning:
+
+```bash
+bash scripts/setup_env.sh
+source nanochat/.venv/bin/activate
+export PYTHONPATH="$PWD:$PWD/nanochat"
+bash scripts/download_climbmix.sh 170 8
+DRY_RUN=1 bash scripts/run_d12_sweep.sh
+```
+
+If the new cluster has a different launcher, keep the repo commands unchanged
+and wrap them in the cluster's allocation mechanism. `scripts/run_d12_sweep.sh`
+does not request GPUs itself; it assumes the requested GPUs are already visible.
+
 ## Sweep
 
 Use sweeps for optimizer-quality comparisons. Dense metrics and Hessian logging
@@ -142,6 +164,7 @@ for nanochat's original Muon/NormMuon implementation in
 Structured optimizer knobs:
 
 ```bash
+STRUCTURED_CONFIG=auto
 PRECONDITION_FREQUENCY=5
 SHAMPOO_BETA=0.95
 OPTIMIZER_BETA1=0.9
@@ -149,6 +172,21 @@ OPTIMIZER_BETA2=0.95
 STRUCTURED_INIT_FACTOR=1.0
 STRUCTURED_USE_QR=1
 ```
+
+`STRUCTURED_CONFIG=auto` is the default and should be used for handoff sweeps.
+It applies reference-style per-method settings:
+
+| method | beta1 | beta2 | shampoo beta | precondition freq | init factor |
+|---|---:|---:|---:|---:|---:|
+| `soap` | `0.95` | `0.95` | `0.95` | `10` | `1.0` |
+| `shampoo` | `0.95` | `0.95` | `0.95` | `10` | `1.0` |
+| `kl_soap` | `0.95` | `0.90` | `0.90` | `1` | `0.1` |
+| `kl_shampoo` | `0.95` | `0.90` | `0.90` | `1` | `0.1` |
+
+Set `STRUCTURED_CONFIG=global` only for explicit ablations; then the
+`PRECONDITION_FREQUENCY`, `SHAMPOO_BETA`, `OPTIMIZER_BETA*`, and
+`STRUCTURED_INIT_FACTOR` environment variables are used for every structured
+optimizer.
 
 For a consolidated multi-optimizer baseline run:
 

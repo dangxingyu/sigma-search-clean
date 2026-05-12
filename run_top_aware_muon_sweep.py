@@ -54,6 +54,36 @@ RUN_EVAL_OPTIMIZER = {
     "kl_shampoo": "kl_shampoo",
     "kl_soap": "kl_soap",
 }
+STRUCTURED_REFERENCE_CONFIGS = {
+    "soap": {
+        "precondition_frequency": 10,
+        "shampoo_beta": 0.95,
+        "optimizer_beta1": 0.95,
+        "optimizer_beta2": 0.95,
+        "structured_init_factor": 1.0,
+    },
+    "shampoo": {
+        "precondition_frequency": 10,
+        "shampoo_beta": 0.95,
+        "optimizer_beta1": 0.95,
+        "optimizer_beta2": 0.95,
+        "structured_init_factor": 1.0,
+    },
+    "kl_soap": {
+        "precondition_frequency": 1,
+        "shampoo_beta": 0.90,
+        "optimizer_beta1": 0.95,
+        "optimizer_beta2": 0.90,
+        "structured_init_factor": 0.1,
+    },
+    "kl_shampoo": {
+        "precondition_frequency": 1,
+        "shampoo_beta": 0.90,
+        "optimizer_beta1": 0.95,
+        "optimizer_beta2": 0.90,
+        "structured_init_factor": 0.1,
+    },
+}
 CHINCHILLA_1X_TOKENS_BY_DEPTH = {
     # 20x non-embedding/token-budget convention used by this handoff repo.
     # Values are rounded down where needed to stay compatible with the main
@@ -214,6 +244,18 @@ def metrics_args(args: argparse.Namespace) -> list[str]:
     return out
 
 
+def structured_config(args: argparse.Namespace, method: str) -> dict[str, float | int]:
+    if args.structured_config == "auto" and method in STRUCTURED_REFERENCE_CONFIGS:
+        return STRUCTURED_REFERENCE_CONFIGS[method]
+    return {
+        "precondition_frequency": args.precondition_frequency,
+        "shampoo_beta": args.shampoo_beta,
+        "optimizer_beta1": args.optimizer_beta1,
+        "optimizer_beta2": args.optimizer_beta2,
+        "structured_init_factor": args.structured_init_factor,
+    }
+
+
 def build_command(args: argparse.Namespace, method: str, batch: int, lr: float, seed: int,
                   out: Path, top_k: int | None, alpha: float | None) -> list[str]:
     candidate = {
@@ -232,11 +274,14 @@ def build_command(args: argparse.Namespace, method: str, batch: int, lr: float, 
         "--k", str(args.streaming_rank_k),
         "--num-iters", str(args.streaming_num_iters),
         "--fallback-ortho-tol", f"{args.fallback_ortho_tol:g}",
-        "--precondition-frequency", str(args.precondition_frequency),
-        "--shampoo-beta", f"{args.shampoo_beta:g}",
-        "--optimizer-beta1", f"{args.optimizer_beta1:g}",
-        "--optimizer-beta2", f"{args.optimizer_beta2:g}",
-        "--structured-init-factor", f"{args.structured_init_factor:g}",
+    ]
+    cfg = structured_config(args, method)
+    cmd += [
+        "--precondition-frequency", str(cfg["precondition_frequency"]),
+        "--shampoo-beta", f"{cfg['shampoo_beta']:g}",
+        "--optimizer-beta1", f"{cfg['optimizer_beta1']:g}",
+        "--optimizer-beta2", f"{cfg['optimizer_beta2']:g}",
+        "--structured-init-factor", f"{cfg['structured_init_factor']:g}",
     ]
     if args.pure_qr:
         cmd.append("--pure-qr")
@@ -384,6 +429,8 @@ def write_manifest(args: argparse.Namespace, methods: list[str]) -> None:
             "rank_k": args.streaming_rank_k,
         },
         "structured_optimizers": {
+            "config": args.structured_config,
+            "auto_reference_configs": STRUCTURED_REFERENCE_CONFIGS if args.structured_config == "auto" else {},
             "precondition_frequency": args.precondition_frequency,
             "shampoo_beta": args.shampoo_beta,
             "optimizer_beta1": args.optimizer_beta1,
@@ -464,6 +511,7 @@ def sweep_signature(args: argparse.Namespace, methods: list[str]) -> dict[str, A
         "streaming_rank_k": args.streaming_rank_k,
         "fallback_ortho_tol": args.fallback_ortho_tol,
         "pure_qr": args.pure_qr,
+        "structured_config": args.structured_config,
         "precondition_frequency": args.precondition_frequency,
         "shampoo_beta": args.shampoo_beta,
         "optimizer_beta1": args.optimizer_beta1,
@@ -679,6 +727,16 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--streaming-rank-k", type=int, default=-1)
     parser.add_argument("--fallback-ortho-tol", type=float, default=0.01)
     parser.add_argument("--pure-qr", action=argparse.BooleanOptionalAction, default=True)
+    parser.add_argument(
+        "--structured-config",
+        choices=["auto", "global"],
+        default="auto",
+        help=(
+            "auto uses method-specific reference configs for SOAP/Shampoo/KL variants; "
+            "global uses the explicit --precondition-frequency/--shampoo-beta/"
+            "--optimizer-beta*/--structured-init-factor values for every method."
+        ),
+    )
     parser.add_argument("--precondition-frequency", type=int, default=5)
     parser.add_argument("--shampoo-beta", type=float, default=0.95)
     parser.add_argument("--optimizer-beta1", type=float, default=0.9)

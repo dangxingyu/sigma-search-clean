@@ -17,6 +17,9 @@ from torch import Tensor
 
 STRUCTURED_KINDS = {"soap", "shampoo", "kl_shampoo", "kl_soap"}
 BASELINE_KINDS = STRUCTURED_KINDS | {"plain_muon"}
+KL_PRECONDITIONED_KINDS = {"kl_shampoo", "kl_soap"}
+SOAP_RMS_KINDS = {"soap", "kl_soap"}
+SORTED_BASIS_KINDS = {"soap", "shampoo"}
 
 
 def _finite_power(values: Tensor, exponent: float, eps: float) -> Tensor:
@@ -32,11 +35,17 @@ def _eigh_basis(matrix: Tensor, eps: float) -> tuple[Tensor, Tensor]:
     return vecs, vals
 
 
-def _qr_basis(matrix: Tensor, old_q: Tensor) -> Tensor:
+def _qr_basis(matrix: Tensor, old_q: Tensor, *, sort_by_eigenvalue: bool = True) -> tuple[Tensor, Tensor]:
+    if sort_by_eigenvalue:
+        eig_est = torch.diagonal(old_q.float().T @ matrix.float() @ old_q.float())
+        sort_idx = torch.argsort(eig_est, descending=True)
+        old_q = old_q[:, sort_idx]
+    else:
+        sort_idx = torch.arange(old_q.shape[1], device=old_q.device)
     q, r = torch.linalg.qr(matrix.float() @ old_q.float(), mode="reduced")
     signs = torch.sign(torch.diagonal(r))
     signs = torch.where(signs == 0, torch.ones_like(signs), signs)
-    return (q * signs.unsqueeze(0)).contiguous()
+    return (q * signs.unsqueeze(0)).contiguous(), sort_idx
 
 
 def _project_2d(x: Tensor, q_left: Tensor, q_right: Tensor) -> Tensor:
@@ -50,6 +59,15 @@ def _project_back_2d(x: Tensor, q_left: Tensor, q_right: Tensor) -> Tensor:
 def _matrix_outer_products(grad: Tensor) -> tuple[Tensor, Tensor]:
     grad_f = grad.float()
     return grad_f @ grad_f.T, grad_f.T @ grad_f
+
+
+def _effective_shampoo_beta(group: dict, step: int) -> float:
+    beta = float(group.get("shampoo_beta", group.get("betas", (0.9, 0.95))[1]))
+    if group.get("correct_shampoo_beta_bias", False):
+        denom = 1.0 - beta**max(step, 1)
+        if denom > 0:
+            beta = 1.0 - (1.0 - beta) / denom
+    return beta
 
 
 def matrix_sign_exact(matrix: Tensor, eps: float = 1e-12) -> Tensor:
@@ -169,7 +187,7 @@ class StructuredAdamW(torch.optim.Optimizer):
         right_eye = torch.eye(n, device=device, dtype=torch.float32)
         state["step"] = 0
         state["exp_avg"] = torch.zeros_like(p, dtype=torch.float32)
-        if group["kind"] in {"soap", "kl_soap"}:
+        if group["kind"] in SOAP_RMS_KINDS:
             state["exp_avg_sq"] = torch.zeros_like(p, dtype=torch.float32)
         state["GG"] = [init_factor * left_eye.clone(), init_factor * right_eye.clone()]
         state["Q"] = [left_eye.clone(), right_eye.clone()]
@@ -189,9 +207,14 @@ class StructuredAdamW(torch.optim.Optimizer):
         old_q = state["Q"]
         new_q = []
         new_vals = []
+        use_qr = bool(group.get("use_qr", True))
+        basis_initialized = bool(state.get("basis_initialized", False))
         for idx, factor in enumerate(state["GG"]):
-            if group.get("use_qr", True) and state["step"] > 0:
-                q = _qr_basis(factor, old_q[idx])
+            if use_qr and basis_initialized:
+                sort_basis = group["kind"] in SORTED_BASIS_KINDS
+                q, sort_idx = _qr_basis(factor, old_q[idx], sort_by_eigenvalue=sort_basis)
+                if group["kind"] == "soap" and "exp_avg_sq" in state:
+                    state["exp_avg_sq"] = state["exp_avg_sq"].index_select(idx, sort_idx)
                 vals = torch.diagonal(q.T @ factor.float() @ q).clamp_min(eps)
             else:
                 q, vals = _eigh_basis(factor, eps)
@@ -200,15 +223,16 @@ class StructuredAdamW(torch.optim.Optimizer):
         state["Q"] = new_q
         state["eigenvalues"] = new_vals
         state["eigen_sqrt_inv"] = [_finite_power(vals, -0.5, eps) for vals in new_vals]
+        state["basis_initialized"] = True
 
     def _update_shampoo_preconditioner(self, grad: Tensor, state: dict, group: dict) -> None:
-        beta = float(group.get("shampoo_beta", group.get("betas", (0.9, 0.95))[1]))
+        beta = _effective_shampoo_beta(group, state["step"])
         left_outer, right_outer = _matrix_outer_products(grad)
         state["GG"][0].lerp_(left_outer, 1.0 - beta)
         state["GG"][1].lerp_(right_outer, 1.0 - beta)
 
     def _update_kl_preconditioner(self, grad: Tensor, state: dict, group: dict) -> None:
-        beta = float(group.get("shampoo_beta", group.get("betas", (0.9, 0.95))[1]))
+        beta = _effective_shampoo_beta(group, state["step"])
         eps = float(group.get("eps", 1e-8))
         max_inv_sqrt = float(group.get("max_inv_sqrt", 4000.0))
         grad_f = grad.float()
@@ -238,55 +262,123 @@ class StructuredAdamW(torch.optim.Optimizer):
             inv = _finite_power(current, -0.5, eps)
             state["eigen_sqrt_inv"][idx] = torch.clamp(inv, max=max_inv_sqrt)
 
+    def _bootstrap_preconditioner(self, grad: Tensor, state: dict, group: dict) -> None:
+        """Initialize basis from the first observed gradient and skip that update.
+
+        SOAP's reference implementation initializes Shampoo bases from the first
+        batch and avoids using that same gradient in the projected Adam update.
+        KL-SOAP-H follows the same skip-first-step pattern.
+        """
+        grad_f = grad.detach().float()
+        rows, cols = grad_f.shape
+        kind = group["kind"]
+        if kind in KL_PRECONDITIONED_KINDS:
+            state["GG"] = [
+                (grad_f @ grad_f.T / max(cols, 1)).contiguous(),
+                (grad_f.T @ grad_f / max(rows, 1)).contiguous(),
+            ]
+            state["Q"] = [
+                _eigh_basis(state["GG"][0], float(group.get("eps", 1e-8)))[0],
+                _eigh_basis(state["GG"][1], float(group.get("eps", 1e-8)))[0],
+            ]
+            init_factor = float(group.get("init_factor", 1.0))
+            inv = 1.0 / math.sqrt(max(init_factor, float(group.get("eps", 1e-8))))
+            state["eigen_sqrt_inv"] = [
+                torch.full((rows,), inv, device=grad.device, dtype=torch.float32),
+                torch.full((cols,), inv, device=grad.device, dtype=torch.float32),
+            ]
+            state["basis_initialized"] = True
+            return
+
+        state["GG"] = [
+            (grad_f @ grad_f.T).contiguous(),
+            (grad_f.T @ grad_f).contiguous(),
+        ]
+        self._refresh_eigenbasis(state, group)
+
     def _maybe_update_basis(self, state: dict, group: dict) -> None:
         freq = int(group.get("precondition_frequency", 10))
-        if freq <= 0:
+        if freq <= 0 and state.get("basis_initialized", False):
             return
-        if state["step"] % freq != 0:
+        due = not state.get("basis_initialized", False)
+        if freq > 0:
+            due = due or (state["step"] > 0 and state["step"] % freq == 0)
+        if not due:
             return
-        if group["kind"] in {"soap", "kl_soap"}:
-            state["exp_avg"] = _project_back_2d(state["exp_avg"], state["Q"][0], state["Q"][1])
+        if group["kind"] == "kl_soap":
+            exp_avg_original = _project_back_2d(state["exp_avg"], state["Q"][0], state["Q"][1])
             self._refresh_eigenbasis(state, group)
-            state["exp_avg"] = _project_2d(state["exp_avg"], state["Q"][0], state["Q"][1])
-            # The diagonal RMS accumulator lives in the projected basis. There
-            # is no exact cheap rotation for elementwise second moments, so do
-            # not silently reuse old-basis statistics after a basis refresh.
-            state["exp_avg_sq"].zero_()
+            state["exp_avg"] = _project_2d(exp_avg_original, state["Q"][0], state["Q"][1]).contiguous()
         else:
             self._refresh_eigenbasis(state, group)
 
-    def _matrix_update(self, p: Tensor, group: dict) -> Tensor:
+    def _matrix_update(self, p: Tensor, group: dict) -> Tensor | None:
+        is_new_state = not bool(self.state[p])
         state = self._init_matrix_state(p, group)
         grad = p.grad.float()
         beta1, beta2 = group.get("betas", (0.9, 0.95))
         eps = float(group.get("eps", 1e-8))
         kind = group["kind"]
 
+        if is_new_state:
+            self._bootstrap_preconditioner(grad, state, group)
+            return None
+
         state["step"] += 1
-        if kind in {"soap", "kl_soap"}:
+
+        if kind == "soap":
+            q_left, q_right = state["Q"]
+            grad_projected = _project_2d(grad, q_left, q_right)
+            state["exp_avg"].lerp_(grad, 1.0 - float(beta1))
+            state["exp_avg_sq"].lerp_(grad_projected.square(), 1.0 - float(beta2))
+            denom = state["exp_avg_sq"].sqrt().add_(eps)
+            exp_avg_projected = _project_2d(state["exp_avg"], q_left, q_right)
+            adam_update = exp_avg_projected / denom
+            if group.get("correct_bias", True):
+                bias_correction1 = 1.0 - float(beta1) ** state["step"]
+                bias_correction2 = 1.0 - float(beta2) ** state["step"]
+                if bias_correction1 > 0:
+                    adam_update = adam_update * (bias_correction2**0.5 / bias_correction1)
+            update = _project_back_2d(adam_update, q_left, q_right)
+        elif kind == "kl_soap":
             q_left, q_right = state["Q"]
             grad_projected = _project_2d(grad, q_left, q_right)
             state["exp_avg"].lerp_(grad_projected, 1.0 - float(beta1))
             state["exp_avg_sq"].lerp_(grad_projected.square(), 1.0 - float(beta2))
-            denom = state["exp_avg_sq"].sqrt().add_(eps)
-            update = _project_back_2d(state["exp_avg"] / denom, q_left, q_right)
+            adam_update = state["exp_avg"] / (state["exp_avg_sq"].sqrt() + eps)
+            if group.get("correct_bias", False):
+                bias_correction1 = 1.0 - float(beta1) ** state["step"]
+                bias_correction2 = 1.0 - float(beta2) ** state["step"]
+                if bias_correction1 > 0:
+                    adam_update = adam_update * (bias_correction2**0.5 / bias_correction1)
+            update = _project_back_2d(adam_update, q_left, q_right)
         elif kind == "shampoo":
             state["exp_avg"].lerp_(grad, 1.0 - float(beta1))
             q_left, q_right = state["Q"]
             left_scale = _finite_power(state["eigenvalues"][0], -0.25, eps)
             right_scale = _finite_power(state["eigenvalues"][1], -0.25, eps)
-            projected = _project_2d(state["exp_avg"], q_left, q_right)
+            momentum = state["exp_avg"]
+            if group.get("correct_bias", True):
+                bias_correction1 = 1.0 - float(beta1) ** state["step"]
+                if bias_correction1 > 0:
+                    momentum = momentum / bias_correction1
+            projected = _project_2d(momentum, q_left, q_right)
             update = _project_back_2d(projected * left_scale.view(-1, 1) * right_scale.view(1, -1), q_left, q_right)
         elif kind == "kl_shampoo":
             state["exp_avg"].lerp_(grad, 1.0 - float(beta1))
             q_left, q_right = state["Q"]
-            projected = _project_2d(state["exp_avg"], q_left, q_right)
+            momentum = state["exp_avg"]
+            if group.get("correct_bias", True):
+                bias_correction1 = 1.0 - float(beta1) ** state["step"]
+                if bias_correction1 > 0:
+                    momentum = momentum / bias_correction1
+            projected = _project_2d(momentum, q_left, q_right)
             scale = state["eigen_sqrt_inv"][0].view(-1, 1) * state["eigen_sqrt_inv"][1].view(1, -1)
             update = _project_back_2d(projected * scale, q_left, q_right)
         else:
             raise ValueError(f"Unknown structured optimizer kind: {kind}")
 
-        if kind in {"kl_shampoo", "kl_soap"}:
+        if kind in KL_PRECONDITIONED_KINDS:
             self._update_kl_preconditioner(grad, state, group)
         else:
             self._update_shampoo_preconditioner(grad, state, group)
@@ -302,6 +394,8 @@ class StructuredAdamW(torch.optim.Optimizer):
             if p.ndim != 2:
                 raise ValueError(f"{group['kind']} only supports 2D matrix params, got shape={tuple(p.shape)}")
             update = self._matrix_update(p, group)
+            if update is None:
+                continue
             if wd:
                 p.add_(p, alpha=-lr * wd)
             p.add_(update, alpha=-lr)

@@ -5,11 +5,14 @@
 Status checkpoint:
 - The current baseline-comparison phase is separate from StreamingMuon/Top-Aware Muon. Do not include Top-Aware or StreamingMuon variants in the immediate optimizer-baseline sanity sweeps unless explicitly requested.
 - Implemented baseline methods are `plain_muon`, `adamw`, `soap`, `shampoo`, `kl_shampoo`, and `kl_soap`.
+- 2026-05-12 audit update: the imported d12/d16 base optimizer sweep rows are stale for SOAP/Shampoo/KL conclusions because the structured optimizer implementation and beta/frequency config were not reference-aligned. Keep the plots for bookkeeping only; rerun before interpreting winners.
 - Completed a 100-step GPU sanity LR sweep at batches `{512,2048}` with artifacts in `results/nonstream_optimizer_sanity/`.
 - The first attempted d8 scale-up array `31950377` was cancelled after a submit-script task-mode path bug; it produced no usable training rows. Fix `scripts/submit_slurm_grid.sh` before re-submitting preemption-safe arrays.
 
 Immediate next steps:
-- Fix and smoke-test `scripts/submit_slurm_grid.sh` task mode, then re-submit the d8 baseline grid or run it inside the existing allocation. After completion, collate `sweep_rows.csv` and inspect boundary optima before deciding whether adaptive LR closure is necessary.
+- Rerun a small fixed-implementation sanity grid before any full base optimizer sweep. Start with d8/d12, one or two batches, and compare `plain_muon`, `adamw`, `soap`, `shampoo`, and `kl_soap`.
+- Use reference configs for structured methods: SOAP/Shampoo `betas=(0.95,0.95)`, `shampoo_beta=0.95`, `precondition_frequency=10`; KL-SOAP-style methods `beta1=0.95`, `beta2=0.9`, `shampoo_beta=0.9`, `precondition_frequency=1`, `structured_init_factor=0.1`.
+- After the sanity grid, re-submit the d8 baseline grid or run it inside an allocation. Collate `sweep_rows.csv` and inspect boundary optima before deciding whether adaptive LR closure is necessary.
 - Use `plain_muon` for ordinary Muon comparisons. Treat nanochat `muon/native_muon` as a deprecated compatibility control unless a specific comparison to nanochat's original implementation is desired.
 - For apple-to-apple comparisons against the existing Top-Aware sweeps, use `scripts/run_d12_optimizer_baselines.sh` and `scripts/run_d16_optimizer_baselines.sh`. They keep the same 2x-Chinchilla `{512K,2M,8M}` LR-sweep recipe and only change the method set to `plain_muon`, AdamW, SOAP, Shampoo, KL-Shampoo, and KL-SOAP.
 

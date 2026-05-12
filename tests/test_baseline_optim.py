@@ -28,6 +28,10 @@ def test_structured_optimizer_matrix_kinds_step() -> None:
         ])
         opt.step()
         assert torch.isfinite(weight).all()
+        assert torch.allclose(weight, before)
+        weight.grad = torch.randn_like(weight)
+        opt.step()
+        assert torch.isfinite(weight).all()
         assert not torch.allclose(weight, before)
 
 

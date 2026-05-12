@@ -1,5 +1,16 @@
 # Experiment Log — LITE vs Muon diagnostic campaign
 
+## 2026-05-12 — baseline optimizer implementation audit
+
+Latest update:
+- Imported and plotted Sadhika's d12/d16 base optimizer sweep under `results/d12-d16-base-opt-sweep/`: `251` completed result JSONs out of the expected `252`; the missing point is `d16 / kl_shampoo / batch=2097152 / lr=0.03`.
+- The old base sweep showed `plain_muon` winning every depth/batch among `{adamw, plain_muon, soap, shampoo, kl_soap, kl_shampoo}`, but those SOAP/Shampoo/KL rows are now invalidated as optimizer-quality evidence.
+- Audited `baseline_optim.py` against the official SOAP record in KellerJordan/modded-nanogpt and the PR-290 KL-SOAP-H implementation. Found implementation/config issues: SOAP `exp_avg` was incorrectly kept in projected coordinates, first-step preconditioner initialization did not match the reference skip-first-update behavior, KL-SOAP update order was wrong, and the sweep used non-reference beta/frequency settings.
+- Fixed the structured optimizer path to initialize bases from the first gradient and skip that update, use raw-gradient EMA for SOAP, update preconditioners after computing the direction, refresh basis after preconditioner update, reorder SOAP projected second moments during QR basis refresh, and keep KL-SOAP's projected momentum refresh behavior separate from SOAP.
+- Cleanup pass: first-step bootstrap now skips weight decay as well as the optimizer update, and `precondition_frequency=N` refreshes on real steps `N, 2N, ...` rather than step 1. Added regression coverage for bootstrap skip and method-specific structured sweep configs.
+- Validation: `py_compile` passed for `baseline_optim.py`, `run_eval.py`, `run_optimizer_sweep.py`, `run_top_aware_muon_sweep.py`, and `metric_logging.py`; `bash -n scripts/*.sh` passed; `pytest tests` passed with `10` tests. CPU toy sanity confirms `soap`, `shampoo`, `kl_soap`, and `kl_shampoo` can step repeatedly with finite parameters.
+- Next required result: rerun at least a small d8/d12 sanity grid before interpreting SOAP/Shampoo/KL-SOAP quality. Suggested configs are SOAP/Shampoo-style `betas=(0.95,0.95)`, `shampoo_beta=0.95`, `precondition_frequency=10`; KL-SOAP-H-style `beta1=0.95`, `beta2=0.9`, `shampoo_beta=0.9`, `precondition_frequency=1`, `structured_init_factor=0.1`.
+
 ## 2026-05-06 — Sadhika d12/d16 alpha sweep import
 
 Latest update:
