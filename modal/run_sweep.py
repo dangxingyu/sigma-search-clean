@@ -82,7 +82,11 @@ NANOCHAT_PACKAGES = [
 image = (
     modal.Image.debian_slim(python_version="3.11")
     .apt_install("build-essential", "ca-certificates", "curl", "git", "pkg-config")
-    .uv_pip_install(*NANOCHAT_PACKAGES, extra_index_url="https://download.pytorch.org/whl/cu128")
+    .uv_pip_install(
+        *NANOCHAT_PACKAGES,
+        extra_index_url="https://download.pytorch.org/whl/cu128",
+        extra_options="--index-strategy unsafe-best-match",
+    )
     .add_local_dir(PROJECT_ROOT, str(REMOTE_ROOT), copy=True, ignore=_ignore_upload)
     .env(
         {
