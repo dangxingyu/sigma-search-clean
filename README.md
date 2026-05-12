@@ -55,6 +55,18 @@ Run a cheap sanity check:
 bash scripts/smoke_run.sh
 ```
 
+## Modal
+
+Modal wrappers live in `modal/`. They reuse the same sweep scripts and store
+data/results in Modal volumes:
+
+```bash
+modal run modal/run_sweep.py::prepare_data
+MODAL_GPU=B200:8 modal run modal/run_sweep.py::sweep --depth 12 --chinchilla-mult 2
+```
+
+See `modal/README.md` for the full command surface.
+
 Run training commands inside whatever GPU allocation your cluster provides, or
 use the included SLURM array submitter if the cluster supports `sbatch`.
 
