@@ -190,8 +190,8 @@ It applies reference-style per-method settings:
 
 | method | beta1 | beta2 | shampoo beta | precondition freq | init factor |
 |---|---:|---:|---:|---:|---:|
-| `soap` | `0.95` | `0.95` | `0.95` | `10` | `1.0` |
-| `shampoo` | `0.95` | `0.95` | `0.95` | `10` | `1.0` |
+| `soap` | `0.95` | `0.99` | `0.90` | `10` | `1.0` |
+| `shampoo` | `0.95` | `0.99` | `0.90` | `10` | `1.0` |
 | `kl_soap` | `0.95` | `0.90` | `0.90` | `1` | `0.1` |
 | `kl_shampoo` | `0.95` | `0.90` | `0.90` | `1` | `0.1` |
 
@@ -208,6 +208,10 @@ STAMP=d16_baselines_001 bash scripts/run_d16_optimizer_baselines.sh
 ```
 
 These baseline wrappers are apple-to-apple with the Top-Aware handoff recipe:
+they use the same token/batch/LR grid, but default `WEIGHT_DECAY=0.1` for the
+non-streaming optimizer baselines following the Fantastic-optimizer reference
+recipe. Set `WEIGHT_DECAY=0.28` if you need strict equality with the current
+Top-Aware sweep default.
 `CHINCHILLA_MULT=2`, batches `{512K,2M,8M}`, the same LR grid, seed `42`,
 architecture `gpt2`, checkpoint/resume enabled, and adaptive LR boundary
 closure enabled. They change only `METHODS` to

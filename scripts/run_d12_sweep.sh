@@ -77,6 +77,7 @@ cmd=(
   --chinchilla-mult "$CHINCHILLA_MULT"
   --nproc-per-node "$NPROC"
   --max-device-batch-size "$MAX_DEVICE_BATCH_SIZE"
+  --weight-decay "${WEIGHT_DECAY:-0.28}"
   --save-every "$SAVE_EVERY"
   --keep-last-checkpoints "$KEEP_LAST_CHECKPOINTS"
   --pure-qr

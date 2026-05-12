@@ -57,16 +57,16 @@ RUN_EVAL_OPTIMIZER = {
 STRUCTURED_REFERENCE_CONFIGS = {
     "soap": {
         "precondition_frequency": 10,
-        "shampoo_beta": 0.95,
+        "shampoo_beta": 0.90,
         "optimizer_beta1": 0.95,
-        "optimizer_beta2": 0.95,
+        "optimizer_beta2": 0.99,
         "structured_init_factor": 1.0,
     },
     "shampoo": {
         "precondition_frequency": 10,
-        "shampoo_beta": 0.95,
+        "shampoo_beta": 0.90,
         "optimizer_beta1": 0.95,
-        "optimizer_beta2": 0.95,
+        "optimizer_beta2": 0.99,
         "structured_init_factor": 1.0,
     },
     "kl_soap": {
@@ -202,6 +202,7 @@ def common_training_args(args: argparse.Namespace, batch: int, lr: float, seed: 
         "--total-batch-size", str(batch),
         "--max-steps", str(steps),
         "--matrix-lr", f"{lr:g}",
+        "--weight-decay", f"{args.weight_decay:g}",
         "--warmup-steps", str(warmup),
         "--warmdown-ratio", f"{args.warmdown_ratio:g}",
         "--final-lr-frac", f"{args.final_lr_frac:g}",
@@ -713,6 +714,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--max-device-batch-size", type=int, default=16)
     parser.add_argument("--eval-tokens", type=int, default=524288)
     parser.add_argument("--eval-every", type=int, default=0, help="0 means steps//8")
+    parser.add_argument("--weight-decay", type=float, default=0.28)
     parser.add_argument("--warmup-ratio", type=float, default=0.05)
     parser.add_argument("--warmdown-ratio", type=float, default=0.65)
     parser.add_argument("--final-lr-frac", type=float, default=0.05)

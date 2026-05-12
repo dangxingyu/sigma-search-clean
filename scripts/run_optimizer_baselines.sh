@@ -16,6 +16,7 @@ TOP_KS="${TOP_KS:-1}"
 LRS="${LRS:-0.005 0.0075 0.01 0.015 0.02 0.03 0.04}"
 SEEDS="${SEEDS:-42}"
 ARCHITECTURE="${ARCHITECTURE:-gpt2}"
+WEIGHT_DECAY="${WEIGHT_DECAY:-0.1}"
 STAMP_PREFIX="${STAMP_PREFIX:-optimizer_baselines_$(date +%Y%m%d_%H%M%S)}"
 
 echo "Running multi-optimizer baseline sweep"
@@ -25,6 +26,7 @@ echo "BATCHES=${BATCHES}"
 echo "METHODS=${METHODS}"
 echo "ALPHAS=${ALPHAS} (ignored unless METHODS includes top_aware_muon)"
 echo "LRS=${LRS}"
+echo "WEIGHT_DECAY=${WEIGHT_DECAY}"
 echo "ARCHITECTURE=${ARCHITECTURE}"
 echo "STAMP_PREFIX=${STAMP_PREFIX}"
 
@@ -42,6 +44,7 @@ for depth in $DEPTHS; do
   LRS="$LRS" \
   SEEDS="$SEEDS" \
   ARCHITECTURE="$ARCHITECTURE" \
+  WEIGHT_DECAY="$WEIGHT_DECAY" \
   STAMP="$stamp" \
   bash scripts/run_d12_sweep.sh "$@"
 done

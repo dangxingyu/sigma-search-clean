@@ -61,7 +61,9 @@ MODAL_GPU=B200:8 modal run modal/run_sweep.py::optimizer_baselines \
 ```
 
 This uses `plain_muon adamw soap shampoo kl_shampoo kl_soap` with the same
-batch/LR defaults as the handoff scripts.
+batch/LR defaults as the handoff scripts. It defaults to `--weight-decay 0.1`
+for the non-streaming optimizer baselines; pass `--weight-decay 0.28` only for
+strict Top-Aware recipe matching.
 
 ## Generic Command
 

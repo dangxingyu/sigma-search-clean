@@ -9,11 +9,11 @@
 
 ### 2. Multiple observations; likely true but still needs careful confirmation
 
-- Reference SOAP-style configs should use `betas=(0.95,0.95)`, `shampoo_beta=0.95`, and `precondition_frequency=10`; PR-290 KL-SOAP-H uses `beta1=0.95`, `beta2=0.9`, `shampoo_beta=0.9`, `precondition_frequency=1`, and `init_factor=0.1`.
+- Reference structured configs should fix `beta1=0.95`. Fantastic-style SOAP/SOAPE uses `beta2=0.99`, `shampoo_beta=0.9`, and `precondition_frequency=10`; PR-290 KL-SOAP-H uses `beta2=0.9`, `shampoo_beta=0.9`, `precondition_frequency=1`, and `init_factor=0.1`.
 
 ### 3. Some observations suggest
 
-- The very poor old SOAP/KL-SOAP rows were likely dominated by implementation/config mismatch rather than optimizer fundamentals. A fixed small sanity grid is required before deciding whether these baselines are competitive.
+- The very poor old SOAP/KL-SOAP rows were likely dominated by implementation/config mismatch and non-reference weight decay rather than optimizer fundamentals. A fixed small sanity grid is required before deciding whether these baselines are competitive.
 
 ### 4. Hypotheses
 

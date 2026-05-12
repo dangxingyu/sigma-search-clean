@@ -15,6 +15,7 @@ export TOP_KS="${TOP_KS:-1}"
 export LRS="${LRS:-0.005 0.0075 0.01 0.015 0.02 0.03 0.04}"
 export SEEDS="${SEEDS:-42}"
 export ARCHITECTURE="${ARCHITECTURE:-gpt2}"
+export WEIGHT_DECAY="${WEIGHT_DECAY:-0.1}"
 export STAMP="${STAMP:-d16_optimizer_baselines_$(date +%Y%m%d_%H%M%S)}"
 
 bash scripts/run_d12_sweep.sh "$@"
