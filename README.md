@@ -190,8 +190,8 @@ It applies reference-style per-method settings:
 
 | method | beta1 | beta2 | shampoo beta | precondition freq | init factor |
 |---|---:|---:|---:|---:|---:|
-| `soap` | `0.95` | `0.99` | `0.90` | `10` | `1.0` |
-| `shampoo` | `0.95` | `0.99` | `0.90` | `10` | `1.0` |
+| `soap` | `0.95` | `0.99` | `0.95` | `10` | `1.0` |
+| `shampoo` | `0.95` | `0.99` | `0.95` | `10` | `1.0` |
 | `kl_soap` | `0.95` | `0.90` | `0.90` | `1` | `0.1` |
 | `kl_shampoo` | `0.95` | `0.90` | `0.90` | `1` | `0.1` |
 

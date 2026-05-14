@@ -66,6 +66,34 @@ def test_kl_basis_refresh_preserves_eigenvalue_ema() -> None:
     assert any(not torch.allclose(a, b) for a, b in zip(state["Q"], q_before))
 
 
+def test_soap_bootstrap_uses_ema_scaled_preconditioner() -> None:
+    torch.manual_seed(0)
+    weight = torch.nn.Parameter(torch.randn(4, 3))
+    grad = torch.randn_like(weight)
+    weight.grad = grad.clone()
+    beta = 0.9
+    opt = StructuredAdamW([
+        {
+            "kind": "soap",
+            "params": [weight],
+            "lr": 1e-3,
+            "betas": (0.95, 0.99),
+            "shampoo_beta": beta,
+            "eps": 1e-8,
+            "weight_decay": 0.0,
+            "precondition_frequency": 10,
+            "init_factor": 1.0,
+            "use_qr": True,
+        }
+    ])
+
+    opt.step()
+    state = opt.state[weight]
+
+    assert torch.allclose(state["GG"][0], (1.0 - beta) * (grad.float() @ grad.float().T))
+    assert torch.allclose(state["GG"][1], (1.0 - beta) * (grad.float().T @ grad.float()))
+
+
 def test_plain_muon_uses_ns5_without_dim_lr_scaling() -> None:
     grad = torch.tensor([[3.0, 0.0], [0.0, 1.0]])
     weight = torch.nn.Parameter(torch.zeros_like(grad))

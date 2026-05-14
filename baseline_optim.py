@@ -307,9 +307,10 @@ class StructuredAdamW(torch.optim.Optimizer):
             return
 
         state["GG"] = [
-            (grad_f @ grad_f.T).contiguous(),
-            (grad_f.T @ grad_f).contiguous(),
+            torch.zeros(rows, rows, device=grad.device, dtype=torch.float32),
+            torch.zeros(cols, cols, device=grad.device, dtype=torch.float32),
         ]
+        self._update_shampoo_preconditioner(grad_f, state, group)
         self._refresh_eigenbasis(state, group)
 
     def _maybe_update_basis(self, state: dict, group: dict) -> None:

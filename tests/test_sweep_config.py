@@ -20,6 +20,9 @@ def test_structured_config_auto_uses_method_reference_values() -> None:
     args = _args("auto")
     assert structured_config(args, "soap") == STRUCTURED_REFERENCE_CONFIGS["soap"]
     assert structured_config(args, "kl_soap") == STRUCTURED_REFERENCE_CONFIGS["kl_soap"]
+    assert structured_config(args, "soap")["shampoo_beta"] == 0.95
+    assert structured_config(args, "soap")["optimizer_beta2"] == 0.99
+    assert structured_config(args, "kl_soap")["shampoo_beta"] == 0.9
 
 
 def test_structured_config_global_uses_explicit_flags() -> None:

@@ -57,14 +57,14 @@ RUN_EVAL_OPTIMIZER = {
 STRUCTURED_REFERENCE_CONFIGS = {
     "soap": {
         "precondition_frequency": 10,
-        "shampoo_beta": 0.90,
+        "shampoo_beta": 0.95,
         "optimizer_beta1": 0.95,
         "optimizer_beta2": 0.99,
         "structured_init_factor": 1.0,
     },
     "shampoo": {
         "precondition_frequency": 10,
-        "shampoo_beta": 0.90,
+        "shampoo_beta": 0.95,
         "optimizer_beta1": 0.95,
         "optimizer_beta2": 0.99,
         "structured_init_factor": 1.0,
