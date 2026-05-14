@@ -35,6 +35,37 @@ def test_structured_optimizer_matrix_kinds_step() -> None:
         assert not torch.allclose(weight, before)
 
 
+def test_kl_basis_refresh_preserves_eigenvalue_ema() -> None:
+    torch.manual_seed(0)
+    weight = torch.nn.Parameter(torch.randn(8, 4))
+    opt = StructuredAdamW([
+        {
+            "kind": "kl_shampoo",
+            "params": [weight],
+            "lr": 1e-3,
+            "betas": (0.95, 0.9),
+            "shampoo_beta": 0.9,
+            "eps": 1e-8,
+            "weight_decay": 0.0,
+            "precondition_frequency": 1,
+            "init_factor": 0.1,
+            "use_qr": True,
+        }
+    ])
+    weight.grad = torch.randn_like(weight)
+    opt.step()
+    state = opt.state[weight]
+
+    weight.grad = torch.randn_like(weight)
+    opt.step()
+    expected = [x.clone() for x in state["eigen_sqrt_inv"]]
+    q_before = [x.clone() for x in state["Q"]]
+    opt._refresh_kl_basis(state, opt.param_groups[0])
+
+    assert all(torch.allclose(a, b) for a, b in zip(state["eigen_sqrt_inv"], expected))
+    assert any(not torch.allclose(a, b) for a, b in zip(state["Q"], q_before))
+
+
 def test_plain_muon_uses_ns5_without_dim_lr_scaling() -> None:
     grad = torch.tensor([[3.0, 0.0], [0.0, 1.0]])
     weight = torch.nn.Parameter(torch.zeros_like(grad))

@@ -225,6 +225,22 @@ class StructuredAdamW(torch.optim.Optimizer):
         state["eigen_sqrt_inv"] = [_finite_power(vals, -0.5, eps) for vals in new_vals]
         state["basis_initialized"] = True
 
+    def _refresh_kl_basis(self, state: dict, group: dict) -> None:
+        """Refresh KL-Shampoo bases without overwriting EMA eigenvalue estimates."""
+        eps = float(group.get("eps", 1e-8))
+        old_q = state["Q"]
+        new_q = []
+        use_qr = bool(group.get("use_qr", True))
+        basis_initialized = bool(state.get("basis_initialized", False))
+        for idx, factor in enumerate(state["GG"]):
+            if use_qr and basis_initialized:
+                q, _ = _qr_basis(factor, old_q[idx], sort_by_eigenvalue=False)
+            else:
+                q, _ = _eigh_basis(factor, eps)
+            new_q.append(q)
+        state["Q"] = new_q
+        state["basis_initialized"] = True
+
     def _update_shampoo_preconditioner(self, grad: Tensor, state: dict, group: dict) -> None:
         beta = _effective_shampoo_beta(group, state["step"])
         left_outer, right_outer = _matrix_outer_products(grad)
@@ -307,8 +323,10 @@ class StructuredAdamW(torch.optim.Optimizer):
             return
         if group["kind"] == "kl_soap":
             exp_avg_original = _project_back_2d(state["exp_avg"], state["Q"][0], state["Q"][1])
-            self._refresh_eigenbasis(state, group)
+            self._refresh_kl_basis(state, group)
             state["exp_avg"] = _project_2d(exp_avg_original, state["Q"][0], state["Q"][1]).contiguous()
+        elif group["kind"] == "kl_shampoo":
+            self._refresh_kl_basis(state, group)
         else:
             self._refresh_eigenbasis(state, group)
 
