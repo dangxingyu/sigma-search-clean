@@ -1,0 +1,31 @@
+[
+  {
+    "round": 1,
+    "num_proposals": 2,
+    "proposals": [
+      {
+        "method": "kl_shampoo",
+        "batch": 262144,
+        "lr": 6.25e-05,
+        "seed": 42,
+        "top_k": null,
+        "alpha": null,
+        "edge": "low"
+      },
+      {
+        "method": "shampoo",
+        "batch": 262144,
+        "lr": 6.25e-05,
+        "seed": 42,
+        "top_k": null,
+        "alpha": null,
+        "edge": "low"
+      }
+    ]
+  },
+  {
+    "round": 2,
+    "num_proposals": 0,
+    "proposals": []
+  }
+]
