@@ -149,6 +149,52 @@ def test_soap_bootstrap_uses_ema_scaled_preconditioner() -> None:
     assert torch.allclose(state["GG"][1], (1.0 - beta) * (grad.float().T @ grad.float()))
 
 
+def test_shampoo_update_matches_two_sided_inverse_quarter_power() -> None:
+    torch.manual_seed(0)
+    weight = torch.nn.Parameter(torch.randn(4, 3))
+    grad1 = torch.randn_like(weight)
+    grad2 = torch.randn_like(weight)
+    lr = 1e-3
+    beta1 = 0.95
+    eps = 1e-8
+    opt = StructuredAdamW([
+        {
+            "kind": "shampoo",
+            "params": [weight],
+            "lr": lr,
+            "betas": (beta1, 0.99),
+            "shampoo_beta": 0.95,
+            "eps": eps,
+            "weight_decay": 0.0,
+            "precondition_frequency": 100,
+            "init_factor": 1.0,
+            "use_qr": True,
+            "correct_bias": False,
+        }
+    ])
+
+    weight.grad = grad1
+    opt.step()  # bootstrap only
+    before = weight.detach().clone()
+    state = opt.state[weight]
+    q_left, q_right = [x.clone() for x in state["Q"]]
+    left_scale = state["eigenvalues"][0].clamp_min(eps).pow(-0.25)
+    right_scale = state["eigenvalues"][1].clamp_min(eps).pow(-0.25)
+
+    momentum = (1.0 - beta1) * grad2.float()
+    projected = _project_2d(momentum, q_left, q_right)
+    expected_update = _project_back_2d(
+        projected * left_scale.view(-1, 1) * right_scale.view(1, -1),
+        q_left,
+        q_right,
+    )
+
+    weight.grad = grad2
+    opt.step()
+
+    assert torch.allclose(weight, before - lr * expected_update.to(weight.dtype), atol=1e-6, rtol=1e-6)
+
+
 def test_plain_muon_uses_ns5_without_dim_lr_scaling() -> None:
     grad = torch.tensor([[3.0, 0.0], [0.0, 1.0]])
     weight = torch.nn.Parameter(torch.zeros_like(grad))

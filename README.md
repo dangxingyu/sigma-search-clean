@@ -213,11 +213,11 @@ independent output root per group, using `STAMP_<group>` suffixes:
 
 | group | methods | default LR grid |
 |---|---|---|
-| `plain_muon` | `plain_muon` | `0.0025 0.005 0.0075 0.01 0.015 0.02 0.03 0.04 0.06 0.08` |
-| `adamw` | `adamw` | `0.00025 0.0005 0.001 0.002 0.003 0.004 0.005 0.006 0.0075` |
-| `soap_klsoap` | `soap kl_soap` | `0.001 0.002 0.003 0.004 0.005 0.006 0.008 0.012 0.016 0.024` |
-| `kl_shampoo` | `kl_shampoo` | `0.001 0.002 0.004 0.005 0.006 0.008 0.012 0.016 0.024` |
-| `shampoo` | `shampoo` | `0.0005 0.001 0.002 0.004 0.005 0.006 0.008 0.012 0.016 0.02 0.024` |
+| `plain_muon` | `plain_muon` | `0.005 0.0075 0.01 0.015 0.02 0.03 0.04 0.06` |
+| `adamw` | `adamw` | `0.0005 0.001 0.002 0.003 0.004 0.005 0.0075` |
+| `soap_klsoap` | `soap kl_soap` | `0.001 0.002 0.003 0.004 0.006 0.008 0.012` |
+| `kl_shampoo` | `kl_shampoo` | `0.002 0.004 0.006 0.008 0.012 0.016` |
+| `shampoo` | `shampoo` | `0.002 0.004 0.005 0.0075 0.01 0.015 0.02` |
 
 All groups use `CHINCHILLA_MULT=2`, batches `{512K,2M,8M}`, seed `42`,
 architecture `gpt2`, checkpoint/resume enabled, and `STRUCTURED_CONFIG=auto`.

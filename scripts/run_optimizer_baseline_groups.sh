@@ -91,7 +91,7 @@ fi
 run_group \
   "plain_muon" \
   "plain_muon" \
-  "${PLAIN_MUON_LRS:-0.0025 0.005 0.0075 0.01 0.015 0.02 0.03 0.04 0.06 0.08}" \
+  "${PLAIN_MUON_LRS:-0.005 0.0075 0.01 0.015 0.02 0.03 0.04 0.06}" \
   "${PLAIN_MUON_LR_MIN:-0.0025}" \
   "${PLAIN_MUON_LR_MAX:-0.16}" \
   "$@"
@@ -99,7 +99,7 @@ run_group \
 run_group \
   "adamw" \
   "adamw" \
-  "${ADAMW_LRS:-0.00025 0.0005 0.001 0.002 0.003 0.004 0.005 0.006 0.0075}" \
+  "${ADAMW_LRS:-0.0005 0.001 0.002 0.003 0.004 0.005 0.0075}" \
   "${ADAMW_LR_MIN:-0.00003125}" \
   "${ADAMW_LR_MAX:-0.016}" \
   "$@"
@@ -107,7 +107,7 @@ run_group \
 run_group \
   "soap_klsoap" \
   "soap kl_soap" \
-  "${SOAP_LRS:-0.001 0.002 0.003 0.004 0.005 0.006 0.008 0.012 0.016 0.024}" \
+  "${SOAP_LRS:-0.001 0.002 0.003 0.004 0.006 0.008 0.012}" \
   "${SOAP_LR_MIN:-0.0005}" \
   "${SOAP_LR_MAX:-0.064}" \
   "$@"
@@ -115,7 +115,7 @@ run_group \
 run_group \
   "kl_shampoo" \
   "kl_shampoo" \
-  "${KL_SHAMPOO_LRS:-0.001 0.002 0.004 0.005 0.006 0.008 0.012 0.016 0.024}" \
+  "${KL_SHAMPOO_LRS:-0.002 0.004 0.006 0.008 0.012 0.016}" \
   "${KL_SHAMPOO_LR_MIN:-0.0005}" \
   "${KL_SHAMPOO_LR_MAX:-0.08}" \
   "$@"
@@ -123,7 +123,7 @@ run_group \
 run_group \
   "shampoo" \
   "shampoo" \
-  "${SHAMPOO_LRS:-0.0005 0.001 0.002 0.004 0.005 0.006 0.008 0.012 0.016 0.02 0.024}" \
+  "${SHAMPOO_LRS:-0.002 0.004 0.005 0.0075 0.01 0.015 0.02}" \
   "${SHAMPOO_LR_MIN:-0.000125}" \
   "${SHAMPOO_LR_MAX:-0.032}" \
   "$@"
