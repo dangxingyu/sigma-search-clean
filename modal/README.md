@@ -66,15 +66,17 @@ optimizer family because the LR scales differ:
 
 | group | methods | default LR grid |
 |---|---|---|
-| `plain_muon` | `plain_muon` | `0.01 0.02 0.03 0.04 0.06 0.08` |
-| `adamw` | `adamw` | `0.00025 0.0005 0.001 0.002 0.004` |
-| `soap_klsoap` | `soap kl_soap` | `0.002 0.004 0.006 0.008 0.012 0.016 0.024` |
-| `kl_shampoo` | `kl_shampoo` | `0.002 0.004 0.008 0.015 0.03` |
-| `shampoo` | `shampoo` | `0.0005 0.001 0.002 0.004 0.008` |
+| `plain_muon` | `plain_muon` | `0.0025 0.005 0.0075 0.01 0.015 0.02 0.03 0.04 0.06 0.08` |
+| `adamw` | `adamw` | `0.00025 0.0005 0.001 0.002 0.003 0.004 0.005 0.006 0.0075` |
+| `soap_klsoap` | `soap kl_soap` | `0.001 0.002 0.003 0.004 0.005 0.006 0.008 0.012 0.016 0.024` |
+| `kl_shampoo` | `kl_shampoo` | `0.001 0.002 0.004 0.005 0.006 0.008 0.012 0.016 0.024` |
+| `shampoo` | `shampoo` | `0.0005 0.001 0.002 0.004 0.005 0.006 0.008 0.012 0.016 0.02 0.024` |
 
 Use `--groups "plain_muon soap_klsoap"` to run a subset. Use `--no-grouped`
 with `--methods` and `--lrs` only for a deliberate single-grid ablation. It
-defaults to `--weight-decay 0.1` for non-streaming optimizer baselines; pass
+defaults to fixed-grid mode with adaptive LR disabled, and uses
+`--weight-decay 0.1` for non-streaming optimizer baselines. Pass
+`--adaptive-lr` only if boundary-extension jobs are supported; pass
 `--weight-decay 0.28` only for strict Top-Aware recipe matching.
 
 ## Generic Command

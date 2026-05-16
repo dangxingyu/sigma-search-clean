@@ -321,6 +321,7 @@ def optimizer_baselines(
     max_device_batch_size: int = 16,
     weight_decay: float = 0.1,
     stamp: str = "",
+    adaptive_lr: bool = False,
     dry_run: bool = False,
     ensure_data: bool = True,
     dataset_shards: int = 170,
@@ -347,7 +348,7 @@ def optimizer_baselines(
         "STAMP": stamp,
         "OUT_ROOT": str(OUTPUT_ROOT / "search_evals" / stamp),
         "LOG_ROOT": str(OUTPUT_ROOT / "logs" / stamp),
-        "ADAPTIVE_LR": "1",
+        "ADAPTIVE_LR": "1" if adaptive_lr else "0",
         "STRUCTURED_CONFIG": "auto",
         "DRY_RUN": "1" if dry_run else "0",
     }

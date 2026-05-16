@@ -3,9 +3,10 @@ set -euo pipefail
 
 # Apple-to-apple d12 non-streaming optimizer baseline sweep.
 #
-# Defaults use method-grouped LR grids because AdamW, Muon, Shampoo, and
-# KL-Shampoo do not share the same LR scale. Set GROUPED=0 to use one custom
-# METHODS/LRS grid for all methods.
+# Defaults use method-grouped fixed LR grids because AdamW, Muon, Shampoo, and
+# KL-Shampoo do not share the same LR scale. Adaptive LR is off by default for
+# handoff clusters; set ADAPTIVE_LR=1 only if the cluster can run boundary
+# closure jobs after the base grid.
 
 REPO="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$REPO"

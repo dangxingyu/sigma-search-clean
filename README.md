@@ -213,17 +213,20 @@ independent output root per group, using `STAMP_<group>` suffixes:
 
 | group | methods | default LR grid |
 |---|---|---|
-| `plain_muon` | `plain_muon` | `0.01 0.02 0.03 0.04 0.06 0.08` |
-| `adamw` | `adamw` | `0.00025 0.0005 0.001 0.002 0.004` |
-| `soap_klsoap` | `soap kl_soap` | `0.002 0.004 0.006 0.008 0.012 0.016 0.024` |
-| `kl_shampoo` | `kl_shampoo` | `0.002 0.004 0.008 0.015 0.03` |
-| `shampoo` | `shampoo` | `0.0005 0.001 0.002 0.004 0.008` |
+| `plain_muon` | `plain_muon` | `0.0025 0.005 0.0075 0.01 0.015 0.02 0.03 0.04 0.06 0.08` |
+| `adamw` | `adamw` | `0.00025 0.0005 0.001 0.002 0.003 0.004 0.005 0.006 0.0075` |
+| `soap_klsoap` | `soap kl_soap` | `0.001 0.002 0.003 0.004 0.005 0.006 0.008 0.012 0.016 0.024` |
+| `kl_shampoo` | `kl_shampoo` | `0.001 0.002 0.004 0.005 0.006 0.008 0.012 0.016 0.024` |
+| `shampoo` | `shampoo` | `0.0005 0.001 0.002 0.004 0.005 0.006 0.008 0.012 0.016 0.02 0.024` |
 
 All groups use `CHINCHILLA_MULT=2`, batches `{512K,2M,8M}`, seed `42`,
-architecture `gpt2`, checkpoint/resume enabled, `STRUCTURED_CONFIG=auto`, and
-adaptive LR boundary closure. The baseline wrappers default `WEIGHT_DECAY=0.1`
-following the structured-optimizer references; set `WEIGHT_DECAY=0.28` only for
-strict equality with the current Top-Aware sweep default. To run a subset, set
+architecture `gpt2`, checkpoint/resume enabled, and `STRUCTURED_CONFIG=auto`.
+The baseline wrappers default to fixed grids with `ADAPTIVE_LR=0` because the
+handoff path should not depend on a separate adaptive closure/collator step.
+Set `ADAPTIVE_LR=1` only on infrastructure where boundary-extension jobs are
+supported. The baseline wrappers default `WEIGHT_DECAY=0.1` following the
+structured-optimizer references; set `WEIGHT_DECAY=0.28` only for strict
+equality with the current Top-Aware sweep default. To run a subset, set
 `OPTIMIZER_GROUPS`, e.g.
 `OPTIMIZER_GROUPS="plain_muon soap_klsoap kl_shampoo"`. Do not use the Bash
 variable name `GROUPS`; Bash reserves it for Unix group IDs. To recover the old
