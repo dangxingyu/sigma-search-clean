@@ -190,10 +190,10 @@ It applies reference-style per-method settings:
 
 | method | beta1 | beta2 | shampoo beta | precondition freq | init factor |
 |---|---:|---:|---:|---:|---:|
-| `soap` | `0.95` | `0.99` | `0.95` | `10` | `1.0` |
+| `soap` | `0.95` | `0.99` | `0.95` | `1` | `1.0` |
 | `shampoo` | `0.90` | `0.98` | `0.98` | `10` | `0.1` |
 | `kl_soap` | `0.95` | `0.90` | `0.90` | `1` | `0.1` |
-| `kl_shampoo` | `0.90` | `0.98` | `0.98` | `10` | `0.1` |
+| `kl_shampoo` | `0.90` | `0.98` | `0.98` | `1` | `0.1` |
 
 Set `STRUCTURED_CONFIG=global` only for explicit ablations; then the
 `PRECONDITION_FREQUENCY`, `SHAMPOO_BETA`, `OPTIMIZER_BETA*`, and

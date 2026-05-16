@@ -56,7 +56,7 @@ RUN_EVAL_OPTIMIZER = {
 }
 STRUCTURED_REFERENCE_CONFIGS = {
     "soap": {
-        "precondition_frequency": 10,
+        "precondition_frequency": 1,
         "shampoo_beta": 0.95,
         "optimizer_beta1": 0.95,
         "optimizer_beta2": 0.99,
@@ -77,7 +77,7 @@ STRUCTURED_REFERENCE_CONFIGS = {
         "structured_init_factor": 0.1,
     },
     "kl_shampoo": {
-        "precondition_frequency": 10,
+        "precondition_frequency": 1,
         "shampoo_beta": 0.98,
         "optimizer_beta1": 0.90,
         "optimizer_beta2": 0.98,
