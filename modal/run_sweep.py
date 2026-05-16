@@ -311,10 +311,10 @@ def sweep(
 def optimizer_baselines(
     depth: int = 12,
     chinchilla_mult: float = 2.0,
-    methods: str = "plain_muon adamw kl_shampoo",
+    methods: str = "plain_muon adamw soap kl_soap kl_shampoo",
     batches: str = "524288 2097152 8388608",
     lrs: str = "0.0005 0.001 0.002 0.004 0.008 0.015 0.02 0.04",
-    groups: str = "plain_muon adamw kl_shampoo",
+    groups: str = "plain_muon adamw soap kl_soap kl_shampoo",
     grouped: bool = True,
     seeds: str = "42",
     nproc: int = 8,

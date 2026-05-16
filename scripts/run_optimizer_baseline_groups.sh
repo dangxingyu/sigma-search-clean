@@ -21,18 +21,19 @@ BASE_STAMP="${STAMP:-d${DEPTH}_optimizer_baselines_$(date +%Y%m%d_%H%M%S)}"
 
 # Space-separated group suffixes to run.
 #
-# Default handoff keeps only stable core comparisons:
+# Default handoff keeps the competitive/core comparisons:
 #   plain_muon: ordinary Muon, using alpha=1 best LR by depth/batch
 #   adamw: dense AdamW baseline
-#   kl_shampoo: current structured-method candidate
+#   soap: SOAP candidate
+#   kl_soap: KL-SOAP candidate
+#   kl_shampoo: KL-Shampoo candidate
 #
-# Optional groups remain implemented but are not default handoff jobs:
-#   OPTIMIZER_GROUPS="plain_muon adamw kl_shampoo shampoo"
-#   OPTIMIZER_GROUPS="soap_klsoap"
+# Optional group remains implemented but is not a default handoff job:
+#   OPTIMIZER_GROUPS="plain_muon adamw soap kl_soap kl_shampoo shampoo"
 #
 # Do not use the shell variable name GROUPS here; Bash reserves it for the
 # current user's Unix group IDs.
-OPTIMIZER_GROUPS="${OPTIMIZER_GROUPS:-plain_muon adamw kl_shampoo}"
+OPTIMIZER_GROUPS="${OPTIMIZER_GROUPS:-plain_muon adamw soap kl_soap kl_shampoo}"
 
 contains_word() {
   local needle="$1"
@@ -155,7 +156,7 @@ if [[ "${GROUPED:-1}" == "0" ]]; then
   echo
   echo "GROUPED=0: running legacy single-grid baseline wrapper"
   export DEPTH CHINCHILLA_MULT BATCHES SEEDS ARCHITECTURE WEIGHT_DECAY ADAPTIVE_LR
-  export METHODS="${METHODS:-plain_muon adamw kl_shampoo}"
+  export METHODS="${METHODS:-plain_muon adamw soap kl_soap kl_shampoo}"
   export ALPHAS="${ALPHAS:-1.0}"
   export TOP_KS="${TOP_KS:-1}"
   export LRS="${LRS:-0.0005 0.001 0.002 0.004 0.008 0.015 0.02 0.04}"
@@ -175,11 +176,19 @@ run_group \
   "$@"
 
 run_group \
-  "soap_klsoap" \
-  "soap kl_soap" \
+  "soap" \
+  "soap" \
   "${SOAP_LRS:-0.001 0.002 0.003 0.004 0.006 0.008 0.012}" \
   "${SOAP_LR_MIN:-0.0005}" \
   "${SOAP_LR_MAX:-0.064}" \
+  "$@"
+
+run_group \
+  "kl_soap" \
+  "kl_soap" \
+  "${KL_SOAP_LRS:-0.001 0.002 0.003 0.004 0.006 0.008 0.012}" \
+  "${KL_SOAP_LR_MIN:-0.0005}" \
+  "${KL_SOAP_LR_MAX:-0.064}" \
   "$@"
 
 run_group \

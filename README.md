@@ -208,16 +208,17 @@ STAMP=d16_baselines_001 bash scripts/run_d16_optimizer_baselines.sh
 ```
 
 These wrappers are apple-to-apple on model/data/batch/schedule, but they do not
-force all optimizers onto one LR grid. The default handoff sweep runs only the
-stable core groups: `plain_muon adamw kl_shampoo`. Each group writes an
-independent output root with a `STAMP_<group>` suffix:
+force all optimizers onto one LR grid. The default handoff sweep runs the
+competitive/core groups: `plain_muon adamw soap kl_soap kl_shampoo`. Each
+group writes an independent output root with a `STAMP_<group>` suffix:
 
 | group | default | methods | LR setting |
 |---|---:|---|---|
 | `plain_muon` | yes | `plain_muon` | one alpha=`1.0` best LR per depth/batch |
 | `adamw` | yes | `adamw` | `0.0005 0.001 0.002 0.003 0.004 0.005 0.0075` |
+| `soap` | yes | `soap` | `0.001 0.002 0.003 0.004 0.006 0.008 0.012` |
+| `kl_soap` | yes | `kl_soap` | `0.001 0.002 0.003 0.004 0.006 0.008 0.012` |
 | `kl_shampoo` | yes | `kl_shampoo` | `0.002 0.004 0.006 0.008 0.012 0.016` |
-| `soap_klsoap` | opt-in | `soap kl_soap` | `0.001 0.002 0.003 0.004 0.006 0.008 0.012` |
 | `shampoo` | opt-in | `shampoo` | `0.002 0.004 0.005 0.0075 0.01 0.015 0.02` |
 
 All groups use `CHINCHILLA_MULT=2`, batches `{512K,2M,8M}`, seed `42`,
@@ -233,7 +234,7 @@ supported. The baseline wrappers default `WEIGHT_DECAY=0.1` following the
 structured-optimizer references; set `WEIGHT_DECAY=0.28` only for strict
 equality with the current Top-Aware sweep default. To run a subset, set
 `OPTIMIZER_GROUPS`, e.g.
-`OPTIMIZER_GROUPS="plain_muon adamw kl_shampoo shampoo"`. Do not use the Bash
+`OPTIMIZER_GROUPS="plain_muon adamw soap kl_soap kl_shampoo shampoo"`. Do not use the Bash
 variable name `GROUPS`; Bash reserves it for Unix group IDs. To recover the old
 single-grid behavior, set `GROUPED=0 METHODS="..." LRS="..."`.
 
