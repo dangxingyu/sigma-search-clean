@@ -60,19 +60,24 @@ MODAL_GPU=B200:8 modal run modal/run_sweep.py::optimizer_baselines \
   --nproc 8
 ```
 
-This uses `plain_muon adamw soap shampoo kl_shampoo kl_soap` with the same
-batch/token defaults as the handoff scripts, but the default run is grouped by
-optimizer family because the LR scales differ:
+This uses the same batch/token defaults as the handoff scripts. The default
+grouped run is the compact core handoff set `plain_muon adamw kl_shampoo`;
+optional structured groups remain available by overriding `--groups`.
 
-| group | methods | default LR grid |
-|---|---|---|
-| `plain_muon` | `plain_muon` | `0.005 0.0075 0.01 0.015 0.02 0.03 0.04 0.06` |
-| `adamw` | `adamw` | `0.0005 0.001 0.002 0.003 0.004 0.005 0.0075` |
-| `soap_klsoap` | `soap kl_soap` | `0.001 0.002 0.003 0.004 0.006 0.008 0.012` |
-| `kl_shampoo` | `kl_shampoo` | `0.002 0.004 0.006 0.008 0.012 0.016` |
-| `shampoo` | `shampoo` | `0.002 0.004 0.005 0.0075 0.01 0.015 0.02` |
+| group | default | methods | LR setting |
+|---|---:|---|---|
+| `plain_muon` | yes | `plain_muon` | one alpha=`1.0` best LR per depth/batch |
+| `adamw` | yes | `adamw` | `0.0005 0.001 0.002 0.003 0.004 0.005 0.0075` |
+| `kl_shampoo` | yes | `kl_shampoo` | `0.002 0.004 0.006 0.008 0.012 0.016` |
+| `soap_klsoap` | opt-in | `soap kl_soap` | `0.001 0.002 0.003 0.004 0.006 0.008 0.012` |
+| `shampoo` | opt-in | `shampoo` | `0.002 0.004 0.005 0.0075 0.01 0.015 0.02` |
 
-Use `--groups "plain_muon soap_klsoap"` to run a subset. Use `--no-grouped`
+For `plain_muon`, d12 uses `{512K: 0.0075, 2M: 0.015, 8M: 0.01}` and d16
+uses `{512K: 0.005, 2M: 0.005, 8M: 0.015}`. Set `PLAIN_MUON_LR=<lr>` only for
+a deliberate custom one-LR Muon run.
+
+Use `--groups "plain_muon adamw kl_shampoo shampoo"` to include optional
+ordinary Shampoo. Use `--no-grouped`
 with `--methods` and `--lrs` only for a deliberate single-grid ablation. It
 defaults to fixed-grid mode with adaptive LR disabled, and uses
 `--weight-decay 0.1` for non-streaming optimizer baselines. Pass
