@@ -40,7 +40,7 @@
 
 ### 2. Multiple observations; likely true but still needs careful confirmation
 
-- Reference structured configs should fix `beta1=0.95`. The optimizer-sft vanilla SOAP implementation and notes use SOAP `beta2=0.99`, `shampoo_beta=0.95`, and `precondition_frequency=10`; PR-290 KL-SOAP-H uses `beta2=0.9`, `shampoo_beta=0.9`, `precondition_frequency=1`, and `init_factor=0.1`.
+- Reference structured configs should fix SOAP at `beta1=0.95`, `beta2=0.99`, `shampoo_beta=0.95`, and `precondition_frequency=10`. For the handoff sweep, ordinary Shampoo is intentionally set to the same beta recipe as KL-Shampoo (`beta1=0.9`, `beta2/shampoo_beta=0.98`, `precondition_frequency=10`) even though this is not beta-swept; PR-290 KL-SOAP-H uses `beta2=0.9`, `shampoo_beta=0.9`, `precondition_frequency=1`, and `init_factor=0.1`.
 - In the old-config d8 bugcheck, KL-SOAP already beats AdamW by a large margin at the same batch/token budget (`1.509367` vs `1.677759` BPB), with best LR around `0.015`; `0.03` is worse. This suggests the implementation is usable and the LR scale for KL-SOAP is much closer to Muon-like values than AdamW-like values.
 - The follow-up Fantastic/PR-aligned d8 tune confirms the KL-SOAP-over-AdamW result: KL-SOAP `1.523088 @ lr=0.008` vs AdamW `1.677638 @ lr=0.0005`.
 
