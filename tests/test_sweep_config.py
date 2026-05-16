@@ -23,6 +23,9 @@ def test_structured_config_auto_uses_method_reference_values() -> None:
     assert structured_config(args, "soap")["shampoo_beta"] == 0.95
     assert structured_config(args, "soap")["optimizer_beta2"] == 0.99
     assert structured_config(args, "kl_soap")["shampoo_beta"] == 0.9
+    assert structured_config(args, "kl_shampoo")["optimizer_beta1"] == 0.9
+    assert structured_config(args, "kl_shampoo")["optimizer_beta2"] == 0.98
+    assert structured_config(args, "kl_shampoo")["precondition_frequency"] == 10
 
 
 def test_structured_config_global_uses_explicit_flags() -> None:

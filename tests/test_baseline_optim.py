@@ -2,7 +2,14 @@ from __future__ import annotations
 
 import torch
 
-from baseline_optim import StructuredAdamW, matrix_sign_exact, matrix_sign_ns5
+from baseline_optim import (
+    StructuredAdamW,
+    _kl_inv_sqrt_clamp,
+    _project_2d,
+    _project_back_2d,
+    matrix_sign_exact,
+    matrix_sign_ns5,
+)
 
 
 def test_structured_optimizer_matrix_kinds_step() -> None:
@@ -64,6 +71,54 @@ def test_kl_basis_refresh_preserves_eigenvalue_ema() -> None:
 
     assert all(torch.allclose(a, b) for a, b in zip(state["eigen_sqrt_inv"], expected))
     assert any(not torch.allclose(a, b) for a, b in zip(state["Q"], q_before))
+
+
+def test_kl_shampoo_update_has_no_adam_bias_correction() -> None:
+    torch.manual_seed(0)
+    weight = torch.nn.Parameter(torch.randn(4, 3))
+    grad1 = torch.randn_like(weight)
+    grad2 = torch.randn_like(weight)
+    lr = 1e-3
+    beta1 = 0.95
+    eps = 1e-8
+    opt = StructuredAdamW([
+        {
+            "kind": "kl_shampoo",
+            "params": [weight],
+            "lr": lr,
+            "betas": (beta1, 0.9),
+            "shampoo_beta": 0.9,
+            "eps": eps,
+            "weight_decay": 0.0,
+            "precondition_frequency": 100,
+            "init_factor": 0.1,
+            "use_qr": True,
+        }
+    ])
+
+    weight.grad = grad1
+    opt.step()  # bootstrap only
+    before = weight.detach().clone()
+    state = opt.state[weight]
+    q_left, q_right = [x.clone() for x in state["Q"]]
+    inv_left, inv_right = [x.clone() for x in state["eigen_sqrt_inv"]]
+
+    momentum = (1.0 - beta1) * grad2.float()
+    projected = _project_2d(momentum, q_left, q_right)
+    scale = inv_left.view(-1, 1) * inv_right.view(1, -1)
+    scale = scale / (1.0 + scale * eps)
+    expected_update = _project_back_2d(projected * scale, q_left, q_right)
+
+    weight.grad = grad2
+    opt.step()
+
+    assert torch.allclose(weight, before - lr * expected_update.to(weight.dtype), atol=1e-6, rtol=1e-6)
+
+
+def test_kl_inv_sqrt_clamp_matches_reference_dimension_rule() -> None:
+    assert _kl_inv_sqrt_clamp(4, {}) == 10.0
+    assert _kl_inv_sqrt_clamp(512, {}) == 512.0
+    assert _kl_inv_sqrt_clamp(8192, {}) == 4000.0
 
 
 def test_soap_bootstrap_uses_ema_scaled_preconditioner() -> None:

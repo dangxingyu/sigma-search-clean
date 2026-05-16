@@ -1,5 +1,19 @@
 # Experiment Plan — LITE vs Muon Switching Diagnostics
 
+## Current baseline optimizer debug plan as of 2026-05-14
+
+Status checkpoint:
+- Baseline optimizer comparison is currently in debug mode, not final sweep mode. The active question is whether SOAP/Shampoo/KL variants are implemented/configured correctly enough to beat or at least approach AdamW/Muon on d8 before spending d12/d16-scale compute.
+- Fixed and validated the reference-alignment issues found in SOAP/Shampoo: plain SOAP now matches the external vanilla SOAP implementation on a CPU numerical sanity case, and non-KL SOAP/Shampoo use the reference first-step preconditioner bootstrap.
+- Old d12/d16 base optimizer sweep artifacts remain useful for plotting infrastructure only; do not use them as scientific evidence for SOAP/Shampoo quality.
+
+Immediate next steps:
+- Use the completed d8 `1x` loss-curve run as a sanity anchor: SOAP-with-KL-hparams beat the chosen plain-Muon point, while KL-Shampoo remained much worse.
+- The KL-SOAP lower-LR follow-up now slightly beats SOAP-with-KL-hparams at this recipe: `kl_soap lr=0.006 -> 1.020622` versus `soap lr=0.004 -> 1.022831`. Treat this as a single-seed/small-grid sanity result, not a final optimizer ranking.
+- Plain Muon is now LR-swept enough for this sanity comparison: `{0.01,0.02,0.04,0.08}` gives best `1.024091 @ lr=0.04`. KL-SOAP still leads by about `0.0035` BPB at `lr=0.006`.
+- Ref-aligned KL-Shampoo is now fixed enough to interpret as a real sanity result at d8/262K/1x: best tested row is `1.043698 @ lr=0.008`, worse than tuned plain Muon and KL-SOAP. Ordinary Shampoo remains much worse (`1.524967 @ lr=0.002`, still improving but not close).
+- Next useful run is to close the d8/262K/1x LR neighborhood for KL-SOAP/SOAP around `{0.006,0.008}` and add tuned AdamW on the same recipe. Do not claim a final optimizer ranking until AdamW and KL-SOAP high-side closure are included.
+
 ## Current non-streaming optimizer-baseline plan as of 2026-05-05
 
 Status checkpoint:
@@ -11,7 +25,7 @@ Status checkpoint:
 
 Immediate next steps:
 - Rerun a small fixed-implementation sanity grid before any full base optimizer sweep. Start with d8/d12, one or two batches, and compare `plain_muon`, `adamw`, `soap`, `shampoo`, and `kl_soap`.
-- Use reference-aligned configs for structured methods: SOAP/Shampoo `beta1=0.95`, `beta2=0.99`, `shampoo_beta=0.95`, `precondition_frequency=10`; KL-SOAP-style methods `beta1=0.95`, `beta2=0.9`, `shampoo_beta=0.9`, `precondition_frequency=1`, `structured_init_factor=0.1`.
+- Use reference-aligned configs for structured methods: SOAP/Shampoo `beta1=0.95`, `beta2=0.99`, `shampoo_beta=0.95`, `precondition_frequency=10`; KL-SOAP-style `beta1=0.95`, `beta2=0.9`, `shampoo_beta=0.9`, `precondition_frequency=1`, `structured_init_factor=0.1`; KL-Shampoo prototype-style `beta1=0.9`, `beta2=0.98`, `shampoo_beta=0.98`, `precondition_frequency=10`, `structured_init_factor=0.1`.
 - After the sanity grid, re-submit the d8 baseline grid or run it inside an allocation. Collate `sweep_rows.csv` and inspect boundary optima before deciding whether adaptive LR closure is necessary.
 - Use `plain_muon` for ordinary Muon comparisons. Treat nanochat `muon/native_muon` as a deprecated compatibility control unless a specific comparison to nanochat's original implementation is desired.
 - For optimizer-baseline comparisons, use `scripts/run_d12_optimizer_baselines.sh` and `scripts/run_d16_optimizer_baselines.sh`. They keep the same 2x-Chinchilla `{512K,2M,8M}` LR-sweep recipe and method set `plain_muon`, AdamW, SOAP, Shampoo, KL-Shampoo, and KL-SOAP, but default to `WEIGHT_DECAY=0.1` for the Fantastic-style baseline recipe. Override `WEIGHT_DECAY=0.28` only for strict equality with existing Top-Aware sweeps.

@@ -1,5 +1,25 @@
 # Experiment Log — LITE vs Muon diagnostic campaign
 
+## 2026-05-14 — d8 1x baseline optimizer loss-curve debug
+
+Latest update:
+- 2026-05-15 retune completed after the KL-Shampoo patch. Ordinary Shampoo d8/262K/1x remains far from competitive despite monotonic improvement over the tested LR range: `0.00025 -> 1.654739`, `0.0005 -> 1.629712`, `0.001 -> 1.584399`, `0.002 -> 1.524967`. The run was stopped before invalid old-config KL-Shampoo rows could continue.
+- Ref-aligned KL-Shampoo d8/262K/1x completed on `8xA100`, stamp `modal_d8_1x_a100_klshampoo_refpatch_20260515_194156`: `lr=0.001 -> 1.118821`, `0.002 -> 1.072575`, `0.004 -> 1.050697`, `0.008 -> 1.043698`, `0.015 -> 1.101288`. Best is `1.043698 @ lr=0.008`, closed against the high-side `0.015` row, but still worse than KL-SOAP `1.020622`, SOAP-with-KL-hparams `1.022831`, and tuned plain Muon `1.024091`.
+- Pulled the retune JSONs locally and generated `results/modal_d8_1x_a100_klshampoo_refpatch_20260515_194156/figures/d8_1x_structured_retune_lr_sweep.png` plus `d8_1x_structured_retune_summary.csv`.
+- 2026-05-15 implementation follow-up: compared `kl_shampoo` against the public `yorkerlin/KL-Methods` prototype. Found and fixed a real mismatch: our KL-Shampoo path was applying Adam-style momentum bias correction, while the reference `klshampoo_update` does not. Also changed KL inverse-sqrt eigenvalue clamping from fixed `4000` to the reference dimension rule `max(10, min(dim, 4000))`, added the reference `eps` damping factor in the KL-Shampoo preconditioned update, and split the auto config so KL-Shampoo uses prototype-style `beta1=0.9`, `beta2/shampoo_beta=0.98`, `precondition_frequency=10` instead of KL-SOAP-H's `0.95/0.9/freq=1`. Local regression subset now passes with `9` tests. Existing KL-Shampoo result rows before this fix should be treated as invalid/stale.
+- 2026-05-15 follow-up: ran A100 plain-Muon LR sweep `modal_d8_1x_a100_plainmuon_lrsweep_20260515_174030`, same d8/262K/1x/seed42/weight_decay0.1 recipe. Results: `lr=0.01 -> 1.056010`, `lr=0.02 -> 1.031564`, `lr=0.04 -> 1.024091`, `lr=0.08 -> 1.031772`. Plain Muon's current tuned best is `1.024091 @ lr=0.04`.
+- The paired baseline comparison after tuning plain Muon is: KL-SOAP `1.020622 @ lr=0.006`, SOAP-with-KL-hparams `1.022831 @ lr=0.004`, plain Muon `1.024091 @ lr=0.04`, KL-Shampoo `1.124470 @ lr=0.0005`. KL-SOAP currently leads plain Muon by `0.003470` BPB, but KL-SOAP is not LR-closed above `0.006`.
+- Combined loss curves and summary CSV are under `results/modal_d8_1x_a100_plainmuon_lrsweep_20260515_174030/figures/`.
+- 2026-05-15 follow-up: ran H100 two-point KL-SOAP sweep `modal_d8_1x_h100_klsoap_lr004_006_20260515_122426`, same d8/262K/1x/seed42/weight_decay0.1 recipe. Results: `kl_soap lr=0.004 -> 1.025321`, `kl_soap lr=0.006 -> 1.020622`; `lr=0.006` is currently the best point among the tested KL/SOAP-family rows.
+- Pulled KL-SOAP JSONs to `results/modal_d8_1x_h100_klsoap_lr004_006_20260515_122426/raw_modal/` and generated the combined baseline plot at `results/modal_d8_1x_h100_klsoap_lr004_006_20260515_122426/figures/d8_1x_baseline_plus_klsoap.png`.
+- Stopped the just-submitted `0.5x` Modal debug jobs before meaningful training after switching the plan to `1x` Chinchilla.
+- Relaunched on `8xA100` as `modal_d8_1x_a100_baseline_loss_curves_20260514_132400` (`ap-yttf8ukfYlAKJWP2RI9p90`), depth `8`, batch `262144`, `CHINCHILLA_MULT=1` (`402,653,184` tokens, `1536` optimizer steps), seed `42`, `weight_decay=0.1`. Earlier `8xB200` attempts were stopped before training; B200 is unnecessary for this d8 loss-curve sanity run.
+- Runs are sequential in one app with separate output roots: SOAP with KL-SOAP-style hyperparameters at `lr=0.004`, KL-Shampoo at `lr=0.0005`, and `plain_muon` at `lr=0.01`.
+- The SOAP ablation intentionally sets `beta1=0.95`, `beta2=0.9`, `shampoo_beta=0.9`, `precondition_frequency=1`, and `structured_init_factor=0.1` to test whether plain SOAP's poor earlier row was mostly a beta/frequency/config issue.
+- Completed all three rows with `0` recorded errors. Final validation BPB: SOAP-with-KL-hparams `1.022831 @ lr=0.004`, plain Muon `1.055852 @ lr=0.01`, KL-Shampoo `1.124470 @ lr=0.0005`.
+- Pulled result JSONs and sweep rows to `results/modal_d8_1x_a100_baseline_loss_curves_20260514_132400/raw_modal/`. Generated train CE / validation BPB curves at `results/modal_d8_1x_a100_baseline_loss_curves_20260514_132400/figures/d8_1x_a100_baseline_loss_curves.png`, with point CSV and summary CSV in the same directory.
+- Interpretation: in this single d8/262K/1x point, SOAP under KL-SOAP-style hyperparameters is not broken and beats the chosen plain-Muon LR. This is not yet an LR-swept optimizer-quality conclusion.
+
 ## 2026-05-12 — baseline optimizer implementation audit
 
 Latest update:
@@ -15,7 +35,8 @@ Latest update:
 - Fixed the structured optimizer path to initialize bases from the first gradient and skip that update, use raw-gradient EMA for SOAP, update preconditioners after computing the direction, refresh basis after preconditioner update, reorder SOAP projected second moments during QR basis refresh, and keep KL-SOAP's projected momentum refresh behavior separate from SOAP.
 - Cleanup pass: first-step bootstrap now skips weight decay as well as the optimizer update, and `precondition_frequency=N` refreshes on real steps `N, 2N, ...` rather than step 1. Added regression coverage for bootstrap skip and method-specific structured sweep configs.
 - Validation: `py_compile` passed for `baseline_optim.py`, `run_eval.py`, `run_optimizer_sweep.py`, `run_top_aware_muon_sweep.py`, and `metric_logging.py`; `bash -n scripts/*.sh` passed; `pytest tests` passed with `10` tests. CPU toy sanity confirms `soap`, `shampoo`, `kl_soap`, and `kl_shampoo` can step repeatedly with finite parameters.
-- Next required result: rerun at least a small d8/d12 sanity grid before interpreting SOAP/Shampoo/KL-SOAP quality. Updated configs are Fantastic-style SOAP/Shampoo `beta1=0.95`, `beta2=0.99`, `shampoo_beta=0.9`, `precondition_frequency=10`, and PR-290 KL-SOAP-H-style `beta1=0.95`, `beta2=0.9`, `shampoo_beta=0.9`, `precondition_frequency=1`, `structured_init_factor=0.1`; baseline wrappers now default `WEIGHT_DECAY=0.1`.
+- 2026-05-15 validation check: `PYTHONPATH=.:nanochat ../nanochat/.venv/bin/python -m pytest tests/test_baseline_optim.py tests/test_sweep_config.py -q` passed with `7` tests. The default shell Python has no `torch`; use the parent `../nanochat/.venv` for local optimizer tests.
+- Next required result: rerun at least a small d8/d12 sanity grid before interpreting SOAP/Shampoo/KL-SOAP quality. Updated configs are Fantastic-style SOAP/Shampoo `beta1=0.95`, `beta2=0.99`, `shampoo_beta=0.95`, `precondition_frequency=10`, and PR-290 KL-SOAP-H-style `beta1=0.95`, `beta2=0.9`, `shampoo_beta=0.9`, `precondition_frequency=1`, `structured_init_factor=0.1`; baseline wrappers now default `WEIGHT_DECAY=0.1`.
 
 ## 2026-05-06 — Sadhika d12/d16 alpha sweep import
 

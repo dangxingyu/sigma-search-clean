@@ -61,6 +61,11 @@ def _matrix_outer_products(grad: Tensor) -> tuple[Tensor, Tensor]:
     return grad_f @ grad_f.T, grad_f.T @ grad_f
 
 
+def _kl_inv_sqrt_clamp(dim: int, group: dict) -> float:
+    """Official KL-Methods clamps inverse sqrt eigenvalues by tensor dimension."""
+    return max(10.0, min(float(dim), float(group.get("max_inv_sqrt", 4000.0))))
+
+
 def _effective_shampoo_beta(group: dict, step: int) -> float:
     beta = float(group.get("shampoo_beta", group.get("betas", (0.9, 0.95))[1]))
     if group.get("correct_shampoo_beta_bias", False):
@@ -250,7 +255,6 @@ class StructuredAdamW(torch.optim.Optimizer):
     def _update_kl_preconditioner(self, grad: Tensor, state: dict, group: dict) -> None:
         beta = _effective_shampoo_beta(group, state["step"])
         eps = float(group.get("eps", 1e-8))
-        max_inv_sqrt = float(group.get("max_inv_sqrt", 4000.0))
         grad_f = grad.float()
         m, n = grad_f.shape
         q_left, q_right = state["Q"]
@@ -276,7 +280,7 @@ class StructuredAdamW(torch.optim.Optimizer):
             )
             current.lerp_(diag.clamp_min(eps), 1.0 - beta)
             inv = _finite_power(current, -0.5, eps)
-            state["eigen_sqrt_inv"][idx] = torch.clamp(inv, max=max_inv_sqrt)
+            state["eigen_sqrt_inv"][idx] = torch.clamp(inv, max=_kl_inv_sqrt_clamp(current.numel(), group))
 
     def _bootstrap_preconditioner(self, grad: Tensor, state: dict, group: dict) -> None:
         """Initialize basis from the first observed gradient and skip that update.
@@ -387,12 +391,13 @@ class StructuredAdamW(torch.optim.Optimizer):
             state["exp_avg"].lerp_(grad, 1.0 - float(beta1))
             q_left, q_right = state["Q"]
             momentum = state["exp_avg"]
-            if group.get("correct_bias", True):
+            if group.get("correct_bias", False):
                 bias_correction1 = 1.0 - float(beta1) ** state["step"]
                 if bias_correction1 > 0:
                     momentum = momentum / bias_correction1
             projected = _project_2d(momentum, q_left, q_right)
             scale = state["eigen_sqrt_inv"][0].view(-1, 1) * state["eigen_sqrt_inv"][1].view(1, -1)
+            scale = scale / (1.0 + scale * eps)
             update = _project_back_2d(projected * scale, q_left, q_right)
         else:
             raise ValueError(f"Unknown structured optimizer kind: {kind}")

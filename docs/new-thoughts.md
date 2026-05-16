@@ -1,5 +1,36 @@
 # New Thoughts — Reading Sadhika's guidance
 
+## Current conclusion ledger addendum (2026-05-14, baseline optimizer debug)
+
+### 1. Confident enough to treat as correct
+
+- The earlier SOAP/Shampoo/KL-Shampoo rows should not be used for optimizer-quality conclusions because the implementation/configuration audit found reference mismatches.
+- Plain Muon baseline should be plotted alongside SOAP-family debug runs; otherwise a SOAP-vs-AdamW comparison alone does not answer whether the optimizer is competitive with Muon-like methods.
+- The current clean code path is credible enough for continued d8 retuning: structured config dispatch is covered by tests, `plain_muon` uses NS5 rather than exact SVD, and the local optimizer regression subset passes under `../nanochat/.venv`. This does not yet make KL-Shampoo scientifically validated.
+- KL-Shampoo rows produced before the 2026-05-15 reference-alignment patch are stale: they used Adam-style momentum bias correction and KL-SOAP-H beta/frequency defaults, unlike the public KL-Methods prototype.
+
+### 2. Multiple observations; likely true but still needs careful confirmation
+
+- KL-SOAP is the only SOAP-family variant that has already shown a credible d8 short-run signal above AdamW. SOAP, Shampoo, and KL-Shampoo still require formulation/config debugging.
+- SOAP's poor old sweep did not look like simple NaN divergence; high LR degraded smoothly. This makes beta/frequency/preconditioner formulation and LR scale more plausible failure modes than catastrophic instability.
+- A d8/262K/1x single-point sanity run now shows plain SOAP under KL-SOAP-style hyperparameters can beat the chosen plain-Muon point (`1.022831` vs `1.055852` BPB). This strongly suggests the previous poor SOAP rows were not a fundamental impossibility of the optimizer path.
+- KL-SOAP at the same d8/262K/1x recipe is also competitive: `lr=0.006 -> 1.020622`, slightly better than SOAP-with-KL-hparams and clearly better than the chosen plain-Muon point. This supports continuing SOAP-family debugging rather than discarding it.
+- After an actual plain-Muon LR sweep, the comparison remains favorable to KL-SOAP in this one recipe: tuned plain Muon is `1.024091 @ lr=0.04`, about `0.00347` BPB worse than KL-SOAP `1.020622 @ lr=0.006`. This is now a fairer sanity comparison, though still single-seed and not AdamW-closed.
+- After reference-aligning KL-Shampoo, it is much better than the stale row but still not competitive at d8/262K/1x: best tested row is `1.043698 @ lr=0.008`, versus tuned plain Muon `1.024091` and KL-SOAP `1.020622`.
+
+### 3. Some observations suggest
+
+- Testing SOAP under KL-SOAP-style hyperparameters is a useful ablation, but it is not a canonical SOAP recipe. If it helps, the next step is to isolate which part matters: `beta2`, `shampoo_beta`, frequency, or structured initialization scale.
+- KL-Shampoo at `lr=0.0005` improved smoothly but remained much worse (`1.124470` BPB); after the bias-correction/clamp mismatch was found, this row should be treated as an implementation-stale observation rather than evidence against KL-Shampoo.
+- The data-size LR shift heuristic is plausible here: old `0.1x` KL-SOAP best was around `lr=0.008`, while the first `1x` follow-up already prefers at least `0.006` over `0.004`. The optimum may still be near `0.006-0.008`; it is not closed.
+- Plain Muon's LR curve at d8/262K/1x is concave enough to use: `0.01` is too small, `0.04` is best among tested, and `0.08` degrades. This makes `0.04` a reasonable tuned Muon comparator for this exact sanity recipe.
+- Ordinary Shampoo at `lr=0.00025` is currently training smoothly in the active d8/262K/1x retune, so any failure is unlikely to be a catastrophic implementation/NaN issue. It may still be an LR-scale or formulation issue.
+- Ordinary Shampoo's tested range is not closed high-side, but the absolute gap is so large (`1.524967 @ lr=0.002`) that it is not a priority unless we specifically want a canonical Shampoo ablation.
+
+### 4. Hypotheses
+
+- If SOAP with KL-SOAP-style hyperparameters still underperforms strongly at d8 1x, the remaining gap is likely not only a beta/frequency issue; it points to either the SOAP formulation, architecture/normalization interaction, or a missing configuration detail from the reference training recipe.
+
 ## Current conclusion ledger addendum (2026-05-12, baseline optimizer audit)
 
 ### 1. Confident enough to treat as correct
