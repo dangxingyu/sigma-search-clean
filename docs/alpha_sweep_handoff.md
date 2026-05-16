@@ -14,7 +14,7 @@ The sweep keeps `top_k=1` fixed unless explicitly studying top-k.
 Run inside an existing 8-GPU allocation:
 
 ```bash
-STAMP_PREFIX=sadhika_alpha_2x_001 \
+STAMP_PREFIX=alpha_2x_001 \
 bash scripts/run_d12_d16_alpha_sweep.sh
 ```
 
@@ -34,10 +34,10 @@ Defaults:
 Outputs are separated by depth:
 
 ```text
-search_evals/sadhika_alpha_2x_001_d12_2x_alpha/
-search_evals/sadhika_alpha_2x_001_d16_2x_alpha/
-logs/sadhika_alpha_2x_001_d12_2x_alpha/
-logs/sadhika_alpha_2x_001_d16_2x_alpha/
+search_evals/alpha_2x_001_d12_2x_alpha/
+search_evals/alpha_2x_001_d16_2x_alpha/
+logs/alpha_2x_001_d12_2x_alpha/
+logs/alpha_2x_001_d16_2x_alpha/
 ```
 
 ## First Smoke / Dry Run
@@ -74,7 +74,7 @@ BATCHES="524288 2097152 8388608" \
 ALPHAS="0.25 0.5 0.75 0.85 1.0 1.15" \
 LRS="0.005 0.0075 0.01 0.015 0.02 0.03 0.04" \
 SEEDS="42" \
-STAMP=sadhika_alpha_d12_2x_001 \
+STAMP=alpha_d12_2x_001 \
 MAX_PARALLEL=8 \
 SBATCH_TIME=24:00:00 \
 bash scripts/submit_slurm_grid.sh
@@ -89,7 +89,7 @@ BATCHES="524288 2097152 8388608" \
 ALPHAS="0.25 0.5 0.75 0.85 1.0 1.15" \
 LRS="0.005 0.0075 0.01 0.015 0.02 0.03 0.04" \
 SEEDS="42" \
-STAMP=sadhika_alpha_d16_2x_001 \
+STAMP=alpha_d16_2x_001 \
 MAX_PARALLEL=8 \
 SBATCH_TIME=24:00:00 \
 bash scripts/submit_slurm_grid.sh
@@ -105,7 +105,7 @@ BATCHES="524288 2097152 8388608" \
 ALPHAS="0.25 0.5 0.75 0.85 1.0 1.15" \
 LRS="0.005 0.0075 0.01 0.015 0.02 0.03 0.04" \
 SEEDS="42" \
-STAMP=sadhika_alpha_d12_2x_001 \
+STAMP=alpha_d12_2x_001 \
 SUMMARY_ONLY=1 \
 bash scripts/run_d12_sweep.sh
 
@@ -114,7 +114,7 @@ BATCHES="524288 2097152 8388608" \
 ALPHAS="0.25 0.5 0.75 0.85 1.0 1.15" \
 LRS="0.005 0.0075 0.01 0.015 0.02 0.03 0.04" \
 SEEDS="42" \
-STAMP=sadhika_alpha_d16_2x_001 \
+STAMP=alpha_d16_2x_001 \
 SUMMARY_ONLY=1 \
 bash scripts/run_d12_sweep.sh
 ```
@@ -135,7 +135,7 @@ DEPTHS="12 16" \
 BATCHES="2097152 8388608" \
 ALPHAS="0.5 0.75 1.0 1.15" \
 LRS="0.0075 0.01 0.015 0.02 0.03" \
-STAMP_PREFIX=sadhika_alpha_pilot_001 \
+STAMP_PREFIX=alpha_pilot_001 \
 bash scripts/run_d12_d16_alpha_sweep.sh
 ```
 
@@ -158,7 +158,7 @@ logs/<STAMP>/*.log                                optional, useful for failures
 If transferring as one archive:
 
 ```bash
-tar -czf sadhika_alpha_d12_2x_001_results.tar.gz \
-  search_evals/sadhika_alpha_d12_2x_001 \
-  logs/sadhika_alpha_d12_2x_001
+tar -czf alpha_d12_2x_001_results.tar.gz \
+  search_evals/alpha_d12_2x_001 \
+  logs/alpha_d12_2x_001
 ```

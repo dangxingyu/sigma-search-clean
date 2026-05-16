@@ -61,9 +61,21 @@ MODAL_GPU=B200:8 modal run modal/run_sweep.py::optimizer_baselines \
 ```
 
 This uses `plain_muon adamw soap shampoo kl_shampoo kl_soap` with the same
-batch/LR defaults as the handoff scripts. It defaults to `--weight-decay 0.1`
-for the non-streaming optimizer baselines; pass `--weight-decay 0.28` only for
-strict Top-Aware recipe matching.
+batch/token defaults as the handoff scripts, but the default run is grouped by
+optimizer family because the LR scales differ:
+
+| group | methods | default LR grid |
+|---|---|---|
+| `plain_muon` | `plain_muon` | `0.01 0.02 0.03 0.04 0.06 0.08` |
+| `adamw` | `adamw` | `0.00025 0.0005 0.001 0.002 0.004` |
+| `soap_klsoap` | `soap kl_soap` | `0.002 0.004 0.006 0.008 0.012 0.016 0.024` |
+| `kl_shampoo` | `kl_shampoo` | `0.002 0.004 0.008 0.015 0.03` |
+| `shampoo` | `shampoo` | `0.0005 0.001 0.002 0.004 0.008` |
+
+Use `--groups "plain_muon soap_klsoap"` to run a subset. Use `--no-grouped`
+with `--methods` and `--lrs` only for a deliberate single-grid ablation. It
+defaults to `--weight-decay 0.1` for non-streaming optimizer baselines; pass
+`--weight-decay 0.28` only for strict Top-Aware recipe matching.
 
 ## Generic Command
 

@@ -6,7 +6,7 @@ set -euo pipefail
 # This is the copy-paste-safe handoff command when someone wants to sweep the
 # Top-Aware coefficient c/alpha rather than only compare c=1.0 vs c=0.5.
 # Run inside an existing GPU allocation, or use submit_slurm_grid.sh for
-# per-case SLURM arrays as described in docs/sadhika_alpha_sweep_handoff.md.
+# per-case SLURM arrays as described in docs/alpha_sweep_handoff.md.
 
 REPO="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$REPO"

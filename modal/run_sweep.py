@@ -313,7 +313,9 @@ def optimizer_baselines(
     chinchilla_mult: float = 2.0,
     methods: str = "plain_muon adamw soap shampoo kl_shampoo kl_soap",
     batches: str = "524288 2097152 8388608",
-    lrs: str = "0.0005 0.001 0.002 0.004 0.008 0.015 0.02",
+    lrs: str = "0.0005 0.001 0.002 0.004 0.008 0.015 0.02 0.04",
+    groups: str = "plain_muon adamw soap_klsoap kl_shampoo shampoo",
+    grouped: bool = True,
     seeds: str = "42",
     nproc: int = 8,
     max_device_batch_size: int = 16,
@@ -333,6 +335,8 @@ def optimizer_baselines(
         "METHODS": methods,
         "BATCHES": batches,
         "LRS": lrs,
+        "OPTIMIZER_GROUPS": groups,
+        "GROUPED": "1" if grouped else "0",
         "SEEDS": seeds,
         "ALPHAS": "1.0",
         "TOP_KS": "1",
@@ -347,7 +351,14 @@ def optimizer_baselines(
         "STRUCTURED_CONFIG": "auto",
         "DRY_RUN": "1" if dry_run else "0",
     }
-    _submit("bash scripts/run_d12_sweep.sh", env, ensure_data, dataset_shards, dataset_workers, tokenizer_max_chars)
+    _submit(
+        "bash scripts/run_optimizer_baseline_groups.sh",
+        env,
+        ensure_data,
+        dataset_shards,
+        dataset_workers,
+        tokenizer_max_chars,
+    )
 
 
 @app.local_entrypoint()

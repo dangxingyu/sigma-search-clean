@@ -193,7 +193,7 @@ It applies reference-style per-method settings:
 | `soap` | `0.95` | `0.99` | `0.95` | `10` | `1.0` |
 | `shampoo` | `0.95` | `0.99` | `0.95` | `10` | `1.0` |
 | `kl_soap` | `0.95` | `0.90` | `0.90` | `1` | `0.1` |
-| `kl_shampoo` | `0.95` | `0.90` | `0.90` | `1` | `0.1` |
+| `kl_shampoo` | `0.90` | `0.98` | `0.98` | `10` | `0.1` |
 
 Set `STRUCTURED_CONFIG=global` only for explicit ablations; then the
 `PRECONDITION_FREQUENCY`, `SHAMPOO_BETA`, `OPTIMIZER_BETA*`, and
@@ -207,16 +207,27 @@ STAMP=d12_baselines_001 bash scripts/run_d12_optimizer_baselines.sh
 STAMP=d16_baselines_001 bash scripts/run_d16_optimizer_baselines.sh
 ```
 
-These baseline wrappers are apple-to-apple with the Top-Aware handoff recipe:
-they use the same token/batch/LR grid, but default `WEIGHT_DECAY=0.1` for the
-non-streaming optimizer baselines following the Fantastic-optimizer reference
-recipe. Set `WEIGHT_DECAY=0.28` if you need strict equality with the current
-Top-Aware sweep default.
-`CHINCHILLA_MULT=2`, batches `{512K,2M,8M}`, the same LR grid, seed `42`,
-architecture `gpt2`, checkpoint/resume enabled, and adaptive LR boundary
-closure enabled. They change only `METHODS` to
-`plain_muon adamw soap shampoo kl_shampoo kl_soap`; `ALPHAS` is set to `1.0`
-and ignored by these non-streaming optimizers.
+These wrappers are apple-to-apple on model/data/batch/schedule, but they do not
+force all optimizers onto one LR grid. The default grouped sweep writes one
+independent output root per group, using `STAMP_<group>` suffixes:
+
+| group | methods | default LR grid |
+|---|---|---|
+| `plain_muon` | `plain_muon` | `0.01 0.02 0.03 0.04 0.06 0.08` |
+| `adamw` | `adamw` | `0.00025 0.0005 0.001 0.002 0.004` |
+| `soap_klsoap` | `soap kl_soap` | `0.002 0.004 0.006 0.008 0.012 0.016 0.024` |
+| `kl_shampoo` | `kl_shampoo` | `0.002 0.004 0.008 0.015 0.03` |
+| `shampoo` | `shampoo` | `0.0005 0.001 0.002 0.004 0.008` |
+
+All groups use `CHINCHILLA_MULT=2`, batches `{512K,2M,8M}`, seed `42`,
+architecture `gpt2`, checkpoint/resume enabled, `STRUCTURED_CONFIG=auto`, and
+adaptive LR boundary closure. The baseline wrappers default `WEIGHT_DECAY=0.1`
+following the structured-optimizer references; set `WEIGHT_DECAY=0.28` only for
+strict equality with the current Top-Aware sweep default. To run a subset, set
+`OPTIMIZER_GROUPS`, e.g.
+`OPTIMIZER_GROUPS="plain_muon soap_klsoap kl_shampoo"`. Do not use the Bash
+variable name `GROUPS`; Bash reserves it for Unix group IDs. To recover the old
+single-grid behavior, set `GROUPED=0 METHODS="..." LRS="..."`.
 
 For d8 runs, reuse the same script with overrides:
 
@@ -303,10 +314,10 @@ token budgets.
 
 ### d12/d16 Alpha Sweep
 
-For Sadhika's broader alpha sweep, use:
+For the broader alpha sweep, use:
 
 ```bash
-STAMP_PREFIX=sadhika_alpha_2x_001 bash scripts/run_d12_d16_alpha_sweep.sh
+STAMP_PREFIX=alpha_2x_001 bash scripts/run_d12_d16_alpha_sweep.sh
 ```
 
 Default grid:
@@ -410,7 +421,7 @@ For the completed d12 2x Chinchilla sweep, use the curated best-point wrapper:
 ```bash
 PRINT_CASES=1 bash scripts/run_d12_metrics_best.sh
 
-STAMP_PREFIX=sadhika_d12_metrics_001 \
+STAMP_PREFIX=d12_metrics_001 \
 bash scripts/run_d12_metrics_best.sh
 ```
 
@@ -430,7 +441,7 @@ For the combined imported d12/d16 sweeps, use the curated combined wrapper:
 ```bash
 PRINT_CASES=1 bash scripts/run_d12_d16_metrics_best.sh
 
-STAMP_PREFIX=sadhika_d12_d16_metrics_001 \
+STAMP_PREFIX=d12_d16_metrics_001 \
 bash scripts/run_d12_d16_metrics_best.sh
 ```
 
@@ -443,7 +454,7 @@ For one job per case, submit an array over `CASE_INDEX=0..5` with a stable
 `STAMP_PREFIX`, for example:
 
 ```bash
-STAMP_PREFIX=sadhika_d12_metrics_001 \
+STAMP_PREFIX=d12_metrics_001 \
 CASE_INDEX="${SLURM_ARRAY_TASK_ID}" \
 bash scripts/run_d12_metrics_best.sh
 ```
