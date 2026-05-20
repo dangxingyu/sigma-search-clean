@@ -18,6 +18,25 @@ if [[ -f "$REPO/nanochat/.venv/bin/activate" ]]; then
   source "$REPO/nanochat/.venv/bin/activate"
 fi
 
+if [[ "${MERLIN_SETUP_ENV:-1}" == "1" ]]; then
+  if ! python - <<'PY' >/dev/null 2>&1
+import pyarrow
+import rustbpe
+import tiktoken
+import tokenizers
+import torch
+PY
+  then
+    if ! command -v uv >/dev/null 2>&1; then
+      python3 -m pip install --user uv
+      export PATH="$HOME/.local/bin:$PATH"
+    fi
+    (cd "$REPO/nanochat" && uv sync --extra gpu)
+    # shellcheck disable=SC1091
+    source "$REPO/nanochat/.venv/bin/activate"
+  fi
+fi
+
 export PYTHONPATH="${PYTHONPATH:-$REPO:$REPO/nanochat}"
 case ":$PYTHONPATH:" in
   *":$REPO:"*) ;;

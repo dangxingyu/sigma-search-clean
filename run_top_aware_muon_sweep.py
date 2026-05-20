@@ -941,7 +941,9 @@ def main() -> None:
         args.append_summary = False
         print(f"case_index={args.case_index}/{len(case_specs)}", flush=True)
         method, batch, lr, seed, top_k, alpha = case_specs[args.case_index]
-        run_case(args, method, batch, lr, seed, top_k=top_k, alpha=alpha)
+        score, err = run_case(args, method, batch, lr, seed, top_k=top_k, alpha=alpha)
+        if score is None or err is not None:
+            raise SystemExit(f"case failed: score={score} error={err}")
         print("\n=== case complete ===", flush=True)
         print("Run the same full-grid command without --case-index to collate CSV and run adaptive LR closure.", flush=True)
         return
