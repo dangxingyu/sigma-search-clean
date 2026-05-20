@@ -24,7 +24,10 @@ scripts/run_d16_optimizer_baselines.sh d16 apple-to-apple baseline grid
 scripts/run_d12_d16_2x_grid.sh canonical sequential d12/d16 handoff grid
 scripts/run_d12_d16_alpha_sweep.sh multi-alpha d12/d16 handoff grid
 scripts/submit_slurm_grid.sh SLURM array submitter for fixed-grid cases
+scripts/submit_merlin_sweep.py Merlin parallel submitter for fixed-grid cases
+scripts/merlin_entrypoint.sh Merlin container entrypoint for sweep cases
 scripts/run_d12_statistics.sh metrics/statistics wrapper
+scripts/run_d8_metrics_grid.sh canonical d8 dynamics metrics wrapper
 scripts/run_d12_d16_metrics_best.sh curated d12/d16 best-point metrics jobs
 ```
 
@@ -66,6 +69,14 @@ MODAL_GPU=B200:8 modal run modal/run_sweep.py::sweep --depth 12 --chinchilla-mul
 ```
 
 See `modal/README.md` for the full command surface.
+
+## Merlin
+
+Merlin parallel sweep support lives in `scripts/submit_merlin_sweep.py` and
+`scripts/merlin_entrypoint.sh`. It submits one Merlin job per sweep
+`--case-index`, so d8/d12/d16 base grids can run in parallel while sharing one
+`OUT_ROOT`. See `docs/merlin_parallel_sweeps.md` for payload examples,
+resource fields, summary collation, and adaptive LR closure.
 
 Run training commands inside whatever GPU allocation your cluster provides, or
 use the included SLURM array submitter if the cluster supports `sbatch`.
@@ -192,7 +203,7 @@ It applies reference-style per-method settings:
 |---|---:|---:|---:|---:|---:|
 | `soap` | `0.95` | `0.99` | `0.95` | `1` | `1.0` |
 | `shampoo` | `0.90` | `0.98` | `0.98` | `10` | `0.1` |
-| `kl_soap` | `0.95` | `0.90` | `0.90` | `1` | `0.1` |
+| `kl_soap` | `0.95` | `0.95` | `0.90` | `1` | `0.1` |
 | `kl_shampoo` | `0.90` | `0.98` | `0.98` | `1` | `0.1` |
 
 Set `STRUCTURED_CONFIG=global` only for explicit ablations; then the

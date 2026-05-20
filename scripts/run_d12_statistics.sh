@@ -36,6 +36,7 @@ ALPHAS="${ALPHAS:-1.0 0.5}"
 TOP_KS="${TOP_KS:-1}"
 LRS="${LRS:-0.02}"
 SEEDS="${SEEDS:-42}"
+ARCHITECTURE="${ARCHITECTURE:-gpt2}"
 
 NPROC="${NPROC:-8}"
 MAX_DEVICE_BATCH_SIZE="${MAX_DEVICE_BATCH_SIZE:-16}"
@@ -68,9 +69,11 @@ cmd=(
   --lrs "$LRS"
   --seeds "$SEEDS"
   --depth "$DEPTH"
+  --architecture "$ARCHITECTURE"
   --chinchilla-mult "$CHINCHILLA_MULT"
   --nproc-per-node "$NPROC"
   --max-device-batch-size "$MAX_DEVICE_BATCH_SIZE"
+  --weight-decay "${WEIGHT_DECAY:-0.28}"
   --save-every "$SAVE_EVERY"
   --keep-last-checkpoints "$KEEP_LAST_CHECKPOINTS"
   --pure-qr
@@ -109,9 +112,9 @@ cmd+=("$@")
 printf 'Running statistics/dynamics run (d12 defaults; DEPTH/CHINCHILLA_MULT may override)\n'
 printf 'OUT_ROOT=%s\nLOG_ROOT=%s\n' "$OUT_ROOT" "$LOG_ROOT"
 if [[ -n "$TOKENS" ]]; then
-  printf 'DEPTH=%s TOKENS=%s NPROC=%s\n' "$DEPTH" "$TOKENS" "$NPROC"
+  printf 'DEPTH=%s TOKENS=%s NPROC=%s ARCHITECTURE=%s\n' "$DEPTH" "$TOKENS" "$NPROC" "$ARCHITECTURE"
 else
-  printf 'DEPTH=%s CHINCHILLA_MULT=%s TOKENS=auto NPROC=%s\n' "$DEPTH" "$CHINCHILLA_MULT" "$NPROC"
+  printf 'DEPTH=%s CHINCHILLA_MULT=%s TOKENS=auto NPROC=%s ARCHITECTURE=%s\n' "$DEPTH" "$CHINCHILLA_MULT" "$NPROC" "$ARCHITECTURE"
 fi
 printf 'METHODS=%s\nBATCHES=%s\nALPHAS=%s\nTOP_KS=%s\nLRS=%s\nSEEDS=%s\n' \
   "$METHODS" "$BATCHES" "$ALPHAS" "$TOP_KS" "$LRS" "$SEEDS"
