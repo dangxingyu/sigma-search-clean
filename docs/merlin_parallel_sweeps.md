@@ -1,7 +1,8 @@
 # Merlin Parallel Sweeps
 
-This repo can run sweep cases in parallel on Merlin by submitting one Merlin job
-per `run_optimizer_sweep.py --case-index`. All jobs share one `STAMP`,
+This repo can run sweep cases in parallel on Merlin by submitting a bounded
+number of shard jobs. Each shard job owns one Merlin node and loops over several
+`run_optimizer_sweep.py --case-index` values. All jobs share one `STAMP`,
 `OUT_ROOT`, and `LOG_ROOT`.
 
 ## Runtime Shape
@@ -10,7 +11,7 @@ per `run_optimizer_sweep.py --case-index`. All jobs share one `STAMP`,
 scripts/submit_merlin_sweep.py
   -> merlin-cli --control-plane cn-seed job create-run --from-file payload.json
     -> scripts/merlin_entrypoint.sh
-      -> scripts/run_d12_sweep.sh --case-index N
+      -> for N in MERLIN_CASE_INDICES: scripts/run_d12_sweep.sh --case-index N
         -> run_optimizer_sweep.py
           -> torch.distributed.run --standalone --nproc_per_node=8 run_eval.py
 ```
@@ -89,17 +90,19 @@ python scripts/submit_merlin_sweep.py \
   --hdfs-volume-json '{"path":"hdfs://haruna/home/byte_data_seed/hdd_hldy/user/xingyu.dang/","mnt":"/mnt/hdfs/user/xingyu.dang","access_mode":"RW","roles":["worker"]}'
 ```
 
-Add `--submit` to create the Merlin jobs:
+Add `--submit` to create the Merlin jobs. Use `--shard-count` to control how
+many Merlin nodes are used; cases are distributed round-robin across those
+nodes and run sequentially inside each node:
 
 ```bash
-python scripts/submit_merlin_sweep.py ... --submit
+python scripts/submit_merlin_sweep.py ... --shard-count 6 --submit
 ```
 
 Limit the launch during smoke tests:
 
 ```bash
-python scripts/submit_merlin_sweep.py ... --case-indices 0,1 --submit
-python scripts/submit_merlin_sweep.py ... --case-start 0 --case-end 8 --submit
+python scripts/submit_merlin_sweep.py ... --case-indices 0,1 --shard-count 1 --submit
+python scripts/submit_merlin_sweep.py ... --case-start 0 --case-end 8 --shard-count 2 --submit
 ```
 
 ## d16 And d8 Presets
@@ -155,8 +158,8 @@ python scripts/submit_merlin_sweep.py \
 ```
 
 The dry-run prints `case_count=21` for `d12_adamw`: three batches times seven
-LRs. Add `--submit` to launch all cases, or use `--case-indices 0,1` for a smoke
-subset.
+LRs. Add `--submit` to launch. Prefer bounded shard jobs, for example
+`--shard-count 4`, instead of one Merlin job per LR case.
 
 Override presets when needed:
 
@@ -166,6 +169,7 @@ python scripts/submit_merlin_sweep.py \
   --methods adamw \
   --batches "524288" \
   --lrs "0.0005 0.001 0.002" \
+  --shard-count 1 \
   ...
 ```
 
@@ -203,7 +207,10 @@ skipped and only new boundary LR cases are launched sequentially by that job.
   manifest signatures.
 - Use `--resource-config-file` if the resource JSON becomes more complex than
   the basic single-role flags.
-- Case jobs set `ADAPTIVE_LR=0`; adaptive closure is a separate step because it
-  depends on all base LR results.
+- Case/shard jobs set `ADAPTIVE_LR=0`; adaptive closure is a separate step
+  because it depends on all base LR results.
 - `scripts/merlin_entrypoint.sh` validates data unless `SUMMARY_ONLY=1` or
   `MERLIN_SKIP_DATA_CHECK=1`.
+- `--shard-count 0` preserves the old one-job-per-case behavior. Use it only for
+  debugging; production sweeps should pass an explicit shard count matching the
+  desired number of parallel nodes.

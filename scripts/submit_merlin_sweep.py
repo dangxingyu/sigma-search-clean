@@ -242,6 +242,15 @@ def select_case_indices(args: argparse.Namespace, case_count: int) -> list[int]:
     return indices
 
 
+def shard_case_indices(indices: list[int], shard_count: int) -> list[list[int]]:
+    if shard_count <= 1:
+        return [indices]
+    shards = [[] for _ in range(shard_count)]
+    for offset, idx in enumerate(indices):
+        shards[offset % shard_count].append(idx)
+    return [shard for shard in shards if shard]
+
+
 def build_resource_config(args: argparse.Namespace) -> dict[str, Any]:
     if args.resource_config_file:
         return json.loads(Path(args.resource_config_file).read_text())
@@ -299,7 +308,11 @@ bash scripts/merlin_entrypoint.sh
 """
 
 
-def common_env(args: argparse.Namespace, case_index: int | None = None) -> dict[str, str]:
+def common_env(
+    args: argparse.Namespace,
+    case_index: int | None = None,
+    case_indices: list[int] | None = None,
+) -> dict[str, str]:
     env = {
         "STAMP": args.stamp,
         "MERLIN_SWEEP_SCRIPT": args.script,
@@ -343,18 +356,28 @@ def common_env(args: argparse.Namespace, case_index: int | None = None) -> dict[
     if case_index is not None:
         env["CASE_INDEX"] = str(case_index)
         env["MERLIN_CASE_INDEX"] = str(case_index)
+    if case_indices is not None:
+        env["MERLIN_CASE_INDICES"] = " ".join(str(idx) for idx in case_indices)
     return {k: v for k, v in env.items() if v is not None and v != ""}
 
 
-def build_payload(args: argparse.Namespace, *, case_index: int | None, job_kind: str) -> dict[str, Any]:
+def build_payload(
+    args: argparse.Namespace,
+    *,
+    case_index: int | None,
+    case_indices: list[int] | None = None,
+    job_kind: str,
+) -> dict[str, Any]:
     caption = f"{args.caption_prefix}-{args.stamp}-{job_kind}"
     if case_index is not None:
         caption = f"{caption}-{case_index:03d}"
+    elif case_indices is not None:
+        caption = f"{caption}-{case_indices[0]:03d}-{case_indices[-1]:03d}"
     payload: dict[str, Any] = {
         "launch_mode": "from_scratch",
         "caption": caption[:90],
         "entrypoint_full_script": bootstrap_script(args.repo_mnt),
-        "env": common_env(args, case_index),
+        "env": common_env(args, case_index, case_indices),
         "resource_config": build_resource_config(args),
         "tags": ["sigma-search", "optimizer-sweep", args.preset],
     }
@@ -448,6 +471,15 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--case-end", type=int, default=None)
     parser.add_argument("--case-indices", default="")
     parser.add_argument("--max-cases", type=int, default=None)
+    parser.add_argument(
+        "--shard-count",
+        type=int,
+        default=0,
+        help=(
+            "Submit N Merlin jobs and run multiple case indices sequentially inside each job. "
+            "0 preserves one-job-per-case behavior."
+        ),
+    )
 
     parser.add_argument("--script", default=None)
     parser.add_argument("--depth", type=int, default=None)
@@ -531,10 +563,19 @@ def main() -> None:
     if args.job_kind == "cases":
         case_count = get_case_count(args)
         indices = select_case_indices(args, case_count)
-        print(f"case_count={case_count} selected={len(indices)} payload_dir={payload_dir}")
-        for idx in indices:
-            payload = build_payload(args, case_index=idx, job_kind="case")
-            path = write_payload(payload_dir, payload, f"case_{idx:04d}")
+        shard_count = args.shard_count or len(indices)
+        shards = shard_case_indices(indices, shard_count)
+        print(
+            f"case_count={case_count} selected={len(indices)} "
+            f"shard_jobs={len(shards)} payload_dir={payload_dir}"
+        )
+        for shard_idx, shard in enumerate(shards):
+            if len(shard) == 1 and not args.shard_count:
+                payload = build_payload(args, case_index=shard[0], job_kind="case")
+                path = write_payload(payload_dir, payload, f"case_{shard[0]:04d}")
+            else:
+                payload = build_payload(args, case_index=None, case_indices=shard, job_kind=f"shard-{shard_idx:03d}")
+                path = write_payload(payload_dir, payload, f"shard_{shard_idx:04d}")
             submit_payload(args, path)
     else:
         payload = build_payload(args, case_index=None, job_kind=args.job_kind)

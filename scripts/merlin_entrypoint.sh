@@ -85,15 +85,13 @@ fi
 
 MERLIN_SWEEP_SCRIPT="${MERLIN_SWEEP_SCRIPT:-scripts/run_d12_sweep.sh}"
 case_index="${MERLIN_CASE_INDEX:-${CASE_INDEX:-}}"
+case_indices="${MERLIN_CASE_INDICES:-}"
 
-cmd=(bash "$MERLIN_SWEEP_SCRIPT")
-if [[ -n "$case_index" ]]; then
-  cmd+=(--case-index "$case_index")
-fi
+base_cmd=(bash "$MERLIN_SWEEP_SCRIPT")
 if [[ -n "${MERLIN_SWEEP_ARGS:-}" ]]; then
   # shellcheck disable=SC2206
   extra_args=($MERLIN_SWEEP_ARGS)
-  cmd+=("${extra_args[@]}")
+  base_cmd+=("${extra_args[@]}")
 fi
 
 echo "Merlin sigma-search entrypoint"
@@ -103,11 +101,30 @@ echo "OUT_ROOT=$OUT_ROOT"
 echo "LOG_ROOT=$LOG_ROOT"
 echo "STAMP=$STAMP"
 echo "MERLIN_SWEEP_SCRIPT=$MERLIN_SWEEP_SCRIPT"
+if [[ -n "$case_indices" ]]; then
+  echo "CASE_INDICES=$case_indices"
+fi
 if [[ -n "$case_index" ]]; then
   echo "CASE_INDEX=$case_index"
 fi
-printf 'Command:'
-printf ' %q' "${cmd[@]}"
-printf '\n'
 
-"${cmd[@]}"
+if [[ -n "$case_indices" ]]; then
+  for idx in $case_indices; do
+    cmd=("${base_cmd[@]}" --case-index "$idx")
+    printf 'Command:'
+    printf ' %q' "${cmd[@]}"
+    printf '\n'
+    "${cmd[@]}"
+  done
+elif [[ -n "$case_index" ]]; then
+  cmd=("${base_cmd[@]}" --case-index "$case_index")
+  printf 'Command:'
+  printf ' %q' "${cmd[@]}"
+  printf '\n'
+  "${cmd[@]}"
+else
+  printf 'Command:'
+  printf ' %q' "${base_cmd[@]}"
+  printf '\n'
+  "${base_cmd[@]}"
+fi
