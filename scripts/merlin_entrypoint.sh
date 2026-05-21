@@ -13,6 +13,14 @@ else
 fi
 cd "$REPO"
 
+if [[ -n "${HDFS_RUNTIME_TGZ:-}" && ! -x "$REPO/nanochat/.venv/bin/python" ]]; then
+  echo "Restoring runtime from HDFS_RUNTIME_TGZ=$HDFS_RUNTIME_TGZ"
+  rm -rf "$REPO/nanochat/.venv"
+  hdfs dfs -get "$HDFS_RUNTIME_TGZ" /tmp/sigma_runtime.tgz
+  mkdir -p "$REPO/nanochat"
+  tar -xzf /tmp/sigma_runtime.tgz -C "$REPO/nanochat"
+fi
+
 if [[ -f "$REPO/nanochat/.venv/bin/activate" ]]; then
   # shellcheck disable=SC1091
   source "$REPO/nanochat/.venv/bin/activate"

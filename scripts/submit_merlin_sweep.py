@@ -349,6 +349,8 @@ def common_env(
         env["TOKENS"] = str(args.tokens)
     if args.hdfs_code_tgz:
         env["HDFS_CODE_TGZ"] = args.hdfs_code_tgz
+    if args.hdfs_runtime_tgz:
+        env["HDFS_RUNTIME_TGZ"] = args.hdfs_runtime_tgz
     if args.out_root:
         env["OUT_ROOT"] = str(args.out_root)
     if args.log_root:
@@ -443,6 +445,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--use-latest-commit", action=argparse.BooleanOptionalAction, default=True)
     parser.add_argument("--repo-mnt", default=os.environ.get("MERLIN_REPO_MNT", "/opt/tiger/sigma-search-clean"))
     parser.add_argument("--hdfs-code-tgz", default=os.environ.get("HDFS_CODE_TGZ", ""))
+    parser.add_argument("--hdfs-runtime-tgz", default=os.environ.get("HDFS_RUNTIME_TGZ", ""))
 
     parser.add_argument("--resource-config-file", default="")
     parser.add_argument("--group-ids", default=os.environ.get("MERLIN_GROUP_IDS", ""))
