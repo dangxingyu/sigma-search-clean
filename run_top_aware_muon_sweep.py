@@ -275,7 +275,10 @@ def build_command(args: argparse.Namespace, method: str, batch: int, lr: float, 
         "--k", str(args.streaming_rank_k),
         "--num-iters", str(args.streaming_num_iters),
         "--fallback-ortho-tol", f"{args.fallback_ortho_tol:g}",
+        "--matrix-lr-adjust", args.matrix_lr_adjust,
+        "--adam-lr-mode", args.adam_lr_mode,
     ]
+    cmd.append("--batch-beta-align" if args.batch_beta_align else "--no-batch-beta-align")
     cfg = structured_config(args, method)
     cmd += [
         "--precondition-frequency", str(cfg["precondition_frequency"]),
@@ -512,6 +515,9 @@ def sweep_signature(args: argparse.Namespace, methods: list[str]) -> dict[str, A
         "streaming_rank_k": args.streaming_rank_k,
         "fallback_ortho_tol": args.fallback_ortho_tol,
         "pure_qr": args.pure_qr,
+        "matrix_lr_adjust": args.matrix_lr_adjust,
+        "batch_beta_align": args.batch_beta_align,
+        "adam_lr_mode": args.adam_lr_mode,
         "structured_config": args.structured_config,
         "precondition_frequency": args.precondition_frequency,
         "shampoo_beta": args.shampoo_beta,
@@ -729,6 +735,13 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--streaming-rank-k", type=int, default=-1)
     parser.add_argument("--fallback-ortho-tol", type=float, default=0.01)
     parser.add_argument("--pure-qr", action=argparse.BooleanOptionalAction, default=True)
+    parser.add_argument("--matrix-lr-adjust", choices=["none", "moonlight"], default="moonlight")
+    parser.add_argument("--batch-beta-align", action=argparse.BooleanOptionalAction, default=True)
+    parser.add_argument(
+        "--adam-lr-mode",
+        choices=["relative_to_matrix", "nanochat_fixed"],
+        default="relative_to_matrix",
+    )
     parser.add_argument(
         "--structured-config",
         choices=["auto", "global"],

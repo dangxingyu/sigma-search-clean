@@ -1,0 +1,6 @@
+batch_label,batch,winner_in_batch,method,variant,source,family,optimal_lr,best_score,delta_vs_identity_best,quality,seed,path
+32K,32768,yes,streaming_lite,LITE-like chi=2 rs=.1,v26_streaming_small,same_driver_streaming_ddp,0.005,0.933130615316,-0.00193302492656,,42,search_evals/v26_small_bsz_streaming_fair_20260430/lite_chi2_rs01_bsz32768_lr0p005_s42/result.json
+32K,32768,,streaming_identity,identity / Muon-like,v26_streaming_small,same_driver_streaming_ddp,0.005,0.935063640242,+0,,42,search_evals/v26_small_bsz_streaming_fair_20260430/identity_bsz32768_lr0p005_s42/result.json
+64K,65536,yes,streaming_identity,identity / Muon-like,v26_streaming_small,same_driver_streaming_ddp,0.01,0.922144542015,+0,,42,search_evals/v26_small_bsz_streaming_fair_20260430/identity_bsz65536_lr0p01_s42/result.json
+64K,65536,,streaming_lite,LITE-like chi=2 rs=.1,v26_streaming_small,same_driver_streaming_ddp,0.01,0.922291040381,+0.000146498365874,,42,search_evals/v26_small_bsz_streaming_fair_20260430/lite_chi2_rs01_bsz65536_lr0p01_s42/result.json
+64K,65536,,top_aware_muon,top1 per-matrix alpha=.5,v26_streaming_small,same_driver_streaming_ddp,0.01,0.923802321001,+0.00165777898593,,42,search_evals/v26_small_bsz_streaming_fair_20260430/top1pm_a05_bsz65536_lr0p01_s42/result.json

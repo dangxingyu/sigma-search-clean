@@ -207,12 +207,34 @@ def test_plain_muon_uses_ns5_without_dim_lr_scaling() -> None:
             "momentum": 0.0,
             "ns_steps": 5,
             "weight_decay": 0.0,
+            "matrix_lr_adjust": "none",
         }
     ])
     opt.step()
     expected = -0.1 * matrix_sign_ns5(grad, steps=5)
     assert torch.allclose(weight, expected, atol=1e-6, rtol=1e-6)
     assert not torch.allclose(matrix_sign_ns5(grad, steps=5), matrix_sign_exact(grad), atol=1e-3, rtol=1e-3)
+
+
+def test_plain_muon_applies_moonlight_lr_scale() -> None:
+    grad = torch.tensor([[3.0, 0.0], [0.0, 1.0]])
+    weight = torch.nn.Parameter(torch.zeros_like(grad))
+    weight.grad = grad.clone()
+    opt = StructuredAdamW([
+        {
+            "kind": "plain_muon",
+            "params": [weight],
+            "lr": 0.1,
+            "momentum": 0.0,
+            "ns_steps": 5,
+            "weight_decay": 0.0,
+            "matrix_lr_adjust": "moonlight",
+        }
+    ])
+    opt.step()
+    moonlight = 0.2 * (2.0 ** 0.5)
+    expected = -0.1 * moonlight * matrix_sign_ns5(grad, steps=5)
+    assert torch.allclose(weight, expected, atol=1e-6, rtol=1e-6)
 
 
 def test_plain_muon_weight_decay_is_decoupled_from_update() -> None:
@@ -227,7 +249,68 @@ def test_plain_muon_weight_decay_is_decoupled_from_update() -> None:
             "momentum": 0.0,
             "ns_steps": 5,
             "weight_decay": 0.2,
+            "matrix_lr_adjust": "none",
         }
     ])
     opt.step()
     assert torch.allclose(weight, torch.full_like(weight, 0.98))
+
+
+def test_plain_muon_moonlight_scale_does_not_scale_weight_decay() -> None:
+    grad = torch.zeros(16, 16)
+    weight = torch.nn.Parameter(torch.ones_like(grad))
+    weight.grad = grad.clone()
+    opt = StructuredAdamW([
+        {
+            "kind": "plain_muon",
+            "params": [weight],
+            "lr": 0.1,
+            "momentum": 0.0,
+            "ns_steps": 5,
+            "weight_decay": 0.2,
+            "matrix_lr_adjust": "moonlight",
+        }
+    ])
+    opt.step()
+    assert torch.allclose(weight, torch.full_like(weight, 0.98))
+
+
+def test_kl_soap_ignores_moonlight_lr_scale() -> None:
+    torch.manual_seed(0)
+    weight = torch.nn.Parameter(torch.randn(16, 16))
+    grad1 = torch.randn_like(weight)
+    grad2 = torch.randn_like(weight)
+    lr = 1e-3
+    beta1 = 0.95
+    beta2 = 0.95
+    eps = 1e-8
+    opt = StructuredAdamW([
+        {
+            "kind": "kl_soap",
+            "params": [weight],
+            "lr": lr,
+            "betas": (beta1, beta2),
+            "shampoo_beta": 0.9,
+            "eps": eps,
+            "weight_decay": 0.0,
+            "precondition_frequency": 100,
+            "init_factor": 0.1,
+            "use_qr": True,
+            "matrix_lr_adjust": "moonlight",
+        }
+    ])
+
+    weight.grad = grad1
+    opt.step()  # bootstrap only
+    before = weight.detach().clone()
+    state = opt.state[weight]
+    q_left, q_right = [x.clone() for x in state["Q"]]
+    grad_projected = _project_2d(grad2, q_left, q_right)
+    exp_avg = (1.0 - beta1) * grad_projected
+    exp_avg_sq = (1.0 - beta2) * grad_projected.square()
+    expected_update = _project_back_2d(exp_avg / (exp_avg_sq.sqrt() + eps), q_left, q_right)
+
+    weight.grad = grad2
+    opt.step()
+
+    assert torch.allclose(weight, before - lr * expected_update.to(weight.dtype), atol=1e-6, rtol=1e-6)

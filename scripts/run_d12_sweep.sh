@@ -83,6 +83,8 @@ cmd=(
   --pure-qr
   --streaming-num-iters "${STREAMING_NUM_ITERS:-2}"
   --fallback-ortho-tol "${FALLBACK_ORTHO_TOL:-0.01}"
+  --matrix-lr-adjust "${MATRIX_LR_ADJUST:-moonlight}"
+  --adam-lr-mode "${ADAM_LR_MODE:-relative_to_matrix}"
   --structured-config "${STRUCTURED_CONFIG:-auto}"
   --precondition-frequency "${PRECONDITION_FREQUENCY:-5}"
   --shampoo-beta "${SHAMPOO_BETA:-0.95}"
@@ -118,6 +120,11 @@ if [[ "${STRUCTURED_USE_QR:-1}" == "1" ]]; then
   cmd+=(--structured-use-qr)
 else
   cmd+=(--no-structured-use-qr)
+fi
+if [[ "${BATCH_BETA_ALIGN:-1}" == "1" ]]; then
+  cmd+=(--batch-beta-align)
+else
+  cmd+=(--no-batch-beta-align)
 fi
 if [[ "$RESUME" == "1" ]]; then
   cmd+=(--resume)

@@ -51,6 +51,28 @@ parser.add_argument("--max-steps", type=int, default=500, help="Training steps")
 parser.add_argument("--device-batch-size", type=int, default=8, help="Per-device batch size")
 parser.add_argument("--total-batch-size", type=int, default=-1, help="Total batch size (-1 = auto)")
 parser.add_argument("--matrix-lr", type=float, default=0.02, help="Muon LR")
+parser.add_argument(
+    "--matrix-lr-adjust",
+    type=str,
+    default="moonlight",
+    choices=["none", "moonlight"],
+    help="Per-matrix LR factor for Muon/structured matrix updates. "
+    "moonlight uses 0.2*sqrt(max(rows, cols)) (Moonlight RMS matching).",
+)
+parser.add_argument(
+    "--batch-beta-align",
+    action=argparse.BooleanOptionalAction,
+    default=True,
+    help="Rescale EMA betas/momentum so half-life in tokens is constant across batch sizes.",
+)
+parser.add_argument(
+    "--adam-lr-mode",
+    type=str,
+    default="relative_to_matrix",
+    choices=["relative_to_matrix", "nanochat_fixed"],
+    help="How to set AdamW peak LRs for embeddings/lm_head. "
+    "relative_to_matrix scales them with --matrix-lr; nanochat_fixed keeps legacy constants.",
+)
 parser.add_argument("--weight-decay", type=float, default=0.28, help="Weight decay")
 parser.add_argument("--warmup-steps", type=int, default=40, help="LR warmup steps")
 parser.add_argument("--warmdown-ratio", type=float, default=0.65, help="Fraction of training in LR warmdown")
@@ -135,6 +157,12 @@ from nanochat.common import COMPUTE_DTYPE, print0, autodetect_device_type
 from nanochat.tokenizer import get_tokenizer, get_token_bytes
 from nanochat.loss_eval import evaluate_bpb
 from streaming_muon_torch import StreamingMuonAdamW, DistStreamingMuonAdamW, CustomTransform
+from optimizer_recipe import (
+    B_REF,
+    adam_lr_from_matrix_lr,
+    batch_lr_scale as recipe_batch_lr_scale,
+    ema_beta_for_batch,
+)
 
 # =============================================================================
 # Load candidate f(Σ)
@@ -388,6 +416,12 @@ def _make_adamw_group(kind: str, params: list[torch.nn.Parameter], lr: float,
     return dict(kind=kind, params=params, lr=lr, betas=betas, eps=eps, weight_decay=weight_decay)
 
 
+def _beta_for_run(beta_ref: float, total_batch_size: int, batch_beta_align: bool) -> float:
+    if not batch_beta_align:
+        return beta_ref
+    return ema_beta_for_batch(beta_ref, total_batch_size, B_REF)
+
+
 def build_optimizer_for_run(
     model: torch.nn.Module,
     *,
@@ -397,6 +431,10 @@ def build_optimizer_for_run(
     weight_decay: float,
     batch_lr_scale: float,
     dmodel_lr_scale: float,
+    total_batch_size: int,
+    matrix_lr_adjust: str,
+    batch_beta_align: bool,
+    adam_lr_mode: str,
     ddp: bool,
 ) -> tuple[torch.optim.Optimizer, dict[int, str]]:
     """Build the mixed optimizer and return ``param_id -> name`` for matrix params."""
@@ -418,34 +456,83 @@ def build_optimizer_for_run(
     used_ids = matrix_param_ids | {id(p) for p in lm_head_params + embedding_params + value_embed_params}
     extra_adamw_params = [p for p in named.values() if id(p) not in used_ids]
 
-    scalar_lr = 0.5 * batch_lr_scale
+    def _adam_peak_lr(role: str, nanochat_lr: float) -> float:
+        if adam_lr_mode == "relative_to_matrix":
+            return adam_lr_from_matrix_lr(
+                matrix_lr,
+                role,
+                dmodel_lr_scale=dmodel_lr_scale,
+                batch_lr_scale_value=batch_lr_scale,
+            )
+        return nanochat_lr
+
+    adam_betas = (
+        _beta_for_run(0.8, total_batch_size, batch_beta_align),
+        _beta_for_run(0.96, total_batch_size, batch_beta_align),
+    )
+    embed_betas = (
+        _beta_for_run(0.8, total_batch_size, batch_beta_align),
+        _beta_for_run(0.995, total_batch_size, batch_beta_align),
+    )
+    scalar_betas = (
+        _beta_for_run(0.8, total_batch_size, batch_beta_align),
+        _beta_for_run(0.95, total_batch_size, batch_beta_align),
+    )
     param_groups: list[dict] = []
     if lm_head_params:
         param_groups.append(_make_adamw_group(
-            "adamw", lm_head_params, 0.008 * dmodel_lr_scale * batch_lr_scale,
-            (0.8, 0.96), 1e-10, 0.01,
+            "adamw",
+            lm_head_params,
+            _adam_peak_lr("lm_head", 0.008 * dmodel_lr_scale * batch_lr_scale),
+            adam_betas,
+            1e-10,
+            0.01,
         ))
     if embedding_params:
         param_groups.append(_make_adamw_group(
-            "adamw", embedding_params, 0.3 * dmodel_lr_scale * batch_lr_scale,
-            (0.8, 0.995), 1e-10, 0.001,
+            "adamw",
+            embedding_params,
+            _adam_peak_lr("embedding", 0.3 * dmodel_lr_scale * batch_lr_scale),
+            embed_betas,
+            1e-10,
+            0.001,
         ))
     if value_embed_params:
         param_groups.append(_make_adamw_group(
-            "adamw", value_embed_params, 0.3 * dmodel_lr_scale * batch_lr_scale * 0.5,
-            (0.8, 0.995), 1e-10, 0.01,
+            "adamw",
+            value_embed_params,
+            _adam_peak_lr("value_embed", 0.3 * dmodel_lr_scale * batch_lr_scale * 0.5),
+            embed_betas,
+            1e-10,
+            0.01,
         ))
     if extra_adamw_params:
         param_groups.append(_make_adamw_group(
-            "adamw", extra_adamw_params, scalar_lr * 0.01,
-            (0.8, 0.95), 1e-10, 0.0,
+            "adamw",
+            extra_adamw_params,
+            _adam_peak_lr("scalar", 0.5 * batch_lr_scale * 0.01),
+            scalar_betas,
+            1e-10,
+            0.0,
         ))
+
+    matrix_group_extras = {
+        "matrix_lr_adjust": matrix_lr_adjust,
+    }
+    structured_beta1 = _beta_for_run(args.optimizer_beta1, total_batch_size, batch_beta_align)
+    structured_beta2 = _beta_for_run(args.optimizer_beta2, total_batch_size, batch_beta_align)
+    structured_shampoo_beta = _beta_for_run(args.shampoo_beta, total_batch_size, batch_beta_align)
+    plain_muon_momentum = _beta_for_run(0.95, total_batch_size, batch_beta_align)
 
     if optimizer_name == "adamw":
         if matrix_params:
             matrix_group = _make_adamw_group(
-                "adamw", matrix_params, matrix_lr * batch_lr_scale,
-                (args.optimizer_beta1, args.optimizer_beta2), 1e-8, weight_decay,
+                "adamw",
+                matrix_params,
+                matrix_lr * batch_lr_scale,
+                (structured_beta1, structured_beta2),
+                1e-8,
+                weight_decay,
             )
             matrix_group["schedule_weight_decay"] = True
             param_groups.append(matrix_group)
@@ -458,9 +545,10 @@ def build_optimizer_for_run(
                 kind="plain_muon",
                 params=group_params,
                 lr=matrix_lr * batch_lr_scale,
-                momentum=0.95,
+                momentum=plain_muon_momentum,
                 ns_steps=5,
                 weight_decay=weight_decay,
+                **matrix_group_extras,
             ))
         from baseline_optim import StructuredAdamW
         optimizer = StructuredAdamW(param_groups, average_gradients=ddp)
@@ -471,9 +559,10 @@ def build_optimizer_for_run(
                 kind="muon",
                 params=group_params,
                 lr=matrix_lr * batch_lr_scale,
-                momentum=0.95,
+                momentum=plain_muon_momentum,
                 ns_steps=5,
                 weight_decay=weight_decay,
+                **matrix_group_extras,
             ))
         from nanochat.optim import DistMuonAdamW, MuonAdamW
         optimizer = (DistMuonAdamW if ddp else MuonAdamW)(param_groups)
@@ -487,7 +576,7 @@ def build_optimizer_for_run(
                 kind="streaming_muon",
                 params=group_params,
                 lr=matrix_lr * batch_lr_scale,
-                momentum=0.95,
+                momentum=plain_muon_momentum,
                 weight_decay=weight_decay,
                 sigma_transform=sigma_transform,
                 k=k_val,
@@ -497,6 +586,7 @@ def build_optimizer_for_run(
                     None if args.fallback_ortho_tol is not None and args.fallback_ortho_tol < 0
                     else args.fallback_ortho_tol
                 ),
+                **matrix_group_extras,
             ))
         optimizer = (DistStreamingMuonAdamW if ddp else StreamingMuonAdamW)(param_groups)
     else:
@@ -508,13 +598,14 @@ def build_optimizer_for_run(
                 kind=optimizer_name,
                 params=group_params,
                 lr=matrix_lr * batch_lr_scale,
-                betas=(args.optimizer_beta1, args.optimizer_beta2),
-                shampoo_beta=args.shampoo_beta,
+                betas=(structured_beta1, structured_beta2),
+                shampoo_beta=structured_shampoo_beta,
                 eps=1e-8,
                 weight_decay=weight_decay,
                 precondition_frequency=args.precondition_frequency,
                 init_factor=args.structured_init_factor,
                 use_qr=args.structured_use_qr,
+                **matrix_group_extras,
             ))
         optimizer = StructuredAdamW(param_groups, average_gradients=ddp)
 
@@ -630,7 +721,7 @@ def main():
         # Batch size (scales with world_size for distributed)
         tokens_per_batch = args.device_batch_size * args.max_seq_len
         total_batch_size = args.total_batch_size if args.total_batch_size > 0 else tokens_per_batch * world_size
-        batch_lr_scale = (total_batch_size / (2**19)) ** 0.5 if total_batch_size != 2**19 else 1.0
+        batch_lr_scale = recipe_batch_lr_scale(total_batch_size, B_REF)
 
         optimizer, param_name_by_id = build_optimizer_for_run(
             model,
@@ -640,6 +731,10 @@ def main():
             weight_decay=args.weight_decay,
             batch_lr_scale=batch_lr_scale,
             dmodel_lr_scale=dmodel_lr_scale,
+            total_batch_size=total_batch_size,
+            matrix_lr_adjust=args.matrix_lr_adjust,
+            batch_beta_align=args.batch_beta_align,
+            adam_lr_mode=args.adam_lr_mode,
             ddp=ddp,
         )
         matrix_params_named = {
@@ -717,12 +812,13 @@ def main():
             warmdown_start = num_iterations - warmdown_iters
             if it < min(400, num_iterations // 4):
                 frac = it / min(400, num_iterations // 4)
-                return (1 - frac) * 0.85 + frac * 0.97
+                momentum = (1 - frac) * 0.85 + frac * 0.97
             elif args.mom_decay and it >= warmdown_start:
                 progress = (it - warmdown_start) / warmdown_iters
-                return 0.97 * (1 - progress) + 0.90 * progress
+                momentum = 0.97 * (1 - progress) + 0.90 * progress
             else:
-                return 0.97
+                momentum = 0.97
+            return _beta_for_run(momentum, total_batch_size, args.batch_beta_align)
 
         def get_weight_decay(it):
             return args.weight_decay * 0.5 * (1 + math.cos(math.pi * it / num_iterations))

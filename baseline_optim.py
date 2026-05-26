@@ -14,6 +14,8 @@ import torch
 import torch.distributed as dist
 from torch import Tensor
 
+from optimizer_recipe import matrix_lr_step_scale
+
 
 STRUCTURED_KINDS = {"soap", "shampoo", "kl_shampoo", "kl_soap"}
 BASELINE_KINDS = STRUCTURED_KINDS | {"plain_muon"}
@@ -448,9 +450,10 @@ class StructuredAdamW(torch.optim.Optimizer):
         buf.lerp_(grads, 1.0 - momentum)
         nesterov = grads.float().lerp(buf.float(), momentum)
         update = matrix_sign_ns5(nesterov, steps=int(group.get("ns_steps", 5))).to(dtype=stacked_params.dtype)
+        lr_step = lr * matrix_lr_step_scale(group, shape[0], shape[1])
         if wd:
             stacked_params.add_(stacked_params, alpha=-lr * wd)
-        stacked_params.add_(update, alpha=-lr)
+        stacked_params.add_(update, alpha=-lr_step)
         for p, updated in zip(params, stacked_params):
             p.copy_(updated)
 

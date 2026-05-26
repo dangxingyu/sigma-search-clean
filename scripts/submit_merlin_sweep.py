@@ -343,6 +343,9 @@ def common_env(
         "METRICS_HESSIAN_MAX_MODULES": str(args.metrics_hessian_max_modules),
         "ADAPTIVE_LR": "0",
     }
+    if args.merlin_parallel_cases > 1:
+        env["MERLIN_PARALLEL_CASES"] = str(args.merlin_parallel_cases)
+        env["MERLIN_GPUS_PER_CASE"] = str(args.merlin_gpus_per_case or args.nproc)
     if args.tokens is None:
         env["CHINCHILLA_MULT"] = str(args.chinchilla_mult)
     else:
@@ -510,6 +513,18 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--metrics-hessian-top-k", type=int, default=None)
     parser.add_argument("--metrics-hessian-iters", type=int, default=None)
     parser.add_argument("--metrics-hessian-max-modules", type=int, default=None)
+    parser.add_argument(
+        "--merlin-parallel-cases",
+        type=int,
+        default=int(os.environ.get("MERLIN_PARALLEL_CASES", "1")),
+        help="Run multiple single-process case indices concurrently inside one Merlin node.",
+    )
+    parser.add_argument(
+        "--merlin-gpus-per-case",
+        type=int,
+        default=int(os.environ.get("MERLIN_GPUS_PER_CASE", "0")),
+        help="CUDA devices assigned to each concurrent case; defaults to --nproc.",
+    )
 
     parser_defaults = {
         action.dest: action.default

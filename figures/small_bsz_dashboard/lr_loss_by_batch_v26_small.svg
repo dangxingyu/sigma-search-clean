@@ -1,0 +1,62 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="880" height="485" viewBox="0 0 880 485">
+<rect width="100%" height="100%" fill="white"/>
+<style>text{font-family:-apple-system,BlinkMacSystemFont,Segoe UI,sans-serif;fill:#202124} .small{font-size:11px;fill:#5f6368} .title{font-size:18px;font-weight:700} .subtitle{font-size:12px;fill:#5f6368} .axis{stroke:#555;stroke-width:1} .grid{stroke:#ddd;stroke-width:.7} .legend{font-size:12px}</style>
+
+<text x="24" y="28" class="title">Small-bsz sweep: LR vs final loss</text>
+<text x="24" y="48" class="subtitle">same-driver streaming DDP; open marker indicates per-method optimum</text>
+<g><text x="88" y="81" font-size="14" font-weight="700">batch=32K</text>
+<line x1="88.0" x2="88.0" y1="95" y2="330" class="grid"/><text x="88.0" y="346" class="small" text-anchor="middle">0.0025</text>
+<line x1="198.0" x2="198.0" y1="95" y2="330" class="grid"/><text x="198.0" y="346" class="small" text-anchor="middle">0.005</text>
+<line x1="308.0" x2="308.0" y1="95" y2="330" class="grid"/><text x="308.0" y="346" class="small" text-anchor="middle">0.01</text>
+<line x1="418.0" x2="418.0" y1="95" y2="330" class="grid"/><text x="418.0" y="346" class="small" text-anchor="middle">0.02</text>
+<line x1="88" x2="418" y1="330.0" y2="330.0" class="grid"/><text x="81" y="333.0" class="small" text-anchor="end">0.932395</text>
+<line x1="88" x2="418" y1="271.2" y2="271.2" class="grid"/><text x="81" y="274.2" class="small" text-anchor="end">0.935061</text>
+<line x1="88" x2="418" y1="212.5" y2="212.5" class="grid"/><text x="81" y="215.5" class="small" text-anchor="end">0.937727</text>
+<line x1="88" x2="418" y1="153.8" y2="153.8" class="grid"/><text x="81" y="156.8" class="small" text-anchor="end">0.940393</text>
+<line x1="88" x2="418" y1="95.0" y2="95.0" class="grid"/><text x="81" y="98.0" class="small" text-anchor="end">0.943058</text>
+<line x1="88" x2="88" y1="95" y2="330" class="axis"/><line x1="88" x2="418" y1="330" y2="330" class="axis"/>
+<polyline fill="none" stroke="#1f77b4" stroke-width="2" points="88.0,123.3 198.0,271.2 308.0,249.4 418.0,111.2"/>
+<circle cx="88.0" cy="123.3" r="4.2" fill="#1f77b4" stroke="#1f77b4" stroke-width="1.2"/>
+<circle cx="198.0" cy="271.2" r="4.2" fill="#1f77b4" stroke="#1f77b4" stroke-width="1.2"/>
+<circle cx="308.0" cy="249.4" r="4.2" fill="#1f77b4" stroke="#1f77b4" stroke-width="1.2"/>
+<circle cx="418.0" cy="111.2" r="4.2" fill="#1f77b4" stroke="#1f77b4" stroke-width="1.2"/>
+<circle cx="198.0" cy="271.2" r="7.0" fill="white" stroke="#1f77b4" stroke-width="1.2"/>
+<rect x="193.8" y="309.6" width="8.4" height="8.4" fill="#2ca02c" stroke="#2ca02c" stroke-width="1.2"/>
+<rect x="191.0" y="306.8" width="14.0" height="14.0" fill="white" stroke="#2ca02c" stroke-width="1.2"/>
+</g>
+<g><text x="508" y="81" font-size="14" font-weight="700">batch=64K</text>
+<line x1="508.0" x2="508.0" y1="95" y2="330" class="grid"/><text x="508.0" y="346" class="small" text-anchor="middle">0.0025</text>
+<line x1="618.0" x2="618.0" y1="95" y2="330" class="grid"/><text x="618.0" y="346" class="small" text-anchor="middle">0.005</text>
+<line x1="728.0" x2="728.0" y1="95" y2="330" class="grid"/><text x="728.0" y="346" class="small" text-anchor="middle">0.01</text>
+<line x1="838.0" x2="838.0" y1="95" y2="330" class="grid"/><text x="838.0" y="346" class="small" text-anchor="middle">0.02</text>
+<line x1="508" x2="838" y1="330.0" y2="330.0" class="grid"/><text x="501" y="333.0" class="small" text-anchor="end">0.921520</text>
+<line x1="508" x2="838" y1="271.2" y2="271.2" class="grid"/><text x="501" y="274.2" class="small" text-anchor="end">0.923783</text>
+<line x1="508" x2="838" y1="212.5" y2="212.5" class="grid"/><text x="501" y="215.5" class="small" text-anchor="end">0.926046</text>
+<line x1="508" x2="838" y1="153.8" y2="153.8" class="grid"/><text x="501" y="156.8" class="small" text-anchor="end">0.928309</text>
+<line x1="508" x2="838" y1="95.0" y2="95.0" class="grid"/><text x="501" y="98.0" class="small" text-anchor="end">0.930572</text>
+<line x1="508" x2="508" y1="95" y2="330" class="axis"/><line x1="508" x2="838" y1="330" y2="330" class="axis"/>
+<polyline fill="none" stroke="#1f77b4" stroke-width="2" points="618.0,272.9 728.0,313.8 838.0,187.1"/>
+<circle cx="618.0" cy="272.9" r="4.2" fill="#1f77b4" stroke="#1f77b4" stroke-width="1.2"/>
+<circle cx="728.0" cy="313.8" r="4.2" fill="#1f77b4" stroke="#1f77b4" stroke-width="1.2"/>
+<circle cx="838.0" cy="187.1" r="4.2" fill="#1f77b4" stroke="#1f77b4" stroke-width="1.2"/>
+<circle cx="728.0" cy="313.8" r="7.0" fill="white" stroke="#1f77b4" stroke-width="1.2"/>
+<polyline fill="none" stroke="#2ca02c" stroke-width="2" points="508.0,202.1 618.0,308.8 728.0,310.0 838.0,111.2"/>
+<rect x="503.8" y="197.9" width="8.4" height="8.4" fill="#2ca02c" stroke="#2ca02c" stroke-width="1.2"/>
+<rect x="613.8" y="304.6" width="8.4" height="8.4" fill="#2ca02c" stroke="#2ca02c" stroke-width="1.2"/>
+<rect x="723.8" y="305.8" width="8.4" height="8.4" fill="#2ca02c" stroke="#2ca02c" stroke-width="1.2"/>
+<rect x="833.8" y="107.0" width="8.4" height="8.4" fill="#2ca02c" stroke="#2ca02c" stroke-width="1.2"/>
+<rect x="721.0" y="303.0" width="14.0" height="14.0" fill="white" stroke="#2ca02c" stroke-width="1.2"/>
+<polyline fill="none" stroke="#d62728" stroke-width="2" points="618.0,252.6 728.0,270.8 838.0,143.5"/>
+<polygon points="618.0,247.5 613.0,256.8 623.0,256.8" fill="#d62728" stroke="#d62728" stroke-width="1.2"/>
+<polygon points="728.0,265.7 723.0,275.0 733.0,275.0" fill="#d62728" stroke="#d62728" stroke-width="1.2"/>
+<polygon points="838.0,138.4 833.0,147.7 843.0,147.7" fill="#d62728" stroke="#d62728" stroke-width="1.2"/>
+<polygon points="728.0,262.4 719.6,277.8 736.4,277.8" fill="white" stroke="#d62728" stroke-width="1.2"/>
+</g>
+<text x="30" y="411" class="subtitle">Legend: open marker = per-method optimum</text>
+<circle cx="38.0" cy="423.0" r="5.0" fill="#1f77b4" stroke="#1f77b4" stroke-width="1.2"/>
+<text x="50" y="427" class="legend">streaming_identity</text>
+<rect x="198.0" y="418.0" width="10.0" height="10.0" fill="#2ca02c" stroke="#2ca02c" stroke-width="1.2"/>
+<text x="215" y="427" class="legend">streaming_lite</text>
+<polygon points="368.0,417.0 362.0,428.0 374.0,428.0" fill="#d62728" stroke="#d62728" stroke-width="1.2"/>
+<text x="380" y="427" class="legend">top_aware_muon</text>
+</svg>

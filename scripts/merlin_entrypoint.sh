@@ -13,6 +13,15 @@ else
 fi
 cd "$REPO"
 
+export UV_PYTHON_DOWNLOADS="${UV_PYTHON_DOWNLOADS:-never}"
+export UV_PYTHON="${UV_PYTHON:-python3}"
+export UV_PYTHON_PREFERENCE="${UV_PYTHON_PREFERENCE:-only-system}"
+export UV_LINK_MODE="${UV_LINK_MODE:-copy}"
+export UV_INDEX_URL="${UV_INDEX_URL:-https://bytedpypi.byted.org/simple}"
+export UV_DEFAULT_INDEX="${UV_DEFAULT_INDEX:-https://bytedpypi.byted.org/simple}"
+export PIP_INDEX_URL="${PIP_INDEX_URL:-https://bytedpypi.byted.org/simple}"
+export PIP_TRUSTED_HOST="${PIP_TRUSTED_HOST:-bytedpypi.byted.org}"
+
 if [[ -n "${HDFS_RUNTIME_TGZ:-}" && ! -x "$REPO/nanochat/.venv/bin/python" ]]; then
   echo "Restoring runtime from HDFS_RUNTIME_TGZ=$HDFS_RUNTIME_TGZ"
   rm -rf "$REPO/nanochat/.venv"
@@ -39,7 +48,23 @@ PY
       python3 -m pip install --user uv
       export PATH="$HOME/.local/bin:$PATH"
     fi
-    (cd "$REPO/nanochat" && uv sync --extra gpu)
+
+    NANOCHAT_DIR="$REPO/nanochat"
+    if [[ -f "$NANOCHAT_DIR/pyproject.toml" ]]; then
+      python3 - <<'PY'
+from pathlib import Path
+import re
+p = Path("$NANOCHAT_DIR/pyproject.toml")
+text = p.read_text()
+text = text.replace('    "torch==2.9.1",\n', '')
+text = re.sub(r'\n# target torch to cuda 12\.8 or CPU\n\[tool\.uv\.sources\]\n(?:.*\n)*?\n\[\[tool\.uv\.index\]\]\nname = "pytorch-cpu"\nurl = "https://download\.pytorch\.org/whl/cpu"\nexplicit = true\n\n\[\[tool\.uv\.index\]\]\nname = "pytorch-cu128"\nurl = "https://download\.pytorch\.org/whl/cu128"\nexplicit = true\n', '\n', text, count=1)
+p.write_text(text)
+PY
+      rm -f "$NANOCHAT_DIR/uv.lock"
+    fi
+
+    rm -rf "$REPO/nanochat/.venv"
+    (cd "$REPO/nanochat" && uv venv --system-site-packages && uv sync)
     # shellcheck disable=SC1091
     source "$REPO/nanochat/.venv/bin/activate"
   fi
@@ -116,7 +141,44 @@ if [[ -n "$case_index" ]]; then
   echo "CASE_INDEX=$case_index"
 fi
 
-if [[ -n "$case_indices" ]]; then
+parallel_cases="${MERLIN_PARALLEL_CASES:-1}"
+gpus_per_case="${MERLIN_GPUS_PER_CASE:-${NPROC:-1}}"
+if [[ -n "$case_indices" && "$parallel_cases" -gt 1 ]]; then
+  running=0
+  slot=0
+  pids=()
+  for idx in $case_indices; do
+    gpu_start=$(((slot % parallel_cases) * gpus_per_case))
+    gpu_ids=""
+    for ((i = 0; i < gpus_per_case; i++)); do
+      gpu_id=$((gpu_start + i))
+      if [[ -z "$gpu_ids" ]]; then
+        gpu_ids="$gpu_id"
+      else
+        gpu_ids="$gpu_ids,$gpu_id"
+      fi
+    done
+    (
+      export CUDA_VISIBLE_DEVICES="$gpu_ids"
+      cmd=("${base_cmd[@]}" --case-index "$idx")
+      printf 'Parallel command on GPUs %s:' "$gpu_ids"
+      printf ' %q' "${cmd[@]}"
+      printf '\n'
+      "${cmd[@]}"
+    ) &
+    pids+=("$!")
+    running=$((running + 1))
+    slot=$((slot + 1))
+    if [[ "$running" -ge "$parallel_cases" ]]; then
+      wait "${pids[0]}"
+      pids=("${pids[@]:1}")
+      running=$((running - 1))
+    fi
+  done
+  for pid in "${pids[@]}"; do
+    wait "$pid"
+  done
+elif [[ -n "$case_indices" ]]; then
   for idx in $case_indices; do
     cmd=("${base_cmd[@]}" --case-index "$idx")
     printf 'Command:'
