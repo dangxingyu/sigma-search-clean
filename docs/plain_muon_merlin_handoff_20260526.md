@@ -171,6 +171,93 @@ bash scripts/merlin_entrypoint.sh
 
 This avoids GitHub/PyTorch downloads and uses the system Python / system-site torch in the image.
 
+## Observed Successful Rerun2 Config
+
+Later successful jobs were submitted under:
+
+```text
+plainmuon_d8_h800_20260527_0831_rerun2
+```
+
+Representative DONE job:
+
+```text
+job_run_id: 7fafa9c3612e7857
+trial_id: 353307209
+status: DONE
+caption: sigma-sweep-plainmuon_d8_h800_20260527_0831_rerun2-shard-006-006-013
+```
+
+What made this submission work:
+
+- It still used an HDFS code tarball, not Codebase/Git:
+
+```text
+HDFS_CODE_TGZ=hdfs://haruna/home/byte_data_seed/hdd_hldy/user/xingyu.dang/sigma-search/sigma-search-clean-d8-plainmuon-20260527_0829_fix2-671fd00.tgz
+```
+
+- It also provided the offline runtime tarball:
+
+```text
+HDFS_RUNTIME_TGZ=hdfs://haruna/home/byte_data_seed/hdd_hldy/user/xingyu.dang/sigma-search/runtime/nanochat_venv_torch291_cu128.tgz
+```
+
+- It ran through the normal wrapper:
+
+```text
+MERLIN_SWEEP_SCRIPT=scripts/run_d12_sweep.sh
+METHODS=plain_muon
+DEPTH=8
+CHINCHILLA_MULT=2.0
+NPROC=8
+MAX_DEVICE_BATCH_SIZE=64
+MATRIX_LR_ADJUST=moonlight        # default via wrapper
+ADAM_LR_MODE=relative_to_matrix   # default via wrapper
+BATCH_BETA_ALIGN=1                # default via wrapper
+```
+
+- The H800 image still installed `uv`, but the patched entrypoint prevented the earlier GitHub Python-standalone failure. In logs this showed:
+
+```text
+Restoring runtime from HDFS_RUNTIME_TGZ=...
+Using CPython 3.11.2 interpreter at: /usr/bin/python3
+Creating virtual environment at: .venv
+Resolved 114 packages ...
+Installed 64 packages ...
+```
+
+Current rerun2 status when checked:
+
+```text
+7fafa9c3612e7857  DONE
+a0e533b549a101af  DONE
+ea436b09b308983a  RUNNING
+4ebf363e20705643  RUNNING
+5897e744c8cdc63f  RUNNING
+cddd27272e14c3fa  RUNNING
+64f5fde42f1b1bef  RUNNING
+e1019b9361c2b231  FAILED
+```
+
+The failed `e1019b9361c2b231` is the 4K shard, and its failure is not the old `uv`/GitHub issue. Its stderr ended with:
+
+```text
+ValueError: .../search_evals/plainmuon_d8_h800_20260527_0831_rerun2/manifest.json already exists with a different sweep configuration.
+Use a new STAMP/OUT_ROOT for a changed recipe, or pass --allow-config-mismatch if you intentionally want to mix configs.
+```
+
+Root cause: the 4K sweep used the same `STAMP` / `OUT_ROOT` as the 64K-1M sweep but has a different sweep signature (`BATCHES=4096`, `NPROC=4`, `MAX_DEVICE_BATCH_SIZE=1`, etc.). The sweep manifest guard correctly rejected mixing these configurations.
+
+Fix for 4K: submit it under a separate stamp/output root, for example:
+
+```text
+STAMP=plainmuon_d8_4k_h800_20260527_0831_rerun2
+OUT_ROOT=/mnt/hdfs/user/xingyu.dang/sigma-search-runs/search_evals/plainmuon_d8_4k_h800_20260527_0831_rerun2
+LOG_ROOT=/mnt/hdfs/user/xingyu.dang/sigma-search-runs/logs/plainmuon_d8_4k_h800_20260527_0831_rerun2
+```
+
+Do not reuse the 64K-1M `plainmuon_d8_h800_20260527_0831_rerun2` output root for 4K unless intentionally passing `--allow-config-mismatch`.
+
 ## Recommended Fix
 
 Patch `scripts/merlin_entrypoint.sh` directly so future H800 jobs do not need an inline entrypoint patch:

@@ -49,12 +49,13 @@ PY
       export PATH="$HOME/.local/bin:$PATH"
     fi
 
-    NANOCHAT_DIR="$REPO/nanochat"
+    export NANOCHAT_DIR="$REPO/nanochat"
     if [[ -f "$NANOCHAT_DIR/pyproject.toml" ]]; then
       python3 - <<'PY'
 from pathlib import Path
+import os
 import re
-p = Path("$NANOCHAT_DIR/pyproject.toml")
+p = Path(os.environ["NANOCHAT_DIR"]) / "pyproject.toml"
 text = p.read_text()
 text = text.replace('    "torch==2.9.1",\n', '')
 text = re.sub(r'\n# target torch to cuda 12\.8 or CPU\n\[tool\.uv\.sources\]\n(?:.*\n)*?\n\[\[tool\.uv\.index\]\]\nname = "pytorch-cpu"\nurl = "https://download\.pytorch\.org/whl/cpu"\nexplicit = true\n\n\[\[tool\.uv\.index\]\]\nname = "pytorch-cu128"\nurl = "https://download\.pytorch\.org/whl/cu128"\nexplicit = true\n', '\n', text, count=1)
