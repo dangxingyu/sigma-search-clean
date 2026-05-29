@@ -15,6 +15,12 @@ Prefer the repo submitter:
 python scripts/submit_merlin_sweep.py ...
 ```
 
+For the standard d8 plain-Muon sweep, prefer the dedicated wrapper:
+
+```bash
+python scripts/submit_d8_muon_merlin_sweep.py --submit
+```
+
 Do not hand-roll `create-run` payloads unless the submitter cannot express the job.
 
 ## Preflight
@@ -133,6 +139,30 @@ python scripts/submit_merlin_sweep.py \
 ```
 
 First dry-run without `--submit`; inspect payloads under `/tmp/sigma_merlin_payloads_<stamp>/`.
+
+## Standard d8 Muon Sweep
+
+Use:
+
+```bash
+python scripts/submit_d8_muon_merlin_sweep.py \
+  --stamp plainmuon_d8_a100_<stamp> \
+  --submit
+```
+
+Defaults:
+
+```text
+method: plain_muon only
+depth: 8
+CHINCHILLA_MULT: 2
+4K: one 8-GPU node running two 4-GPU cases concurrently
+64K/128K/512K/1M: 8-GPU DDP jobs, main-shard-count=3 by default
+resource: seed_eval_x A100 queue
+runtime: nanochat_venv_torch291_cu128.tgz
+```
+
+Muon momentum is not batch-scaled. Batch half-life beta alignment remains for Adam/structured optimizer betas.
 
 ## Manifest Discipline
 

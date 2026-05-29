@@ -522,7 +522,7 @@ def build_optimizer_for_run(
     structured_beta1 = _beta_for_run(args.optimizer_beta1, total_batch_size, batch_beta_align)
     structured_beta2 = _beta_for_run(args.optimizer_beta2, total_batch_size, batch_beta_align)
     structured_shampoo_beta = _beta_for_run(args.shampoo_beta, total_batch_size, batch_beta_align)
-    plain_muon_momentum = _beta_for_run(0.95, total_batch_size, batch_beta_align)
+    plain_muon_momentum = 0.95
 
     if optimizer_name == "adamw":
         if matrix_params:
@@ -818,7 +818,7 @@ def main():
                 momentum = 0.97 * (1 - progress) + 0.90 * progress
             else:
                 momentum = 0.97
-            return _beta_for_run(momentum, total_batch_size, args.batch_beta_align)
+            return momentum
 
         def get_weight_decay(it):
             return args.weight_decay * 0.5 * (1 + math.cos(math.pi * it / num_iterations))
