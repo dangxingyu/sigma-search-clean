@@ -1,13 +1,12 @@
 #!/usr/bin/env python3
-"""Package and submit the standard d8 plain-Muon sweep to Merlin.
+"""Package and submit d8 fixed-beta1 sweeps to Merlin.
 
-This wrapper captures the current handoff recipe:
-
-- d8, 40TPP (`CHINCHILLA_MULT=2`)
-- method: `plain_muon` only
-- split 4K and 64K-1M into separate output roots to avoid manifest conflicts
-- A100 seed_eval_x by default
-- HDFS code tarball plus the known nanochat runtime tarball
+This extends the fair-comparison recipe:
+- Muon sweeps fixed ``muon_momentum`` with a static schedule.
+- KL-SOAP sweeps fixed ``optimizer_beta1`` while keeping the KL-SOAP reference
+  preconditioner config.
+- AdamW optionally sweeps fixed matrix-AdamW ``optimizer_beta1``.
+- In all cases, beta2 / shampoo_beta / AdamW beta2 remain batch-aligned.
 """
 
 from __future__ import annotations
@@ -30,12 +29,22 @@ DEFAULT_HDFS_VOLUME = (
     '{"path":"hdfs://haruna/home/byte_data_seed/hdd_hldy/user/xingyu.dang/",'
     '"mnt":"/mnt/hdfs/user/xingyu.dang","access_mode":"RW","roles":["worker"]}'
 )
+DEFAULT_BATCHES = "32768 65536 131072"
+DEFAULT_LRS = "0.001 0.0015 0.002 0.003 0.004"
 
 
 def run(cmd: list[str], *, dry_run: bool = False) -> None:
     print("+ " + " ".join(cmd), flush=True)
     if not dry_run:
         subprocess.run(cmd, cwd=ROOT, check=True)
+
+
+def split_floats(value: str) -> list[float]:
+    return [float(x) for x in value.replace(",", " ").split() if x]
+
+
+def beta_tag(beta1: float) -> str:
+    return f"b{beta1:g}".replace(".", "p")
 
 
 def package_code(args: argparse.Namespace) -> str:
@@ -61,33 +70,23 @@ def package_code(args: argparse.Namespace) -> str:
     return hdfs_tgz
 
 
-def submit_group(
-    args: argparse.Namespace,
-    *,
-    hdfs_code_tgz: str,
-    group: str,
-    batches: str,
-    lrs: str,
-    nproc: int,
-    max_device_batch_size: int,
-    shard_count: int,
-    merlin_parallel_cases: int = 1,
-    merlin_gpus_per_case: int = 0,
-) -> None:
-    stamp = f"{args.stamp}_{group}"
+def base_submit_cmd(args: argparse.Namespace, *, hdfs_code_tgz: str, method: str, beta1: float) -> list[str]:
+    stamp = f"{args.stamp}_{method}_{beta_tag(beta1)}"
     cmd = [
         "python",
         "scripts/submit_merlin_sweep.py",
         "--preset",
         "d8_quality",
+        "--caption-prefix",
+        "sigma-beta1",
         "--stamp",
         stamp,
         "--methods",
-        "plain_muon",
+        method,
         "--batches",
-        batches,
+        args.batches,
         "--lrs",
-        lrs,
+        args.lrs,
         "--alphas",
         "1.0",
         "--depth",
@@ -95,17 +94,18 @@ def submit_group(
         "--chinchilla-mult",
         "2",
         "--nproc",
-        str(nproc),
+        str(args.nproc),
         "--max-device-batch-size",
-        str(max_device_batch_size),
+        str(args.max_device_batch_size),
         "--weight-decay",
         str(args.weight_decay),
-        "--muon-momentum",
-        str(args.muon_momentum),
         "--muon-momentum-schedule",
-        args.muon_momentum_schedule,
+        "static",
+        "--batch-beta-align",
+        "--batch-beta-align-mode",
+        "beta2_only",
         "--shard-count",
-        str(shard_count),
+        str(args.shard_count),
         "--image-url",
         args.image_url,
         "--hdfs-code-tgz",
@@ -133,21 +133,59 @@ def submit_group(
         "--hdfs-volume-json",
         args.hdfs_volume_json,
     ]
-    if merlin_parallel_cases > 1:
-        cmd += ["--merlin-parallel-cases", str(merlin_parallel_cases)]
-        cmd += ["--merlin-gpus-per-case", str(merlin_gpus_per_case or nproc)]
     if args.submit:
         cmd.append("--submit")
+    return cmd
+
+
+def submit_method_beta(
+    args: argparse.Namespace,
+    *,
+    hdfs_code_tgz: str,
+    method: str,
+    beta1: float,
+) -> None:
+    cmd = base_submit_cmd(args, hdfs_code_tgz=hdfs_code_tgz, method=method, beta1=beta1)
+    if method == "plain_muon":
+        cmd += ["--muon-momentum", f"{beta1:g}"]
+    elif method == "kl_soap":
+        cmd += [
+            "--muon-momentum",
+            "0.95",
+            "--structured-config",
+            "global",
+            "--precondition-frequency",
+            "1",
+            "--shampoo-beta",
+            "0.90",
+            "--optimizer-beta1",
+            f"{beta1:g}",
+            "--optimizer-beta2",
+            "0.95",
+            "--structured-init-factor",
+            "0.1",
+        ]
+    elif method == "adamw":
+        cmd += [
+            "--muon-momentum",
+            "0.95",
+            "--optimizer-beta1",
+            f"{beta1:g}",
+            "--optimizer-beta2",
+            "0.95",
+        ]
+    else:
+        raise ValueError(f"unsupported method for beta1 sweep: {method}")
     run(cmd, dry_run=False)
 
 
 def parse_args() -> argparse.Namespace:
-    stamp = f"plainmuon_d8_a100_{time.strftime('%Y%m%d_%H%M')}"
+    stamp = f"beta1_d8_a100_{time.strftime('%Y%m%d_%H%M')}"
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--stamp", default=stamp)
-    parser.add_argument("--submit", action="store_true", help="Submit jobs; default is dry-run payload generation.")
-    parser.add_argument("--dry-run", action="store_true", help="Dry-run packaging commands too.")
-    parser.add_argument("--skip-package", action="store_true", help="Use --hdfs-code-tgz instead of repackaging.")
+    parser.add_argument("--submit", action="store_true")
+    parser.add_argument("--dry-run", action="store_true")
+    parser.add_argument("--skip-package", action="store_true")
     parser.add_argument("--hdfs-code-tgz", default="")
     parser.add_argument("--hdfs-code-dir", default=f"{HDFS_BASE}/sigma-search")
     parser.add_argument("--hdfs-runtime-tgz", default=DEFAULT_RUNTIME)
@@ -162,13 +200,19 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--memory", type=int, default=1941504)
     parser.add_argument("--hdfs-volume-json", default=DEFAULT_HDFS_VOLUME)
     parser.add_argument("--weight-decay", type=float, default=0.28)
-    parser.add_argument("--muon-momentum", type=float, default=0.95)
-    parser.add_argument("--muon-momentum-schedule", choices=["nanochat", "static"], default="static")
-    parser.add_argument("--include-4k", action=argparse.BooleanOptionalAction, default=True)
-    parser.add_argument("--include-main", action=argparse.BooleanOptionalAction, default=True)
-    parser.add_argument("--lrs-4k", default="0.0005 0.00075 0.001 0.0015 0.002")
-    parser.add_argument("--lrs-main", default="0.001 0.0015 0.002 0.003 0.004")
-    parser.add_argument("--main-shard-count", type=int, default=3)
+    parser.add_argument("--batches", default=DEFAULT_BATCHES)
+    parser.add_argument("--lrs", default=DEFAULT_LRS)
+    parser.add_argument("--beta1s", default="0.85 0.9 0.95 0.97")
+    parser.add_argument("--adamw-beta1s", default="0.8 0.9 0.95")
+    parser.add_argument("--include-adamw", action=argparse.BooleanOptionalAction, default=True)
+    parser.add_argument("--nproc", type=int, default=8)
+    parser.add_argument("--max-device-batch-size", type=int, default=64)
+    parser.add_argument(
+        "--shard-count",
+        type=int,
+        default=1,
+        help="Default 1 keeps each method/beta on one 8-GPU job to avoid flooding A100s.",
+    )
     return parser.parse_args()
 
 
@@ -181,33 +225,14 @@ def main() -> None:
     else:
         hdfs_code_tgz = package_code(args)
 
-    if args.include_4k:
-        submit_group(
-            args,
-            hdfs_code_tgz=hdfs_code_tgz,
-            group="4k",
-            batches="4096",
-            lrs=args.lrs_4k,
-            nproc=4,
-            max_device_batch_size=1,
-            shard_count=1,
-            merlin_parallel_cases=2,
-            merlin_gpus_per_case=4,
-        )
+    for method in ("plain_muon", "kl_soap"):
+        for beta1 in split_floats(args.beta1s):
+            submit_method_beta(args, hdfs_code_tgz=hdfs_code_tgz, method=method, beta1=beta1)
 
-    if args.include_main:
-        submit_group(
-            args,
-            hdfs_code_tgz=hdfs_code_tgz,
-            group="64k_1m",
-            batches="65536 131072 524288 1048576",
-            lrs=args.lrs_main,
-            nproc=8,
-            max_device_batch_size=64,
-            shard_count=args.main_shard_count,
-        )
+    if args.include_adamw:
+        for beta1 in split_floats(args.adamw_beta1s):
+            submit_method_beta(args, hdfs_code_tgz=hdfs_code_tgz, method="adamw", beta1=beta1)
 
 
 if __name__ == "__main__":
     main()
-

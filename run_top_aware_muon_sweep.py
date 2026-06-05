@@ -277,8 +277,11 @@ def build_command(args: argparse.Namespace, method: str, batch: int, lr: float, 
         "--fallback-ortho-tol", f"{args.fallback_ortho_tol:g}",
         "--matrix-lr-adjust", args.matrix_lr_adjust,
         "--adam-lr-mode", args.adam_lr_mode,
+        "--muon-momentum", f"{args.muon_momentum:g}",
+        "--muon-momentum-schedule", args.muon_momentum_schedule,
     ]
     cmd.append("--batch-beta-align" if args.batch_beta_align else "--no-batch-beta-align")
+    cmd += ["--batch-beta-align-mode", args.batch_beta_align_mode]
     cfg = structured_config(args, method)
     cmd += [
         "--precondition-frequency", str(cfg["precondition_frequency"]),
@@ -511,12 +514,15 @@ def sweep_signature(args: argparse.Namespace, methods: list[str]) -> dict[str, A
         "warmup_ratio": args.warmup_ratio,
         "warmdown_ratio": args.warmdown_ratio,
         "final_lr_frac": args.final_lr_frac,
+        "muon_momentum": args.muon_momentum,
+        "muon_momentum_schedule": args.muon_momentum_schedule,
         "streaming_num_iters": args.streaming_num_iters,
         "streaming_rank_k": args.streaming_rank_k,
         "fallback_ortho_tol": args.fallback_ortho_tol,
         "pure_qr": args.pure_qr,
         "matrix_lr_adjust": args.matrix_lr_adjust,
         "batch_beta_align": args.batch_beta_align,
+        "batch_beta_align_mode": args.batch_beta_align_mode,
         "adam_lr_mode": args.adam_lr_mode,
         "structured_config": args.structured_config,
         "precondition_frequency": args.precondition_frequency,
@@ -711,7 +717,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--alphas", type=parse_list_float, default=parse_list_float("1.0 0.5"))
     parser.add_argument("--seeds", type=parse_list_int, default=parse_list_int("42"))
     parser.add_argument("--depth", type=int, default=8)
-    parser.add_argument("--architecture", type=str, default="gpt2", choices=["gpt2", "nanochat"])
+    parser.add_argument("--architecture", type=str, default="gpt2", choices=["gpt2", "nanochat", "qwen3"])
     parser.add_argument("--tokens", type=int, default=None,
                         help="Exact token budget override. If omitted, use --chinchilla-mult and --depth.")
     parser.add_argument("--chinchilla-mult", type=float, default=2.0,
@@ -724,6 +730,8 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--warmup-ratio", type=float, default=0.05)
     parser.add_argument("--warmdown-ratio", type=float, default=0.65)
     parser.add_argument("--final-lr-frac", type=float, default=0.05)
+    parser.add_argument("--muon-momentum", type=float, default=0.95)
+    parser.add_argument("--muon-momentum-schedule", choices=["nanochat", "static"], default="nanochat")
 
     parser.add_argument("--save-every", type=int, default=0,
                         help="If >0, enable per-case checkpoints every N optimizer steps.")
@@ -737,6 +745,12 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--pure-qr", action=argparse.BooleanOptionalAction, default=True)
     parser.add_argument("--matrix-lr-adjust", choices=["none", "moonlight"], default="moonlight")
     parser.add_argument("--batch-beta-align", action=argparse.BooleanOptionalAction, default=True)
+    parser.add_argument(
+        "--batch-beta-align-mode",
+        choices=["all", "beta2_only", "none"],
+        default="all",
+        help="When batch-beta-align is on: all scales beta1+beta2; beta2_only keeps beta1 constant.",
+    )
     parser.add_argument(
         "--adam-lr-mode",
         choices=["relative_to_matrix", "nanochat_fixed"],
@@ -764,7 +778,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--metrics-module-regex",
         type=str,
-        default=r"transformer\.h\.(?:[0-9]+)\.(?:attn\.(?:c_q|c_k|c_v|c_proj)|mlp\.(?:c_fc|c_proj))\.weight$",
+        default=r"transformer\.h\.(?:[0-9]+)\.(?:attn\.(?:c_q|c_k|c_v|c_proj)|mlp\.(?:c_gate|c_fc|c_proj))\.weight$",
     )
     parser.add_argument("--metrics-max-modules", type=int, default=0)
     parser.add_argument("--metrics-hessian-every", type=int, default=0)

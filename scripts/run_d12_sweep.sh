@@ -78,6 +78,8 @@ cmd=(
   --nproc-per-node "$NPROC"
   --max-device-batch-size "$MAX_DEVICE_BATCH_SIZE"
   --weight-decay "${WEIGHT_DECAY:-0.28}"
+  --muon-momentum "${MUON_MOMENTUM:-0.95}"
+  --muon-momentum-schedule "${MUON_MOMENTUM_SCHEDULE:-nanochat}"
   --save-every "$SAVE_EVERY"
   --keep-last-checkpoints "$KEEP_LAST_CHECKPOINTS"
   --pure-qr
@@ -126,6 +128,7 @@ if [[ "${BATCH_BETA_ALIGN:-1}" == "1" ]]; then
 else
   cmd+=(--no-batch-beta-align)
 fi
+cmd+=(--batch-beta-align-mode "${BATCH_BETA_ALIGN_MODE:-all}")
 if [[ "$RESUME" == "1" ]]; then
   cmd+=(--resume)
 else

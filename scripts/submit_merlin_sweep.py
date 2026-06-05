@@ -329,6 +329,16 @@ def common_env(
         "SEEDS": args.seeds,
         "ARCHITECTURE": args.architecture,
         "WEIGHT_DECAY": str(args.weight_decay),
+        "MUON_MOMENTUM": str(args.muon_momentum),
+        "MUON_MOMENTUM_SCHEDULE": args.muon_momentum_schedule,
+        "BATCH_BETA_ALIGN": "1" if args.batch_beta_align else "0",
+        "BATCH_BETA_ALIGN_MODE": args.batch_beta_align_mode,
+        "STRUCTURED_CONFIG": args.structured_config,
+        "PRECONDITION_FREQUENCY": str(args.precondition_frequency),
+        "SHAMPOO_BETA": str(args.shampoo_beta),
+        "OPTIMIZER_BETA1": str(args.optimizer_beta1),
+        "OPTIMIZER_BETA2": str(args.optimizer_beta2),
+        "STRUCTURED_INIT_FACTOR": str(args.structured_init_factor),
         "SAVE_EVERY": str(args.save_every),
         "KEEP_LAST_CHECKPOINTS": str(args.keep_last_checkpoints),
         "RESUME": "1" if args.resume else "0",
@@ -501,6 +511,20 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--nproc", type=int, default=8)
     parser.add_argument("--max-device-batch-size", type=int, default=16)
     parser.add_argument("--weight-decay", type=float, default=None)
+    parser.add_argument("--muon-momentum", type=float, default=0.95)
+    parser.add_argument("--muon-momentum-schedule", choices=["nanochat", "static"], default="nanochat")
+    parser.add_argument("--batch-beta-align", action=argparse.BooleanOptionalAction, default=True)
+    parser.add_argument(
+        "--batch-beta-align-mode",
+        choices=["all", "beta2_only", "none"],
+        default="all",
+    )
+    parser.add_argument("--structured-config", choices=["auto", "global"], default="auto")
+    parser.add_argument("--precondition-frequency", type=int, default=5)
+    parser.add_argument("--shampoo-beta", type=float, default=0.95)
+    parser.add_argument("--optimizer-beta1", type=float, default=0.9)
+    parser.add_argument("--optimizer-beta2", type=float, default=0.95)
+    parser.add_argument("--structured-init-factor", type=float, default=1.0)
     parser.add_argument("--save-every", type=int, default=100)
     parser.add_argument("--keep-last-checkpoints", type=int, default=2)
     parser.add_argument("--resume", action=argparse.BooleanOptionalAction, default=True)

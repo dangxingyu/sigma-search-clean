@@ -44,8 +44,8 @@ parser.add_argument("--depth", type=int, default=4, help="Model depth (small for
 parser.add_argument("--aspect-ratio", type=int, default=64, help="model_dim = depth * aspect_ratio")
 parser.add_argument("--head-dim", type=int, default=64, help="Head dimension")
 parser.add_argument("--max-seq-len", type=int, default=512, help="Max sequence length")
-parser.add_argument("--architecture", type=str, default="gpt2", choices=["gpt2", "nanochat"],
-                    help="Model architecture. gpt2 is the simplified control; nanochat keeps the original modded block.")
+parser.add_argument("--architecture", type=str, default="gpt2", choices=["gpt2", "nanochat", "qwen3"],
+                    help="Model architecture. gpt2 is the simplified control; nanochat keeps the original modded block; qwen3 uses RoPE, RMSNorm, QK norm, and SwiGLU.")
 # Training
 parser.add_argument("--max-steps", type=int, default=500, help="Training steps")
 parser.add_argument("--device-batch-size", type=int, default=8, help="Per-device batch size")
@@ -66,6 +66,15 @@ parser.add_argument(
     help="Rescale EMA betas/momentum so half-life in tokens is constant across batch sizes.",
 )
 parser.add_argument(
+    "--batch-beta-align-mode",
+    type=str,
+    default="all",
+    choices=["all", "beta2_only", "none"],
+    help="Which betas to batch-align when --batch-beta-align is set. "
+    "all scales beta1 and beta2/shampoo_beta; beta2_only keeps beta1 constant "
+    "and scales beta2/shampoo_beta/adam_beta2.",
+)
+parser.add_argument(
     "--adam-lr-mode",
     type=str,
     default="relative_to_matrix",
@@ -77,6 +86,14 @@ parser.add_argument("--weight-decay", type=float, default=0.28, help="Weight dec
 parser.add_argument("--warmup-steps", type=int, default=40, help="LR warmup steps")
 parser.add_argument("--warmdown-ratio", type=float, default=0.65, help="Fraction of training in LR warmdown")
 parser.add_argument("--final-lr-frac", type=float, default=0.05, help="Final LR as fraction of peak")
+parser.add_argument("--muon-momentum", type=float, default=0.95, help="Static Muon momentum when --muon-momentum-schedule=static.")
+parser.add_argument(
+    "--muon-momentum-schedule",
+    type=str,
+    default="nanochat",
+    choices=["nanochat", "static"],
+    help="Muon momentum schedule. static keeps --muon-momentum fixed for all steps.",
+)
 parser.add_argument("--mom-decay", action="store_true", default=True, help="Decay momentum 0.97→0.90 during warmdown")
 parser.add_argument("--no-mom-decay", dest="mom_decay", action="store_false", help="Keep momentum constant at 0.97")
 # StreamingMuon
@@ -118,7 +135,7 @@ parser.add_argument("--metrics-every", type=int, default=0,
 parser.add_argument("--metrics-top-k", type=int, default=4,
                     help="Top singular directions to summarize in diagnostic logging.")
 parser.add_argument("--metrics-module-regex", type=str,
-                    default=r"transformer\.h\.(?:[0-9]+)\.(?:attn\.(?:c_q|c_k|c_v|c_proj)|mlp\.(?:c_fc|c_proj))\.weight$",
+                    default=r"transformer\.h\.(?:[0-9]+)\.(?:attn\.(?:c_q|c_k|c_v|c_proj)|mlp\.(?:c_gate|c_fc|c_proj))\.weight$",
                     help="Regex selecting modules for diagnostic logging.")
 parser.add_argument("--metrics-max-modules", type=int, default=0,
                     help="Maximum modules to log per step; 0 means all selected modules.")
@@ -416,8 +433,21 @@ def _make_adamw_group(kind: str, params: list[torch.nn.Parameter], lr: float,
     return dict(kind=kind, params=params, lr=lr, betas=betas, eps=eps, weight_decay=weight_decay)
 
 
-def _beta_for_run(beta_ref: float, total_batch_size: int, batch_beta_align: bool) -> float:
-    if not batch_beta_align:
+def _beta_align_flags(batch_beta_align: bool, batch_beta_align_mode: str) -> tuple[bool, bool]:
+    if not batch_beta_align or batch_beta_align_mode == "none":
+        return False, False
+    if batch_beta_align_mode == "beta2_only":
+        return False, True
+    return True, True
+
+
+def _beta_for_run(
+    beta_ref: float,
+    total_batch_size: int,
+    *,
+    align: bool,
+) -> float:
+    if not align:
         return beta_ref
     return ema_beta_for_batch(beta_ref, total_batch_size, B_REF)
 
@@ -434,6 +464,7 @@ def build_optimizer_for_run(
     total_batch_size: int,
     matrix_lr_adjust: str,
     batch_beta_align: bool,
+    batch_beta_align_mode: str,
     adam_lr_mode: str,
     ddp: bool,
 ) -> tuple[torch.optim.Optimizer, dict[int, str]]:
@@ -466,17 +497,18 @@ def build_optimizer_for_run(
             )
         return nanochat_lr
 
+    align_beta1, align_beta2 = _beta_align_flags(batch_beta_align, batch_beta_align_mode)
     adam_betas = (
-        _beta_for_run(0.8, total_batch_size, batch_beta_align),
-        _beta_for_run(0.96, total_batch_size, batch_beta_align),
+        _beta_for_run(0.8, total_batch_size, align=align_beta1),
+        _beta_for_run(0.96, total_batch_size, align=align_beta2),
     )
     embed_betas = (
-        _beta_for_run(0.8, total_batch_size, batch_beta_align),
-        _beta_for_run(0.995, total_batch_size, batch_beta_align),
+        _beta_for_run(0.8, total_batch_size, align=align_beta1),
+        _beta_for_run(0.995, total_batch_size, align=align_beta2),
     )
     scalar_betas = (
-        _beta_for_run(0.8, total_batch_size, batch_beta_align),
-        _beta_for_run(0.95, total_batch_size, batch_beta_align),
+        _beta_for_run(0.8, total_batch_size, align=align_beta1),
+        _beta_for_run(0.95, total_batch_size, align=align_beta2),
     )
     param_groups: list[dict] = []
     if lm_head_params:
@@ -519,10 +551,10 @@ def build_optimizer_for_run(
     matrix_group_extras = {
         "matrix_lr_adjust": matrix_lr_adjust,
     }
-    structured_beta1 = _beta_for_run(args.optimizer_beta1, total_batch_size, batch_beta_align)
-    structured_beta2 = _beta_for_run(args.optimizer_beta2, total_batch_size, batch_beta_align)
-    structured_shampoo_beta = _beta_for_run(args.shampoo_beta, total_batch_size, batch_beta_align)
-    plain_muon_momentum = 0.95
+    structured_beta1 = _beta_for_run(args.optimizer_beta1, total_batch_size, align=align_beta1)
+    structured_beta2 = _beta_for_run(args.optimizer_beta2, total_batch_size, align=align_beta2)
+    structured_shampoo_beta = _beta_for_run(args.shampoo_beta, total_batch_size, align=align_beta2)
+    plain_muon_momentum = args.muon_momentum
 
     if optimizer_name == "adamw":
         if matrix_params:
@@ -734,6 +766,7 @@ def main():
             total_batch_size=total_batch_size,
             matrix_lr_adjust=args.matrix_lr_adjust,
             batch_beta_align=args.batch_beta_align,
+            batch_beta_align_mode=args.batch_beta_align_mode,
             adam_lr_mode=args.adam_lr_mode,
             ddp=ddp,
         )
@@ -808,6 +841,8 @@ def main():
                 return progress * 1.0 + (1 - progress) * args.final_lr_frac
 
         def get_muon_momentum(it):
+            if args.muon_momentum_schedule == "static":
+                return args.muon_momentum
             warmdown_iters = round(args.warmdown_ratio * num_iterations)
             warmdown_start = num_iterations - warmdown_iters
             if it < min(400, num_iterations // 4):
