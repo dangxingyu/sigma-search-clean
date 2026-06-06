@@ -4,6 +4,7 @@ from __future__ import annotations
 import csv
 import html
 import json
+import os
 import subprocess
 from pathlib import Path
 
@@ -12,12 +13,21 @@ ROOT = Path(__file__).resolve().parents[1]
 OUT = ROOT / "figures" / "qwen3_d12_muon_klsoap_dashboard"
 HDFS_BASE = "hdfs://haruna/home/byte_data_seed/hdd_hldy/user/xingyu.dang/sigma-search-runs/search_evals"
 
-METHOD_LABEL = {"plain_muon": "Muon", "kl_soap": "KL-SOAP"}
-METHOD_COLOR = {"plain_muon": "#1f77b4", "kl_soap": "#d62728"}
+METHOD_LABEL = {"plain_muon": "Muon", "kl_soap": "KL-SOAP", "coord_descent": "coord-descent"}
+METHOD_COLOR = {"plain_muon": "#1f77b4", "kl_soap": "#d62728", "coord_descent": "#111111"}
+DASHBOARD_METHODS = ["plain_muon", "kl_soap", "coord_descent"]
 BETA_STYLE = {
     "0.85": ("o", "-"),
     "0.90": ("s", "--"),
     "0.95": ("^", ":"),
+    "0.97": ("D", "-."),
+    "0.985": ("v", (0, (3, 1, 1, 1))),
+    "0.99": ("P", (0, (1, 1))),
+}
+WD_COLOR = {
+    "0.20": "#2ca02c",
+    "0.28": "#1f77b4",
+    "0.36": "#9467bd",
 }
 
 SOURCE_ROOTS = [
@@ -25,10 +35,48 @@ SOURCE_ROOTS = [
     ("plain_muon", "0.90", f"{HDFS_BASE}/qwen3_d12_1x_h20_betafixed_b0p90_muon_20260604"),
     ("plain_muon", "0.95", f"{HDFS_BASE}/qwen3_d12_1x_h20_betafixed_b0p95_muon_20260604"),
     ("plain_muon", "0.95", f"{HDFS_BASE}/qwen3_d12_1x_h20_muon_lrext_b0p95_64k128k_lr0028_004_20260604"),
+    ("plain_muon", "0.95", f"{HDFS_BASE}/qwen3_d12_1x_a100r34rw_muon64k_b0p95_wd0p2_20260605"),
+    ("plain_muon", "0.95", f"{HDFS_BASE}/qwen3_d12_1x_a100r34rw_muon64k_b0p95_wd0p36_20260605"),
+    ("plain_muon", "0.97", f"{HDFS_BASE}/qwen3_d12_1x_a100r34rw_muon64k_b0p97_wd0p2_20260605"),
+    ("plain_muon", "0.97", f"{HDFS_BASE}/qwen3_d12_1x_a100r34rw_muon64k_b0p97_wd0p28_20260605"),
+    ("plain_muon", "0.97", f"{HDFS_BASE}/qwen3_d12_1x_a100r34rw_muon64k_b0p97_wd0p36_20260605"),
+    ("plain_muon", "0.985", f"{HDFS_BASE}/qwen3_d12_1x_a100r34rw_muon64k_b0p985_wd0p2_20260605"),
+    ("plain_muon", "0.985", f"{HDFS_BASE}/qwen3_d12_1x_a100r34rw_muon64k_b0p985_wd0p28_20260605"),
+    ("plain_muon", "0.985", f"{HDFS_BASE}/qwen3_d12_1x_a100r34rw_muon64k_b0p985_wd0p36_20260605"),
+    ("plain_muon", "0.99", f"{HDFS_BASE}/qwen3_d12_1x_a100r34rw_muon64k_b0p99_wd0p2_20260605"),
+    ("plain_muon", "0.99", f"{HDFS_BASE}/qwen3_d12_1x_a100r34rw_muon64k_b0p99_wd0p28_20260605"),
+    ("plain_muon", "0.99", f"{HDFS_BASE}/qwen3_d12_1x_a100r34rw_muon64k_b0p99_wd0p36_20260605"),
     ("kl_soap", "0.85", f"{HDFS_BASE}/qwen3_d12_1x_h20_betafixed_b0p85_klsoap_20260604"),
     ("kl_soap", "0.90", f"{HDFS_BASE}/qwen3_d12_1x_h20_betafixed_b0p90_klsoap_20260604"),
     ("kl_soap", "0.95", f"{HDFS_BASE}/qwen3_d12_1x_h20_betafixed_b0p95_klsoap_20260604"),
 ]
+
+COORD_DESCENT_ROW = {
+    "method": "coord_descent",
+    "method_label": "coord-descent",
+    "beta1": "0.95",
+    "batch": 65536,
+    "batch_label": "64K",
+    "lr": 0.008,
+    "loss": 0.856601,
+    "architecture": "qwen3",
+    "depth": 12,
+    "weight_decay": "0.20",
+    "muon_momentum": "0.95",
+    "muon_momentum_schedule": "static",
+    "optimizer_beta1": "0.95",
+    "optimizer_beta2": "0.95",
+    "shampoo_beta": "0.95",
+    "batch_beta_align_mode": "beta2_only",
+    "train_losses": [],
+    "root": "qwen3_d12_muon64_coordinate_descent",
+    "path": (
+        "hdfs://haruna/home/byte_data_seed/hdd_hldy/user/xingyu.dang/"
+        "sigma-search-runs/search_evals/"
+        "qwen3_d12_muon64_cd_r02_adam_lr_multiplier_4_20260605/"
+        "plain_muon_bsz65536_lr0p008_s42/result.json"
+    ),
+}
 
 
 def run_text(cmd: list[str]) -> str:
@@ -51,6 +99,20 @@ def slug_batch(batch: int) -> str:
     return f"{batch // 1024}K" if batch % 1024 == 0 else str(batch)
 
 
+def fmt_float(value: object) -> str:
+    try:
+        return f"{float(value):.3g}"
+    except (TypeError, ValueError):
+        return str(value)
+
+
+def fmt_wd(value: object) -> str:
+    try:
+        return f"{float(value):.2f}"
+    except (TypeError, ValueError):
+        return str(value)
+
+
 def row_from_result(expected_method: str, beta1: str, root: str, path: str, data: dict) -> dict | None:
     if data.get("error"):
         return None
@@ -63,14 +125,14 @@ def row_from_result(expected_method: str, beta1: str, root: str, path: str, data
     return {
         "method": method,
         "method_label": METHOD_LABEL[method],
-        "beta1": beta1,
+        "beta1": fmt_float(args.get("optimizer_beta1") or args.get("muon_momentum") or beta1),
         "batch": batch,
         "batch_label": slug_batch(batch),
         "lr": float(args["matrix_lr"]),
         "loss": float(score),
         "architecture": args.get("architecture", ""),
         "depth": args.get("depth", ""),
-        "weight_decay": args.get("weight_decay", ""),
+        "weight_decay": fmt_wd(args.get("weight_decay", "")),
         "muon_momentum": args.get("muon_momentum", ""),
         "muon_momentum_schedule": args.get("muon_momentum_schedule", ""),
         "optimizer_beta1": args.get("optimizer_beta1", ""),
@@ -90,16 +152,17 @@ def collect_rows() -> list[dict]:
             row = row_from_result(method, beta1, root, path, hdfs_json(path))
             if row is not None:
                 rows.append(row)
-    return sorted(rows, key=lambda r: (r["method"], r["beta1"], r["batch"], r["lr"]))
+    rows.append(dict(COORD_DESCENT_ROW))
+    return sorted(rows, key=lambda r: (r["method"], float(r["beta1"]), r["weight_decay"], r["batch"], r["lr"]))
 
 
 def best_rows(rows: list[dict]) -> list[dict]:
-    best: dict[tuple[str, str, int], dict] = {}
+    best: dict[tuple[str, str, str, int], dict] = {}
     for row in rows:
-        key = (row["method"], row["beta1"], row["batch"])
+        key = (row["method"], row["beta1"], row["weight_decay"], row["batch"])
         if key not in best or row["loss"] < best[key]["loss"]:
             best[key] = row
-    return sorted(best.values(), key=lambda r: (r["method"], r["batch"], r["beta1"]))
+    return sorted(best.values(), key=lambda r: (r["method"], r["batch"], float(r["beta1"]), r["weight_decay"]))
 
 
 def write_csv(path: Path, rows: list[dict]) -> None:
@@ -117,11 +180,30 @@ def write_csv(path: Path, rows: list[dict]) -> None:
             writer.writerow({field: row.get(field, "") for field in fields})
 
 
+def read_csv(path: Path) -> list[dict]:
+    rows: list[dict] = []
+    with path.open(newline="") as f:
+        for row in csv.DictReader(f):
+            row["batch"] = int(row["batch"])
+            row["lr"] = float(row["lr"])
+            row["loss"] = float(row["loss"])
+            row["train_losses"] = []
+            rows.append(row)
+    return rows
+
+
+def with_coord_descent(rows: list[dict]) -> list[dict]:
+    filtered = [row for row in rows if row.get("method") != "coord_descent" and row.get("method_label") != "coord-descent"]
+    filtered.append(dict(COORD_DESCENT_ROW))
+    return sorted(filtered, key=lambda r: (r["method"], float(r["beta1"]), r["weight_decay"], r["batch"], r["lr"]))
+
+
 def plot_overlay_batch_panel(ax, panel: list[dict], *, title: str, zoom: bool = False) -> None:
-    for method in ["plain_muon", "kl_soap"]:
+    for method in DASHBOARD_METHODS:
         method_rows = [r for r in panel if r["method"] == method]
-        for beta in sorted({r["beta1"] for r in method_rows}):
-            pts = sorted([r for r in method_rows if r["beta1"] == beta], key=lambda r: r["lr"])
+        groups = sorted({(r["beta1"], r["weight_decay"]) for r in method_rows}, key=lambda x: (float(x[0]), float(x[1])))
+        for beta, wd in groups:
+            pts = sorted([r for r in method_rows if r["beta1"] == beta and r["weight_decay"] == wd], key=lambda r: r["lr"])
             if not pts:
                 continue
             color = METHOD_COLOR[method]
@@ -132,8 +214,9 @@ def plot_overlay_batch_panel(ax, panel: list[dict], *, title: str, zoom: bool = 
                 marker=marker,
                 color=color,
                 linestyle=linestyle,
-                linewidth=1.9 if zoom else 2.1,
-                markersize=4.2 if zoom else 4.8,
+                linewidth=2.5 if method == "coord_descent" else 1.9 if zoom else 2.1,
+                markersize=7.2 if method == "coord_descent" else 4.2 if zoom else 4.8,
+                alpha=1.0 if method == "coord_descent" else 0.9 if wd == "0.28" else 0.72,
             )
             best_pt = min(pts, key=lambda r: r["loss"])
             ax.scatter(
@@ -156,7 +239,8 @@ def plot_overlay_batch_panel(ax, panel: list[dict], *, title: str, zoom: bool = 
         )
         ax.annotate(
             f"{METHOD_LABEL[winner['method']]} b={winner['beta1']}\n"
-            f"lr={winner['lr']:.4g} loss={winner['loss']:.4f}",
+            f"wd={winner['weight_decay']} lr={winner['lr']:.4g}\n"
+            f"loss={winner['loss']:.4f}",
             xy=(winner["lr"], winner["loss"]),
             xytext=(8, 10),
             textcoords="offset points",
@@ -184,7 +268,7 @@ def plot_dashboard(rows: list[dict], best: list[dict]) -> None:
     if not rows:
         return
     batches = sorted({r["batch"] for r in rows})
-    methods = ["plain_muon", "kl_soap"]
+    methods = DASHBOARD_METHODS
 
     fig = plt.figure(figsize=(22, 19))
     gs = fig.add_gridspec(
@@ -237,9 +321,11 @@ def plot_dashboard(rows: list[dict], best: list[dict]) -> None:
         "- depth=12, dim=768\n"
         "- 1x Chinchilla tokens\n"
         "- batches 64K/128K/512K\n"
-        "- weight_decay=0.28\n"
+        "- weight_decay=0.28 main\n"
+        "- Muon 64K has wd sweep 0.20/0.28/0.36\n"
         "- KL b2=shampoo=0.95 ref\n"
-        "- batch_beta_align_mode=beta2_only",
+        "- batch_beta_align_mode=beta2_only\n"
+        "- coord-descent = tuned Muon 64K final point",
         va="top",
         fontsize=9.5,
         family="monospace",
@@ -253,13 +339,14 @@ def plot_dashboard(rows: list[dict], best: list[dict]) -> None:
     ax_loss = fig.add_subplot(gs[2, 0:2])
     ax_lr = fig.add_subplot(gs[2, 2])
     for method in methods:
-        for beta in sorted({r["beta1"] for r in best if r["method"] == method}):
-            pts = sorted([r for r in best if r["method"] == method and r["beta1"] == beta], key=lambda r: r["batch"])
+        groups = sorted({(r["beta1"], r["weight_decay"]) for r in best if r["method"] == method}, key=lambda x: (float(x[0]), float(x[1])))
+        for beta, wd in groups:
+            pts = sorted([r for r in best if r["method"] == method and r["beta1"] == beta and r["weight_decay"] == wd], key=lambda r: r["batch"])
             if not pts:
                 continue
             marker, linestyle = BETA_STYLE.get(beta, ("o", "-"))
             color = METHOD_COLOR[method]
-            label = f"{METHOD_LABEL[method]} b={beta}"
+            label = f"{METHOD_LABEL[method]} b={beta} wd={wd}"
             x = [slug_batch(r["batch"]) for r in pts]
             ax_loss.plot(x, [r["loss"] for r in pts], label=label, color=color, linestyle=linestyle, marker=marker, linewidth=2)
             ax_lr.plot(x, [r["lr"] for r in pts], label=label, color=color, linestyle=linestyle, marker=marker, linewidth=2)
@@ -279,17 +366,18 @@ def plot_dashboard(rows: list[dict], best: list[dict]) -> None:
         for method in methods:
             pts = sorted(
                 [r for r in best if r["batch"] == batch and r["method"] == method],
-                key=lambda r: float(r["beta1"]),
+                key=lambda r: (float(r["beta1"]), float(r["weight_decay"])),
             )
             if not pts:
                 continue
             ax.plot(
                 [float(r["beta1"]) for r in pts],
                 [r["loss"] for r in pts],
-                marker="o",
+                marker="*" if method == "coord_descent" else "o",
                 color=METHOD_COLOR[method],
                 linestyle="-",
-                linewidth=2.2,
+                linewidth=2.8 if method == "coord_descent" else 2.2,
+                markersize=10 if method == "coord_descent" else 6,
                 label=METHOD_LABEL[method],
             )
         if any(r["batch"] == batch for r in best):
@@ -311,10 +399,10 @@ def plot_dashboard(rows: list[dict], best: list[dict]) -> None:
     ax_table = fig.add_subplot(gs[4, :])
     ax_table.axis("off")
     lines = ["Best rows:"]
-    for row in sorted(best, key=lambda r: (r["method"], r["batch"], float(r["beta1"]))):
+    for row in sorted(best, key=lambda r: (r["method"], r["batch"], float(r["beta1"]), r["weight_decay"])):
         lines.append(
             f"{METHOD_LABEL[row['method']]:7s} b={row['beta1']} batch={slug_batch(row['batch']):>4s} "
-            f"lr={row['lr']:.4g} loss={row['loss']:.5f}"
+            f"wd={row['weight_decay']} lr={row['lr']:.4g} loss={row['loss']:.5f}"
         )
     ax_table.text(0, 1, "\n".join(lines), va="top", fontsize=8.3, family="monospace")
 
@@ -340,7 +428,7 @@ def plot_training_health(best: list[dict]) -> None:
     )
     for ax, batch in zip(axes, batches):
         batch_rows = [row for row in candidates if row["batch"] == batch]
-        for method in ["plain_muon", "kl_soap"]:
+        for method in DASHBOARD_METHODS:
             method_rows = [row for row in batch_rows if row["method"] == method]
             if not method_rows:
                 continue
@@ -381,8 +469,87 @@ def plot_training_health(best: list[dict]) -> None:
     plt.close(fig)
 
 
+def plot_muon64_wd_beta(rows: list[dict]) -> None:
+    import matplotlib.pyplot as plt
+    from matplotlib.lines import Line2D
+
+    panel = [row for row in rows if row["method"] == "plain_muon" and row["batch"] == 65536]
+    if not panel:
+        return
+
+    fig, axes = plt.subplots(1, 2, figsize=(14.5, 5.2), gridspec_kw={"width_ratios": [1.35, 1.0]})
+    ax_lr, ax_beta = axes
+    fig.suptitle("Qwen3 d12 64K Muon beta / weight-decay extension", fontsize=15, fontweight="bold")
+
+    groups = sorted({(row["beta1"], row["weight_decay"]) for row in panel}, key=lambda x: (float(x[0]), float(x[1])))
+    for beta, wd in groups:
+        pts = sorted([row for row in panel if row["beta1"] == beta and row["weight_decay"] == wd], key=lambda row: row["lr"])
+        if not pts:
+            continue
+        marker, linestyle = BETA_STYLE.get(beta, ("o", "-"))
+        color = WD_COLOR.get(wd, "#666666")
+        label = f"b={beta} wd={wd}"
+        ax_lr.plot(
+            [row["lr"] for row in pts],
+            [row["loss"] for row in pts],
+            color=color,
+            marker=marker,
+            linestyle=linestyle,
+            linewidth=2.1,
+            label=label,
+        )
+        local_best = min(pts, key=lambda row: row["loss"])
+        ax_lr.scatter([local_best["lr"]], [local_best["loss"]], facecolors="none", edgecolors=color, s=90, linewidths=1.5)
+
+    winner = min(panel, key=lambda row: row["loss"])
+    ax_lr.scatter([winner["lr"]], [winner["loss"]], marker="*", s=180, color="black", zorder=5)
+    ax_lr.annotate(
+        f"winner b={winner['beta1']} wd={winner['weight_decay']}\n"
+        f"lr={winner['lr']:.4g} loss={winner['loss']:.6f}",
+        xy=(winner["lr"], winner["loss"]),
+        xytext=(8, 12),
+        textcoords="offset points",
+        fontsize=9,
+    )
+    ax_lr.set_xscale("log")
+    ax_lr.set_title("LR sweep")
+    ax_lr.set_xlabel("Matrix LR")
+    ax_lr.set_ylabel("Final validation BPB / loss")
+    ax_lr.grid(True, alpha=0.22)
+    ax_lr.legend(fontsize=8, ncol=2)
+
+    best_by_group: dict[tuple[str, str], dict] = {}
+    for row in panel:
+        key = (row["beta1"], row["weight_decay"])
+        if key not in best_by_group or row["loss"] < best_by_group[key]["loss"]:
+            best_by_group[key] = row
+    for wd in sorted({row["weight_decay"] for row in panel}, key=float):
+        pts = sorted([row for (beta, row_wd), row in best_by_group.items() if row_wd == wd], key=lambda row: float(row["beta1"]))
+        if not pts:
+            continue
+        ax_beta.plot(
+            [float(row["beta1"]) for row in pts],
+            [row["loss"] for row in pts],
+            color=WD_COLOR.get(wd, "#666666"),
+            marker="o",
+            linewidth=2.1,
+            label=f"wd={wd}",
+        )
+    ax_beta.scatter([float(winner["beta1"])], [winner["loss"]], marker="*", s=160, color="black", zorder=5)
+    ax_beta.set_title("Best loss over beta / wd")
+    ax_beta.set_xlabel("fixed Muon momentum / beta1")
+    ax_beta.set_ylabel("Best final validation BPB / loss")
+    ax_beta.grid(True, alpha=0.22)
+    ax_beta.legend(fontsize=9)
+
+    fig.tight_layout(rect=[0, 0, 1, 0.92])
+    fig.savefig(OUT / "qwen3_d12_muon64k_wd_beta_dashboard.png", dpi=180)
+    fig.savefig(OUT / "qwen3_d12_muon64k_wd_beta_dashboard.pdf")
+    plt.close(fig)
+
+
 def html_table(rows: list[dict]) -> str:
-    fields = ["method_label", "beta1", "batch_label", "lr", "loss", "root"]
+    fields = ["method_label", "beta1", "weight_decay", "batch_label", "lr", "loss", "root"]
     header = "".join(f"<th>{html.escape(field)}</th>" for field in fields)
     body = []
     for row in rows:
@@ -413,6 +580,7 @@ code{{background:#f6f8fa;padding:2px 4px;border-radius:4px}}
 <h1>Qwen3 d12 Muon / KL-SOAP fixed-beta1 dashboard</h1>
 <p class="small">Rows: {len(rows)}. Lower final validation BPB/loss is better.</p>
 <div class="card"><h2>Combined verbose dashboard</h2><img src="qwen3_d12_combined_verbose_dashboard.png"></div>
+<div class="card"><h2>64K Muon beta / weight-decay extension</h2><img src="qwen3_d12_muon64k_wd_beta_dashboard.png"></div>
 <div class="card"><h2>Training-curve health</h2><img src="qwen3_d12_training_health.png"></div>
 <div class="card"><h2>Best rows</h2>{html_table(best)}</div>
 </body>"""
@@ -421,11 +589,16 @@ code{{background:#f6f8fa;padding:2px 4px;border-radius:4px}}
 
 def main() -> None:
     OUT.mkdir(parents=True, exist_ok=True)
-    rows = collect_rows()
+    csv_cache = OUT / "qwen3_d12_rows.csv"
+    if os.environ.get("QWEN3_D12_DASHBOARD_FROM_CSV") == "1" and csv_cache.exists():
+        rows = with_coord_descent(read_csv(csv_cache))
+    else:
+        rows = collect_rows()
     best = best_rows(rows)
     write_csv(OUT / "qwen3_d12_rows.csv", rows)
     write_csv(OUT / "qwen3_d12_best.csv", best)
     plot_dashboard(rows, best)
+    plot_muon64_wd_beta(rows)
     plot_training_health(best)
     write_html(rows, best)
     print(f"rows={len(rows)} best={len(best)} out={OUT}")

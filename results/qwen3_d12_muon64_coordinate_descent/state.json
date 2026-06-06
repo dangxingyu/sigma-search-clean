@@ -1,0 +1,333 @@
+{
+  "experiment": "qwen3_d12_muon64_coordinate_descent",
+  "status": "converged",
+  "max_rounds": 6,
+  "base_recipe": {
+    "architecture": "qwen3",
+    "depth": 12,
+    "batch": 65536,
+    "chinchilla_mult": 1.0,
+    "optimizer": "plain_muon",
+    "matrix_lr": 0.008,
+    "muon_momentum": 0.95,
+    "adam_lr_multiplier": 1.0,
+    "adam_beta1": 0.8,
+    "weight_decay": 0.2,
+    "score": 0.8623740088803121
+  },
+  "rounds": [
+    {
+      "round": 0,
+      "status": "completed",
+      "active_coordinates": [
+        "matrix_lr",
+        "muon_momentum",
+        "adam_lr_multiplier",
+        "adam_beta1",
+        "weight_decay"
+      ],
+      "grids": {
+        "matrix_lr": [
+          0.004,
+          0.0057,
+          0.008,
+          0.0113,
+          0.016
+        ],
+        "muon_momentum": [
+          0.9,
+          0.93,
+          0.95,
+          0.97,
+          0.985
+        ],
+        "adam_lr_multiplier": [
+          0.25,
+          0.5,
+          1.0,
+          1.5,
+          2.0
+        ],
+        "adam_beta1": [
+          0.6,
+          0.7,
+          0.8,
+          0.9,
+          0.95
+        ],
+        "weight_decay": [
+          0.08,
+          0.12,
+          0.16,
+          0.2,
+          0.28
+        ]
+      },
+      "best_by_coordinate": {
+        "adam_beta1": {
+          "score": 0.862436,
+          "improvement": -6.19911196878542e-05,
+          "stamp": "qwen3_d12_muon64_cd_r00_adam_beta1_0p8_20260605"
+        },
+        "adam_lr_multiplier": {
+          "score": 0.859786,
+          "improvement": 0.002588008880312076,
+          "stamp": "qwen3_d12_muon64_cd_r00_adam_lr_multiplier_2_20260605"
+        },
+        "matrix_lr": {
+          "score": 0.862294,
+          "improvement": 8.000888031212128e-05,
+          "stamp": "qwen3_d12_muon64_cd_r00_matrix_lr_0p0057_20260605"
+        },
+        "muon_momentum": {
+          "score": 0.861531,
+          "improvement": 0.0008430088803120794,
+          "stamp": "qwen3_d12_muon64_cd_r00_muon_momentum_0p9_20260605"
+        },
+        "weight_decay": {
+          "score": 0.8624,
+          "improvement": -2.599111968792922e-05,
+          "stamp": "qwen3_d12_muon64_cd_r00_weight_decay_0p16_20260605"
+        }
+      },
+      "accepted_coordinate": "adam_lr_multiplier",
+      "accepted_improvement": 0.002588008880312076
+    },
+    {
+      "round": 1,
+      "status": "completed",
+      "active_coordinates": [
+        "matrix_lr",
+        "muon_momentum",
+        "adam_beta1",
+        "weight_decay"
+      ],
+      "skipped_coordinate": "adam_lr_multiplier",
+      "center_score": 0.859786,
+      "center_recipe": {
+        "matrix_lr": 0.008,
+        "muon_momentum": 0.95,
+        "adam_lr_multiplier": 2.0,
+        "adam_beta1": 0.8,
+        "weight_decay": 0.2
+      },
+      "grids": {
+        "matrix_lr": [
+          0.005,
+          0.00632456,
+          0.008,
+          0.0101193,
+          0.0128
+        ],
+        "muon_momentum": [
+          0.9,
+          0.929289,
+          0.95,
+          0.964645,
+          0.975
+        ],
+        "adam_beta1": [
+          0.5,
+          0.683772,
+          0.8,
+          0.873509,
+          0.92
+        ],
+        "weight_decay": [
+          0.114286,
+          0.151186,
+          0.2,
+          0.264575,
+          0.35
+        ]
+      },
+      "best_by_coordinate": {
+        "adam_beta1": {
+          "score": 0.858858,
+          "improvement": 0.0009280000000000399,
+          "stamp": "qwen3_d12_muon64_cd_r01_adam_beta1_0p683772_20260605"
+        },
+        "matrix_lr": {
+          "score": 0.859152,
+          "improvement": 0.0006340000000000234,
+          "stamp": "qwen3_d12_muon64_cd_r01_matrix_lr_0p005_20260605"
+        },
+        "muon_momentum": {
+          "score": 0.859148,
+          "improvement": 0.0006380000000000274,
+          "stamp": "qwen3_d12_muon64_cd_r01_muon_momentum_0p9_20260605"
+        },
+        "weight_decay": {
+          "score": 0.859374,
+          "improvement": 0.00041200000000007897,
+          "stamp": "qwen3_d12_muon64_cd_r01_weight_decay_0p114286_20260605"
+        }
+      },
+      "accepted_coordinate": "adam_beta1",
+      "accepted_improvement": 0.0009280000000000399
+    },
+    {
+      "round": 2,
+      "status": "completed",
+      "active_coordinates": [
+        "matrix_lr",
+        "muon_momentum",
+        "adam_lr_multiplier",
+        "weight_decay"
+      ],
+      "skipped_coordinate": "adam_beta1",
+      "center_score": 0.858858,
+      "center_recipe": {
+        "matrix_lr": 0.008,
+        "muon_momentum": 0.95,
+        "adam_lr_multiplier": 2.0,
+        "adam_beta1": 0.683772,
+        "weight_decay": 0.2
+      },
+      "grids": {
+        "matrix_lr": [
+          0.005,
+          0.00632456,
+          0.008,
+          0.0101193,
+          0.0128
+        ],
+        "muon_momentum": [
+          0.9,
+          0.929289,
+          0.95,
+          0.964645,
+          0.975
+        ],
+        "adam_lr_multiplier": [
+          1.0,
+          1.41421,
+          2.0,
+          2.82843,
+          4.0
+        ],
+        "weight_decay": [
+          0.114286,
+          0.151186,
+          0.2,
+          0.264575,
+          0.35
+        ]
+      },
+      "best_by_coordinate": {
+        "adam_lr_multiplier": {
+          "score": 0.856601,
+          "improvement": 0.0022570000000000645,
+          "stamp": "qwen3_d12_muon64_cd_r02_adam_lr_multiplier_4_20260605"
+        },
+        "matrix_lr": {
+          "score": 0.859063,
+          "improvement": -0.00020500000000001073,
+          "stamp": "qwen3_d12_muon64_cd_r02_matrix_lr_0p005_20260605"
+        },
+        "muon_momentum": {
+          "score": 0.858783,
+          "improvement": 7.500000000004725e-05,
+          "stamp": "qwen3_d12_muon64_cd_r02_muon_momentum_0p929289_20260605"
+        },
+        "weight_decay": {
+          "score": 0.859263,
+          "improvement": -0.0004049999999999887,
+          "stamp": "qwen3_d12_muon64_cd_r02_weight_decay_0p2_20260605"
+        }
+      },
+      "accepted_coordinate": "adam_lr_multiplier",
+      "accepted_improvement": 0.0022570000000000645
+    },
+    {
+      "round": 3,
+      "status": "completed",
+      "active_coordinates": [
+        "matrix_lr",
+        "muon_momentum",
+        "adam_beta1",
+        "weight_decay"
+      ],
+      "skipped_coordinate": "adam_lr_multiplier",
+      "center_score": 0.856601,
+      "center_recipe": {
+        "matrix_lr": 0.008,
+        "muon_momentum": 0.95,
+        "adam_lr_multiplier": 4.0,
+        "adam_beta1": 0.683772,
+        "weight_decay": 0.2
+      },
+      "grids": {
+        "matrix_lr": [
+          0.005,
+          0.00632456,
+          0.008,
+          0.0101193,
+          0.0128
+        ],
+        "muon_momentum": [
+          0.9,
+          0.929289,
+          0.95,
+          0.964645,
+          0.975
+        ],
+        "adam_beta1": [
+          0.3,
+          0.5,
+          0.683772,
+          0.8,
+          0.873509
+        ],
+        "weight_decay": [
+          0.114286,
+          0.151186,
+          0.2,
+          0.264575,
+          0.35
+        ]
+      },
+      "best_by_coordinate": {
+        "adam_beta1": {
+          "score": 0.856721,
+          "improvement": -0.00012000000000000899,
+          "stamp": "qwen3_d12_muon64_cd_r03_adam_beta1_0p5_20260605"
+        },
+        "matrix_lr": {
+          "score": 0.856942,
+          "improvement": -0.0003410000000000357,
+          "stamp": "qwen3_d12_muon64_cd_r03_matrix_lr_0p00632456_20260605"
+        },
+        "muon_momentum": {
+          "score": 0.856986,
+          "improvement": -0.0003850000000000797,
+          "stamp": "qwen3_d12_muon64_cd_r03_muon_momentum_0p95_20260605"
+        },
+        "weight_decay": {
+          "score": 0.856603,
+          "improvement": -2.0000000000575113e-06,
+          "stamp": "qwen3_d12_muon64_cd_r03_weight_decay_0p151186_20260605"
+        }
+      },
+      "accepted_coordinate": null,
+      "accepted_improvement": -2.0000000000575113e-06
+    }
+  ],
+  "current_recipe": {
+    "matrix_lr": 0.008,
+    "muon_momentum": 0.95,
+    "adam_lr_multiplier": 4.0,
+    "adam_beta1": 0.683772,
+    "weight_decay": 0.2,
+    "architecture": "qwen3",
+    "depth": 12,
+    "batch": 65536,
+    "chinchilla_mult": 1.0,
+    "optimizer": "plain_muon",
+    "score": 0.856601,
+    "source_stamp": "qwen3_d12_muon64_cd_r02_adam_lr_multiplier_4_20260605",
+    "source_path": "hdfs://haruna/home/byte_data_seed/hdd_hldy/user/xingyu.dang/sigma-search-runs/search_evals/qwen3_d12_muon64_cd_r02_adam_lr_multiplier_4_20260605/plain_muon_bsz65536_lr0p008_s42/result.json"
+  },
+  "last_changed_coordinate": "adam_lr_multiplier",
+  "stop_reason": "best improvement -2e-06 <= min_improvement 0"
+}

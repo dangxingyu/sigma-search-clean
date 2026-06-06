@@ -1,0 +1,6 @@
+step,round,center_score,accepted_coordinate,accepted_score,accepted_improvement,accepted_stamp,status
+base,-1,0.8623740088803121,,0.8623740088803121,0.0,base,base
+round 0,0,0.8623740088803121,adam_lr_multiplier,0.859786,0.002588008880312076,qwen3_d12_muon64_cd_r00_adam_lr_multiplier_2_20260605,completed
+round 1,1,0.859786,adam_beta1,0.858858,0.0009280000000000399,qwen3_d12_muon64_cd_r01_adam_beta1_0p683772_20260605,completed
+round 2,2,0.858858,adam_lr_multiplier,0.856601,0.0022570000000000645,qwen3_d12_muon64_cd_r02_adam_lr_multiplier_4_20260605,completed
+round 3,3,0.856601,,0.856601,-2.0000000000575113e-06,,completed

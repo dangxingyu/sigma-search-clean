@@ -333,6 +333,8 @@ def common_env(
         "MUON_MOMENTUM_SCHEDULE": args.muon_momentum_schedule,
         "BATCH_BETA_ALIGN": "1" if args.batch_beta_align else "0",
         "BATCH_BETA_ALIGN_MODE": args.batch_beta_align_mode,
+        "ADAM_LR_MULTIPLIER": str(args.adam_lr_multiplier),
+        "ADAM_BETA1": str(args.adam_beta1),
         "STRUCTURED_CONFIG": args.structured_config,
         "PRECONDITION_FREQUENCY": str(args.precondition_frequency),
         "SHAMPOO_BETA": str(args.shampoo_beta),
@@ -519,6 +521,8 @@ def parse_args() -> argparse.Namespace:
         choices=["all", "beta2_only", "none"],
         default="all",
     )
+    parser.add_argument("--adam-lr-multiplier", type=float, default=1.0)
+    parser.add_argument("--adam-beta1", type=float, default=0.8)
     parser.add_argument("--structured-config", choices=["auto", "global"], default="auto")
     parser.add_argument("--precondition-frequency", type=int, default=5)
     parser.add_argument("--shampoo-beta", type=float, default=0.95)

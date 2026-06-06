@@ -82,6 +82,18 @@ parser.add_argument(
     help="How to set AdamW peak LRs for embeddings/lm_head. "
     "relative_to_matrix scales them with --matrix-lr; nanochat_fixed keeps legacy constants.",
 )
+parser.add_argument(
+    "--adam-lr-multiplier",
+    type=float,
+    default=1.0,
+    help="Multiplier applied to all auxiliary AdamW peak LRs after the selected Adam LR mode.",
+)
+parser.add_argument(
+    "--adam-beta1",
+    type=float,
+    default=0.8,
+    help="Auxiliary AdamW beta1 for embeddings, lm_head, and scalar/norm parameters.",
+)
 parser.add_argument("--weight-decay", type=float, default=0.28, help="Weight decay")
 parser.add_argument("--warmup-steps", type=int, default=40, help="LR warmup steps")
 parser.add_argument("--warmdown-ratio", type=float, default=0.65, help="Fraction of training in LR warmdown")
@@ -466,6 +478,8 @@ def build_optimizer_for_run(
     batch_beta_align: bool,
     batch_beta_align_mode: str,
     adam_lr_mode: str,
+    adam_lr_multiplier: float,
+    adam_beta1: float,
     ddp: bool,
 ) -> tuple[torch.optim.Optimizer, dict[int, str]]:
     """Build the mixed optimizer and return ``param_id -> name`` for matrix params."""
@@ -489,25 +503,27 @@ def build_optimizer_for_run(
 
     def _adam_peak_lr(role: str, nanochat_lr: float) -> float:
         if adam_lr_mode == "relative_to_matrix":
-            return adam_lr_from_matrix_lr(
+            lr = adam_lr_from_matrix_lr(
                 matrix_lr,
                 role,
                 dmodel_lr_scale=dmodel_lr_scale,
                 batch_lr_scale_value=batch_lr_scale,
             )
-        return nanochat_lr
+        else:
+            lr = nanochat_lr
+        return lr * adam_lr_multiplier
 
     align_beta1, align_beta2 = _beta_align_flags(batch_beta_align, batch_beta_align_mode)
     adam_betas = (
-        _beta_for_run(0.8, total_batch_size, align=align_beta1),
+        _beta_for_run(adam_beta1, total_batch_size, align=align_beta1),
         _beta_for_run(0.96, total_batch_size, align=align_beta2),
     )
     embed_betas = (
-        _beta_for_run(0.8, total_batch_size, align=align_beta1),
+        _beta_for_run(adam_beta1, total_batch_size, align=align_beta1),
         _beta_for_run(0.995, total_batch_size, align=align_beta2),
     )
     scalar_betas = (
-        _beta_for_run(0.8, total_batch_size, align=align_beta1),
+        _beta_for_run(adam_beta1, total_batch_size, align=align_beta1),
         _beta_for_run(0.95, total_batch_size, align=align_beta2),
     )
     param_groups: list[dict] = []
@@ -768,6 +784,8 @@ def main():
             batch_beta_align=args.batch_beta_align,
             batch_beta_align_mode=args.batch_beta_align_mode,
             adam_lr_mode=args.adam_lr_mode,
+            adam_lr_multiplier=args.adam_lr_multiplier,
+            adam_beta1=args.adam_beta1,
             ddp=ddp,
         )
         matrix_params_named = {

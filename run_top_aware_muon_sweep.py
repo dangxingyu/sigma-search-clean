@@ -277,6 +277,8 @@ def build_command(args: argparse.Namespace, method: str, batch: int, lr: float, 
         "--fallback-ortho-tol", f"{args.fallback_ortho_tol:g}",
         "--matrix-lr-adjust", args.matrix_lr_adjust,
         "--adam-lr-mode", args.adam_lr_mode,
+        "--adam-lr-multiplier", f"{args.adam_lr_multiplier:g}",
+        "--adam-beta1", f"{args.adam_beta1:g}",
         "--muon-momentum", f"{args.muon_momentum:g}",
         "--muon-momentum-schedule", args.muon_momentum_schedule,
     ]
@@ -524,6 +526,8 @@ def sweep_signature(args: argparse.Namespace, methods: list[str]) -> dict[str, A
         "batch_beta_align": args.batch_beta_align,
         "batch_beta_align_mode": args.batch_beta_align_mode,
         "adam_lr_mode": args.adam_lr_mode,
+        "adam_lr_multiplier": args.adam_lr_multiplier,
+        "adam_beta1": args.adam_beta1,
         "structured_config": args.structured_config,
         "precondition_frequency": args.precondition_frequency,
         "shampoo_beta": args.shampoo_beta,
@@ -756,6 +760,8 @@ def parse_args() -> argparse.Namespace:
         choices=["relative_to_matrix", "nanochat_fixed"],
         default="relative_to_matrix",
     )
+    parser.add_argument("--adam-lr-multiplier", type=float, default=1.0)
+    parser.add_argument("--adam-beta1", type=float, default=0.8)
     parser.add_argument(
         "--structured-config",
         choices=["auto", "global"],

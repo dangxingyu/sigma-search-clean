@@ -4,6 +4,7 @@ from __future__ import annotations
 import csv
 import html
 import json
+import os
 import shutil
 import subprocess
 from pathlib import Path
@@ -13,10 +14,37 @@ ROOT = Path(__file__).resolve().parents[1]
 OUT = ROOT / "figures" / "qwen3_muon_klsoap_dashboard"
 HDFS_BASE = "hdfs://haruna/home/byte_data_seed/hdd_hldy/user/xingyu.dang/sigma-search-runs/search_evals"
 
-METHOD_LABEL = {"plain_muon": "Muon", "kl_soap": "KL-SOAP"}
-METHOD_COLOR = {"plain_muon": "#1f77b4", "kl_soap": "#d62728"}
-METHOD_MARKER = {"plain_muon": "o", "kl_soap": "s"}
+METHOD_LABEL = {"plain_muon": "Muon", "kl_soap": "KL-SOAP", "coord_descent": "coord-descent"}
+METHOD_COLOR = {"plain_muon": "#1f77b4", "kl_soap": "#d62728", "coord_descent": "#111111"}
+METHOD_MARKER = {"plain_muon": "o", "kl_soap": "s", "coord_descent": "*"}
 BETA_COLORS = {"0.85": "#1f77b4", "0.90": "#2ca02c", "0.95": "#ff7f0e", "0.97": "#9467bd"}
+
+COORD_DESCENT_ROW = {
+    "group": "coord_descent",
+    "method": "coord_descent",
+    "method_label": METHOD_LABEL["coord_descent"],
+    "config": "coordinate descent tuned Muon 64K",
+    "beta1": "0.95",
+    "batch": 65536,
+    "batch_label": "64K",
+    "lr": 0.008,
+    "loss": 0.856601,
+    "architecture": "qwen3",
+    "depth": "12",
+    "weight_decay": "0.20",
+    "muon_momentum": "0.95",
+    "muon_momentum_schedule": "static",
+    "optimizer_beta1": "0.95",
+    "optimizer_beta2": "0.95",
+    "shampoo_beta": "0.95",
+    "batch_beta_align_mode": "beta2_only",
+    "root": "qwen3_d12_muon64_coordinate_descent",
+    "path": (
+        f"{HDFS_BASE}/qwen3_d12_muon64_cd_r02_adam_lr_multiplier_4_20260605/"
+        "plain_muon_bsz65536_lr0p008_s42/result.json"
+    ),
+    "note": "d12 coordinate descent tuned Muon 64K final point; kept out of d8 sweep axes.",
+}
 
 SOURCE_ROOTS = [
     {
@@ -220,7 +248,30 @@ def collect_rows() -> list[dict]:
             if row is not None:
                 rows.append(row)
     rows = dedupe_rows(rows)
-    return sorted(rows, key=lambda r: (r["group"], r["method"], r["beta1"], r["batch"], r["lr"]))
+    return with_coord_descent(rows)
+
+
+def row_sort_key(row: dict) -> tuple:
+    return (row["group"], row["method"], row["beta1"], int(row["batch"]), float(row["lr"]))
+
+
+def with_coord_descent(rows: list[dict]) -> list[dict]:
+    rows = [
+        row for row in rows
+        if row.get("method") != COORD_DESCENT_ROW["method"] and row.get("group") != COORD_DESCENT_ROW["group"]
+    ]
+    return sorted([*rows, dict(COORD_DESCENT_ROW)], key=row_sort_key)
+
+
+def read_csv(path: Path) -> list[dict]:
+    rows: list[dict] = []
+    with path.open(newline="") as f:
+        for row in csv.DictReader(f):
+            row["batch"] = int(row["batch"])
+            row["lr"] = float(row["lr"])
+            row["loss"] = float(row["loss"])
+            rows.append(row)
+    return rows
 
 
 def dedupe_rows(rows: list[dict]) -> list[dict]:
@@ -498,7 +549,10 @@ def plot_combined_verbose(rows: list[dict], best: list[dict]) -> None:
         "- beta1/momentum 0.85, 0.90, 0.95, 0.97\n"
         "- Muon high-LR ext to 0.032\n"
         "- KL beta1=0.95 full sweep omitted\n"
-        "  (mainline/backfill covers 512K)"
+        "  (mainline/backfill covers 512K)\n\n"
+        "Extra entry:\n"
+        "- coord-descent d12 64K lr=0.008\n"
+        "  loss=0.85660; not on d8 axes"
     )
     ax_note.text(0.02, 0.55, note, va="top", fontsize=9.5, family="monospace")
 
@@ -565,13 +619,22 @@ def plot_combined_verbose(rows: list[dict], best: list[dict]) -> None:
 
     ax_table = fig.add_subplot(gs[4, :])
     ax_table.axis("off")
-    lines = ["Best rows (fixed-beta sweep):"]
+    lines = ["Best rows (+ extra entries):"]
+    coord_best = [r for r in best if r["group"] == "coord_descent"]
+    for row in coord_best:
+        lines.append(
+            f"{METHOD_LABEL[row['method']]:13s} depth={row['depth']} batch={slug_batch(row['batch']):>4s} "
+            f"lr={row['lr']:.4g} loss={row['loss']:.5f} (extra entry; not on d8 axes)"
+        )
+    if coord_best:
+        lines.append("")
+        lines.append("Fixed-beta sweep:")
     for row in sorted(fixed_best, key=lambda r: (r["method"], r["batch"], float(r["beta1"]))):
         lines.append(
             f"{METHOD_LABEL[row['method']]:7s} b={row['beta1']} batch={slug_batch(row['batch']):>4s} "
             f"lr={row['lr']:.4g} loss={row['loss']:.5f}"
         )
-    ax_table.text(0, 1, "\n".join(lines), va="top", fontsize=8.3, family="monospace")
+    ax_table.text(0, 1, "\n".join(lines), va="top", fontsize=8.0, family="monospace")
 
     fig.savefig(OUT / "qwen3_combined_verbose_dashboard.png", dpi=180)
     fig.savefig(OUT / "qwen3_combined_verbose_dashboard.pdf")
@@ -658,9 +721,13 @@ code{{background:#f6f8fa;padding:2px 4px;border-radius:4px}}
 
 def main() -> None:
     OUT.mkdir(parents=True, exist_ok=True)
-    rows = collect_rows()
+    csv_path = OUT / "qwen3_full_rows.csv"
+    if os.environ.get("QWEN3_FULL_DASHBOARD_FROM_CSV") == "1" and csv_path.exists():
+        rows = with_coord_descent(read_csv(csv_path))
+    else:
+        rows = collect_rows()
     best = best_rows(rows)
-    write_csv(OUT / "qwen3_full_rows.csv", rows)
+    write_csv(csv_path, rows)
     write_csv(OUT / "qwen3_full_best.csv", best)
     plot_mainline(rows)
     plot_fixed_beta(rows)

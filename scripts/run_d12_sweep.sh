@@ -87,6 +87,8 @@ cmd=(
   --fallback-ortho-tol "${FALLBACK_ORTHO_TOL:-0.01}"
   --matrix-lr-adjust "${MATRIX_LR_ADJUST:-moonlight}"
   --adam-lr-mode "${ADAM_LR_MODE:-relative_to_matrix}"
+  --adam-lr-multiplier "${ADAM_LR_MULTIPLIER:-1.0}"
+  --adam-beta1 "${ADAM_BETA1:-0.8}"
   --structured-config "${STRUCTURED_CONFIG:-auto}"
   --precondition-frequency "${PRECONDITION_FREQUENCY:-5}"
   --shampoo-beta "${SHAMPOO_BETA:-0.95}"
